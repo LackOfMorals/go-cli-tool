@@ -8,8 +8,6 @@ package analytics
 import (
 	"io"
 	"net/http"
-
-	"github.com/neo4j-labs/neo4j-mcp-canary/internal/config"
 )
 
 // HTTPClient is the subset of *http.Client used by Analytics, allowing injection of a mock in tests.
@@ -22,12 +20,4 @@ type Service interface {
 	Enable()
 	IsEnabled() bool
 	EmitEvent(event TrackEvent)
-	NewGDSProjCreatedEvent() TrackEvent
-	NewGDSProjDropEvent() TrackEvent
-	NewStartupEvent(transportMode config.TransportMode, tlsEnabled bool, mcpServer string) TrackEvent
-	NewConnectionInitializedEvent(connInfo ConnectionEventInfo) TrackEvent
-	NewToolEvent(toolsUsed string, success bool, vectorInfo *ToolVectorInfo) TrackEvent
-	NewSchemaRetrievalEvent(outcome string, durationMs int64, timeoutSeconds float64, sampleSize, nodeLabelCount, relTypeCount, indexCount, missingNodeLabelCount, missingRelTypeCount int) TrackEvent
-	NewCypherEstimateEvent(outcome string, estimatedRows int64, actualRows int, truncated bool, estimateThreshold, rowCap int) TrackEvent
-	NewUnauthenticatedJSONRPCEvent(jsonRPCRequest string) TrackEvent
 }

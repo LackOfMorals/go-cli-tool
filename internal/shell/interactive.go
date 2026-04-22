@@ -11,415 +11,337 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
-	"github.com/cli/go-cli-tool/internal/telemetry"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
 )
 
-// InteractiveShell implements Shell with basic input support
+// InteractiveShell is the concrete REPL implementation of the Shell interface.
 type InteractiveShell struct {
-	// Core components
-	logger    *logger.LoggerService
-	config    *config.Config
+	log       logger.Service
+	cfg       *config.Config
 	registry  *tools.ToolRegistry
-	telemetry *telemetry.TelemetryService
+	telemetry analytics.Service
 	presenter *presentation.PresentationService
 
-	// Shell state
-	running bool
-	mu      sync.RWMutex
+	// categories is the top-level command hierarchy (cypher, cloud, admin).
+	categories map[string]*Category
 
-	// Command handlers
+	// handlers holds custom one-off command handlers registered at runtime.
 	handlers map[string]CommandHandler
 
-	// IO handler
-	io tool.IOHandler
-
-	// History file
+	io          tool.IOHandler
+	prompt      string
 	historyFile string
 
-	// Prompt
-	prompt string
+	running bool
+	mu      sync.RWMutex
 }
 
-// NewInteractiveShell creates a new interactive shell
+// NewInteractiveShell creates a shell with sensible defaults.
 func NewInteractiveShell() *InteractiveShell {
 	return &InteractiveShell{
+		categories:  make(map[string]*Category),
 		handlers:    make(map[string]CommandHandler),
-		running:     false,
-		prompt:      "cli> ",
-		historyFile: ".cli_history",
 		io:          tool.NewDefaultIOHandler(),
+		prompt:      "neo4j> ",
+		historyFile: ".neo4j_history",
 	}
 }
 
-// SetLogger sets the logger
-func (s *InteractiveShell) SetLogger(logger *logger.LoggerService) {
-	s.logger = logger
-}
+// ---- Setters ------------------------------------------------------------
 
-// SetConfig sets the configuration
-func (s *InteractiveShell) SetConfig(config config.Config) {
-	s.config = &config
-	if config.Shell.Prompt != "" {
-		s.prompt = config.Shell.Prompt
+func (s *InteractiveShell) SetLogger(log logger.Service)                     { s.log = log }
+func (s *InteractiveShell) SetTelemetry(tel analytics.Service)               { s.telemetry = tel }
+func (s *InteractiveShell) SetPresenter(p *presentation.PresentationService) { s.presenter = p }
+func (s *InteractiveShell) SetCategories(cats map[string]*Category)          { s.categories = cats }
+
+func (s *InteractiveShell) SetConfig(cfg config.Config) {
+	s.cfg = &cfg
+	if cfg.Shell.Prompt != "" {
+		s.prompt = cfg.Shell.Prompt
 	}
-	if config.Shell.HistoryFile != "" {
-		s.historyFile = config.Shell.HistoryFile
+	if cfg.Shell.HistoryFile != "" {
+		s.historyFile = cfg.Shell.HistoryFile
 	}
 }
 
-// SetTelemetry sets the telemetry service
-func (s *InteractiveShell) SetTelemetry(telemetry *telemetry.TelemetryService) {
-	s.telemetry = telemetry
-}
-
-// SetPresenter sets the presentation service
-func (s *InteractiveShell) SetPresenter(presenter *presentation.PresentationService) {
-	s.presenter = presenter
-}
-
-// SetRegistry sets the tool registry
 func (s *InteractiveShell) SetRegistry(registry interface {
 	Get(name string) (tool.Tool, error)
 	ListNames() []string
 }) {
-	// Type assertion to get the concrete type
 	if reg, ok := registry.(*tools.ToolRegistry); ok {
 		s.registry = reg
 	}
 }
 
-// Start starts the interactive shell
+// ---- Shell interface ----------------------------------------------------
+
+// Start runs the REPL and blocks until the user exits or a signal fires.
 func (s *InteractiveShell) Start() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.running {
+		s.mu.Unlock()
 		return fmt.Errorf("shell is already running")
 	}
-
 	s.running = true
+	s.mu.Unlock()
 
-	// Handle signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	go func() {
-		for {
-			select {
-			case <-sigChan:
-				s.Stop()
-				return
-			}
-		}
+		<-sigChan
+		_ = s.Stop()
 	}()
 
-	// Main loop
-	go s.runLoop()
+	s.printWelcome()
+	s.runLoop()
 
+	signal.Stop(sigChan)
 	return nil
 }
 
-// Stop stops the shell
 func (s *InteractiveShell) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	s.running = false
 	return nil
 }
 
-// IsRunning returns whether the shell is running
 func (s *InteractiveShell) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.running
 }
 
-// Execute executes a command string
-func (s *InteractiveShell) Execute(cmd string) (string, error) {
-	if cmd == "" {
-		return "", nil
-	}
+func (s *InteractiveShell) RegisterCommand(name string, handler CommandHandler) {
+	s.handlers[name] = handler
+}
 
-	// Parse command
+// Execute parses and dispatches a single command line.
+//
+// Routing order:
+//  1. Built-in commands (exit, help, config, …)
+//  2. Top-level categories (cypher, cloud, admin) — routing inside the
+//     category tree is handled by Category.Dispatch
+//  3. Custom handlers registered via RegisterCommand
+//  4. Tool registry (legacy flat tools)
+func (s *InteractiveShell) Execute(cmd string) (string, error) {
 	args := parseCommand(cmd)
 	if len(args) == 0 {
 		return "", nil
 	}
 
-	command := args[0]
-	cmdArgs := args[1:]
+	name := args[0]
+	rest := args[1:]
 
-	// Check for built-in commands first
-	if IsBuiltinCommand(command) {
-		return s.executeBuiltin(command, cmdArgs)
+	if IsBuiltinCommand(name) {
+		return s.executeBuiltin(name, rest)
 	}
 
-	// Check custom handlers
-	if handler, ok := s.handlers[command]; ok {
-		ctx := s.createContext()
-		return handler(cmdArgs, *ctx)
+	if cat, ok := s.categories[name]; ok {
+		return cat.Dispatch(rest, *s.createContext())
 	}
 
-	// Check for tool execution
+	if handler, ok := s.handlers[name]; ok {
+		return handler(rest, *s.createContext())
+	}
+
 	if s.registry != nil {
-		if t, err := s.registry.Get(command); err == nil {
-			return s.executeTool(t, cmdArgs)
+		if t, err := s.registry.Get(name); err == nil {
+			return s.executeTool(t, rest)
 		}
 	}
 
-	return "", fmt.Errorf("command not found: %s", command)
+	return "", fmt.Errorf("unknown command: %q  (type 'help' to see available commands)", name)
 }
 
-// RegisterCommand registers a command handler
-func (s *InteractiveShell) RegisterCommand(name string, handler CommandHandler) {
-	s.handlers[name] = handler
-}
+// ---- REPL loop ----------------------------------------------------------
 
-// runLoop runs the main shell loop
 func (s *InteractiveShell) runLoop() {
 	reader := bufio.NewReader(os.Stdin)
 
 	for s.IsRunning() {
 		fmt.Print(s.prompt)
-		line, _, err := reader.ReadLine()
+
+		line, err := reader.ReadString('\n')
 		if err != nil {
+			fmt.Println()
 			break
 		}
 
-		cmd := strings.TrimSpace(string(line))
+		cmd := strings.TrimSpace(line)
 		if cmd == "" {
 			continue
 		}
 
 		output, err := s.Execute(cmd)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		}
 		if output != "" {
 			fmt.Println(output)
 		}
 	}
+
+	_ = s.Stop()
 }
 
-// createContext creates a shell context
 func (s *InteractiveShell) createContext() *ShellContext {
 	return NewShellContext().
-		WithConfig(s.config).
-		WithLogger(s.logger).
+		WithConfig(s.cfg).
+		WithLogger(s.log).
 		WithTelemetry(s.telemetry).
 		WithPresenter(s.presenter).
 		WithRegistry(s.registry).
 		WithIO(s.io)
 }
 
-// executeBuiltin executes a built-in command
+func (s *InteractiveShell) printWelcome() {
+	fmt.Println("Neo4j CLI — type 'help' for commands, 'exit' to quit.")
+	fmt.Println()
+}
+
+// ---- Built-in commands --------------------------------------------------
+
 func (s *InteractiveShell) executeBuiltin(command string, args []string) (string, error) {
 	switch command {
 	case "exit", "quit":
-		s.Stop()
+		_ = s.Stop()
 		return "Goodbye!", nil
-
 	case "help":
 		return s.builtinHelp(args)
-
-	case "list":
-		return s.builtinList(args)
-
-	case "exec":
-		return s.builtinExec(args)
-
 	case "config":
 		return s.builtinConfig(args)
-
 	case "set":
 		return s.builtinSet(args)
-
 	case "log-level":
 		return s.builtinLogLevel(args)
-
 	case "clear":
 		return s.builtinClear(args)
-
 	case "version":
 		return s.builtinVersion(args)
-
 	default:
-		return "", fmt.Errorf("unknown built-in command: %s", command)
+		return "", fmt.Errorf("unknown built-in: %s", command)
 	}
 }
 
-// builtinHelp shows help information
+// builtinHelp handles:
+//
+//	help                   — full overview of categories + builtins
+//	help cypher            — category help
+//	help cloud instances   — sub-category help (uses Category.Find)
 func (s *InteractiveShell) builtinHelp(args []string) (string, error) {
-	if len(args) > 0 {
-		toolName := args[0]
-		if s.registry != nil {
-			if t, err := s.registry.Get(toolName); err == nil {
-				return fmt.Sprintf("%s (v%s)\n\n%s", t.Name(), t.Version(), t.Description()), nil
-			}
-		}
-		return "", fmt.Errorf("tool not found: %s", toolName)
-	}
-
-	return "Available commands:\n" +
-		"  exit, quit  - Exit the shell\n" +
-		"  help [cmd]  - Show help information\n" +
-		"  list        - List all available tools\n" +
-		"  exec <tool> [args] - Execute a tool\n" +
-		"  config      - Show current configuration\n" +
-		"  set <key> <value> - Set configuration value\n" +
-		"  log-level <level>  - Change log level\n" +
-		"  clear       - Clear the screen\n" +
-		"  version     - Show version information", nil
-}
-
-// builtinList lists all available tools
-func (s *InteractiveShell) builtinList(args []string) (string, error) {
-	if s.registry == nil {
-		return "", fmt.Errorf("no tools registered")
-	}
-
-	tools := s.registry.ListNames()
-	if len(tools) == 0 {
-		return "No tools available", nil
-	}
-
-	var builder strings.Builder
-	builder.WriteString("Available tools:\n")
-	for _, name := range tools {
-		builder.WriteString(fmt.Sprintf("  - %s\n", name))
-	}
-	return builder.String(), nil
-}
-
-// builtinExec executes a tool
-func (s *InteractiveShell) builtinExec(args []string) (string, error) {
 	if len(args) == 0 {
-		return "", fmt.Errorf("usage: exec <tool> [args]")
+		return CategoryHelpOverview(s.categories), nil
 	}
 
-	toolName := args[0]
-	toolArgs := args[1:]
-
-	if s.registry == nil {
-		return "", fmt.Errorf("no tools registered")
+	cat, ok := s.categories[args[0]]
+	if !ok {
+		return "", fmt.Errorf("unknown category: %s", args[0])
 	}
 
-	t, err := s.registry.Get(toolName)
-	if err != nil {
-		return "", err
+	// Deeper navigation (e.g. "help cloud instances") uses Category.Find.
+	if len(args) > 1 {
+		sub := cat.Find(args[1:])
+		if sub == nil {
+			return "", fmt.Errorf("unknown: %s", strings.Join(args, " "))
+		}
+		return sub.Help(), nil
 	}
 
-	return s.executeTool(t, toolArgs)
+	return cat.Help(), nil
 }
 
-// builtinConfig shows configuration
-func (s *InteractiveShell) builtinConfig(args []string) (string, error) {
-	return fmt.Sprintf("Log Level: %s\nLog Format: %s\nPrompt: %s\nHistory File: %s",
-		s.config.LogLevel, s.config.LogFormat, s.config.Shell.Prompt, s.config.Shell.HistoryFile), nil
+func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
+	if s.cfg == nil {
+		return "no configuration loaded", nil
+	}
+	return fmt.Sprintf("Log Level:    %s\nLog Format:   %s\nPrompt:       %s\nHistory File: %s",
+		s.cfg.LogLevel, s.cfg.LogFormat, s.cfg.Shell.Prompt, s.cfg.Shell.HistoryFile), nil
 }
 
-// builtinSet sets a configuration value
 func (s *InteractiveShell) builtinSet(args []string) (string, error) {
 	if len(args) < 2 {
 		return "", fmt.Errorf("usage: set <key> <value>")
 	}
-
-	key := args[0]
-	value := args[1]
-
-	switch key {
+	switch args[0] {
 	case "prompt":
-		s.config.Shell.Prompt = value
-		s.prompt = value
-		return fmt.Sprintf("Prompt set to: %s", value), nil
+		s.cfg.Shell.Prompt = args[1]
+		s.prompt = args[1]
+		return fmt.Sprintf("prompt set to: %s", args[1]), nil
 	case "log-level":
-		s.config.LogLevel = value
-		if s.logger != nil {
-			s.logger.SetLevel(logger.ParseLogLevel(value))
+		s.cfg.LogLevel = args[1]
+		if s.log != nil {
+			s.log.SetLevel(logger.ParseLogLevel(args[1]))
 		}
-		return fmt.Sprintf("Log level set to: %s", value), nil
+		return fmt.Sprintf("log level set to: %s", args[1]), nil
 	default:
-		return "", fmt.Errorf("unknown config key: %s", key)
+		return "", fmt.Errorf("unknown config key: %s", args[0])
 	}
 }
 
-// builtinLogLevel changes the log level
 func (s *InteractiveShell) builtinLogLevel(args []string) (string, error) {
 	if len(args) == 0 {
-		return fmt.Sprintf("Current log level: %s", s.config.LogLevel), nil
+		if s.cfg != nil {
+			return fmt.Sprintf("current log level: %s", s.cfg.LogLevel), nil
+		}
+		return "log level: unknown", nil
 	}
-
-	level := args[0]
-	s.config.LogLevel = level
-	if s.logger != nil {
-		s.logger.SetLevel(logger.ParseLogLevel(level))
+	if s.cfg != nil {
+		s.cfg.LogLevel = args[0]
 	}
-	return fmt.Sprintf("Log level set to: %s", level), nil
+	if s.log != nil {
+		s.log.SetLevel(logger.ParseLogLevel(args[0]))
+	}
+	return fmt.Sprintf("log level set to: %s", args[0]), nil
 }
 
-// builtinClear clears the screen
-func (s *InteractiveShell) builtinClear(args []string) (string, error) {
+func (s *InteractiveShell) builtinClear(_ []string) (string, error) {
 	fmt.Print("\033[2J\033[H")
 	return "", nil
 }
 
-// builtinVersion shows version
-func (s *InteractiveShell) builtinVersion(args []string) (string, error) {
-	return "go-cli-tool v1.0.0", nil
+func (s *InteractiveShell) builtinVersion(_ []string) (string, error) {
+	return "neo4j-cli (version injected at build time via -ldflags)", nil
 }
 
-// executeTool executes a tool with given arguments
+// ---- Tool execution -----------------------------------------------------
+
 func (s *InteractiveShell) executeTool(t tool.Tool, args []string) (string, error) {
-	ctx := context.Background()
 	if s.telemetry != nil {
-		s.telemetry.TrackToolUsed(ctx, t.Name(), args)
+		s.telemetry.EmitEvent(analytics.TrackEvent{Event: "tool_used"})
 	}
+
 	start := time.Now()
+	_ = context.Background()
 
 	toolCtx := tool.NewContext().
 		WithArgs(args).
-		WithLogger(s.logger).
+		WithLogger(s.log).
 		WithIO(s.io).
 		WithPresenter(s.presenter)
 
 	result, err := t.Execute(*toolCtx)
-	duration := time.Since(start).Seconds()
+	_ = time.Since(start)
 
 	if err != nil {
-		if s.telemetry != nil {
-			s.telemetry.TrackToolError(ctx, t.Name(), err)
-		}
 		return "", err
 	}
-
 	if !result.Success {
-		if s.telemetry != nil {
-			if result.Error != nil {
-				s.telemetry.TrackToolError(ctx, t.Name(), result.Error)
-			} else {
-				s.telemetry.TrackToolError(ctx, t.Name(), fmt.Errorf("tool execution failed"))
-			}
-		}
 		if result.Error != nil {
 			return result.Output, result.Error
 		}
 		return result.Output, fmt.Errorf("tool execution failed")
 	}
-
-	if s.telemetry != nil {
-		s.telemetry.TrackToolSuccess(ctx, t.Name(), duration)
-	}
-
 	return result.Output, nil
 }
 
-// parseCommand parses a command string into arguments
+// ---- Input parsing ------------------------------------------------------
+
 func parseCommand(cmd string) []string {
 	var args []string
 	var current strings.Builder
@@ -427,24 +349,23 @@ func parseCommand(cmd string) []string {
 	quoteChar := ' '
 
 	for _, ch := range cmd {
-		if (ch == '"' || ch == '\'') && !inQuote {
+		switch {
+		case (ch == '"' || ch == '\'') && !inQuote:
 			inQuote = true
 			quoteChar = ch
-		} else if ch == quoteChar && inQuote {
+		case ch == quoteChar && inQuote:
 			inQuote = false
-		} else if ch == ' ' && !inQuote {
+		case ch == ' ' && !inQuote:
 			if current.Len() > 0 {
 				args = append(args, current.String())
 				current.Reset()
 			}
-		} else {
+		default:
 			current.WriteRune(ch)
 		}
 	}
-
 	if current.Len() > 0 {
 		args = append(args, current.String())
 	}
-
 	return args
 }

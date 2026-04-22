@@ -1,138 +1,102 @@
 package shell
 
 import (
-	"github.com/cli/go-cli-tool/internal/config"
+	"fmt"
+	"sort"
+	"strings"
 
+	"github.com/cli/go-cli-tool/internal/analytics"
+	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
-	"github.com/cli/go-cli-tool/internal/telemetry"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
-// Shell defines the interface for CLI shell operations
+// ---- Shell interface ----------------------------------------------------
+
+// Shell defines the interface for CLI shell operations.
 type Shell interface {
-	// Start starts the shell
 	Start() error
-
-	// Stop stops the shell
 	Stop() error
-
-	// Execute executes a command string
+	IsRunning() bool
 	Execute(cmd string) (string, error)
-
-	// RegisterCommand registers a command handler
 	RegisterCommand(name string, handler CommandHandler)
+	SetCategories(categories map[string]*Category)
 
-	// SetLogger sets the logger
-	SetLogger(logger logger.LoggerService)
-
-	// SetConfig sets the configuration
-	SetConfig(config config.Config)
-
-	// SetTelemetry sets the telemetry service
-	SetTelemetry(telemetry telemetry.TelemetryService)
-
-	// SetPresenter sets the presentation service
-	SetPresenter(presenter *presentation.PresentationService)
-
-	// SetRegistry sets the tool registry
+	SetLogger(log logger.Service)
+	SetConfig(cfg config.Config)
+	SetTelemetry(tel analytics.Service)
+	SetPresenter(p *presentation.PresentationService)
 	SetRegistry(registry interface {
 		Get(name string) (tool.Tool, error)
 		ListNames() []string
 	})
-
-	// IsRunning returns whether the shell is running
-	IsRunning() bool
 }
 
-// CommandHandler is a function that handles shell commands
+// CommandHandler is a function that handles a shell command.
 type CommandHandler func(args []string, ctx ShellContext) (string, error)
 
-// ShellContext provides context for command execution
+// ---- ShellContext -------------------------------------------------------
+
+// ShellContext carries the services a CommandHandler may need.
 type ShellContext struct {
-	// Config is the application configuration
-	Config config.Config
-
-	// Logger is the logger instance
-	Logger logger.LoggerService
-
-	// Telemetry is the telemetry service
-	Telemetry telemetry.TelemetryService
-
-	// Presenter is the presentation service
+	Config    config.Config
+	Logger    logger.Service
+	Telemetry analytics.Service
 	Presenter *presentation.PresentationService
-
-	// Tools is a reference to the tool registry
-	Registry interface {
+	Registry  interface {
 		Get(name string) (tool.Tool, error)
 		ListNames() []string
 	}
-
-	// IO is the IO handler
 	IO tool.IOHandler
 }
 
-// NewShellContext creates a new shell context
-func NewShellContext() *ShellContext {
-	return &ShellContext{}
-}
+func NewShellContext() *ShellContext { return &ShellContext{} }
 
-// WithConfig sets the configuration
-func (c *ShellContext) WithConfig(config *config.Config) *ShellContext {
-	c.Config = *config
+func (c *ShellContext) WithConfig(cfg *config.Config) *ShellContext {
+	if cfg != nil {
+		c.Config = *cfg
+	}
 	return c
 }
 
-// WithLogger sets the logger
-func (c *ShellContext) WithLogger(logger *logger.LoggerService) *ShellContext {
-	c.Logger = *logger
+func (c *ShellContext) WithLogger(log logger.Service) *ShellContext {
+	c.Logger = log
 	return c
 }
 
-// WithTelemetry sets the telemetry service
-func (c *ShellContext) WithTelemetry(telemetry *telemetry.TelemetryService) *ShellContext {
-	c.Telemetry = *telemetry
+func (c *ShellContext) WithTelemetry(tel analytics.Service) *ShellContext {
+	c.Telemetry = tel
 	return c
 }
 
-// WithPresenter sets the presentation service
-func (c *ShellContext) WithPresenter(presenter *presentation.PresentationService) *ShellContext {
-	c.Presenter = presenter
+func (c *ShellContext) WithPresenter(p *presentation.PresentationService) *ShellContext {
+	c.Presenter = p
 	return c
 }
 
-// WithRegistry sets the tool registry
-func (c *ShellContext) WithRegistry(registry interface {
+func (c *ShellContext) WithRegistry(r interface {
 	Get(name string) (tool.Tool, error)
 	ListNames() []string
 }) *ShellContext {
-	c.Registry = registry
+	c.Registry = r
 	return c
 }
 
-// WithIO sets the IO handler
 func (c *ShellContext) WithIO(io tool.IOHandler) *ShellContext {
 	c.IO = io
 	return c
 }
 
-// BuiltinCommands returns all built-in command names
+// ---- Built-in command names ---------------------------------------------
+
+// BuiltinCommands returns the names of commands reserved by the shell itself.
+// These take precedence over categories and the tool registry.
 func BuiltinCommands() []string {
-	return []string{
-		"exit",
-		"quit",
-		"help",
-		"list",
-		"exec",
-		"config",
-		"set",
-		"log-level",
-		"clear",
-		"version",
-	}
+	return []string{"exit", "quit", "help", "config", "set", "log-level", "clear", "version"}
 }
 
-// IsBuiltinCommand checks if a command is built-in
+// IsBuiltinCommand reports whether name is a built-in shell command.
 func IsBuiltinCommand(name string) bool {
 	for _, cmd := range BuiltinCommands() {
 		if cmd == name {
@@ -140,4 +104,36 @@ func IsBuiltinCommand(name string) bool {
 		}
 	}
 	return false
+}
+
+// ---- helpOverview -------------------------------------------------------
+
+// CategoryHelpOverview builds the top-level help string given a map of
+// categories. Pulled here so it can be called from both the shell and tests.
+func CategoryHelpOverview(categories map[string]*Category) string {
+	var b strings.Builder
+
+	if len(categories) > 0 {
+		fmt.Fprintln(&b, "Categories:")
+		names := make([]string, 0, len(categories))
+		for n := range categories {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			fmt.Fprintf(&b, "  %-18s %s\n", n, categories[n].Description)
+		}
+		fmt.Fprintln(&b)
+	}
+
+	fmt.Fprintln(&b, "Built-in commands:")
+	fmt.Fprintln(&b, "  exit / quit        Exit the shell")
+	fmt.Fprintln(&b, "  help [cat [sub]]   Show this help or help for a category")
+	fmt.Fprintln(&b, "  config             Show current configuration")
+	fmt.Fprintln(&b, "  set <key> <val>    Set a config value (prompt, log-level)")
+	fmt.Fprintln(&b, "  log-level [level]  Get or set the log level")
+	fmt.Fprintln(&b, "  clear              Clear the screen")
+	fmt.Fprintln(&b, "  version            Show version")
+
+	return strings.TrimRight(b.String(), "\n")
 }
