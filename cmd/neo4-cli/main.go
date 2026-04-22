@@ -7,30 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cli/go-cli-tool/internal/core"
-	"github.com/cli/go-cli-tool/internal/repository"
+	"github.com/cli/go-cli-tool/internal/cli"
+	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/shell"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
 	"github.com/spf13/cobra"
 )
-
-// noopTelemetry is a TelemetryService that does nothing
-type noopTelemetry struct{}
-
-func (t *noopTelemetry) Track(ctx context.Context, eventName string, props map[string]any) error { return nil }
-func (t *noopTelemetry) TrackStartup(ctx context.Context) error                                 { return nil }
-func (t *noopTelemetry) TrackShutdown(ctx context.Context) error                                { return nil }
-func (t *noopTelemetry) TrackToolUsed(ctx context.Context, toolName string, args []string) error {
-	return nil
-}
-func (t *noopTelemetry) TrackToolSuccess(ctx context.Context, toolName string, dur float64) error {
-	return nil
-}
-func (t *noopTelemetry) TrackToolError(ctx context.Context, toolName string, err error) error {
-	return nil
-}
 
 var (
 	configPath string
@@ -39,21 +24,31 @@ var (
 	shellMode  bool
 	execTool   string
 	execArgs   []string
+	metrics    bool
 )
 
+// go build -C cmd/neo4j-mcp -o ../../bin/ -ldflags "-X 'main.Version=9999'"
+var Version = "development"
+
+const MixPanelEndpoint = "https://api.mixpanel.com"
+const MixPanelToken = "4bfb2414ab973c741b6f067bf06d5575" // #nosec G101 -- MixPanel tokens are safe to be public
+
+// This is very intentionally very small
+// It starts up the CLI and does an os.exit(0) for normal exit or os.exit(1) on an error
 func main() {
 	// Initialize root command
 	rootCmd := &cobra.Command{
-		Use:   "go-cli-tool",
-		Short: "A modular, extensible CLI framework",
-		Long:  `go-cli-tool is a Go-based CLI framework with shell interface, logging, and configuration management.`,
-		Run:   runRoot,
+		Use:   "neo4j-cli",
+		Short: "A cli for neo4j",
+		Long:  `neo4j-cli is a CLI for use with Neo4j.  It has a shell interface, logging, and is configure using a JSON file, env vars or parameters.`,
+		Run:   runCLI,
 	}
 
 	// Add flags
-	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to configuration file")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config-file", "", "Path to configuration file")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "", "Log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&logFormat, "log-format", "", "Log format (text, json)")
+	rootCmd.PersistentFlags().BoolVarP(&metrics, "metrics", "", true, "Send metrics to Neo4j")
 	rootCmd.PersistentFlags().BoolVarP(&shellMode, "shell", "s", false, "Start interactive shell")
 	rootCmd.PersistentFlags().StringVar(&execTool, "exec", "", "Execute a tool directly")
 	rootCmd.Flags().StringSliceVar(&execArgs, "args", []string{}, "Arguments for tool execution")
@@ -62,110 +57,38 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+
+	os.Exit(0)
+
 }
 
-func runRoot(cmd *cobra.Command, args []string) {
-	// Load configuration
-	config := loadConfiguration()
+func runCLI(cmd *cobra.Command, args []string) {
 
-	// Create logger
-	logger := createLogger(config)
+	// Load the configuration in
+	configService := config.NewConfigService(cmd, args)
+	cfg, _ := configService.LoadConfiguration()
 
-	// Initialize Telemetry
-	var telemetry service.TelemetryService
-	if config.Telemetry.MixpanelToken != "" {
-		telemetry = service.NewMixpanelService(config.Telemetry.MixpanelToken, logger)
-	} else {
-		// No-op telemetry if token is missing
-		telemetry = &noopTelemetry{}
+	// NewCLI is a constructor that creates a newCLI instance
+	cli, err := cli.NewCLI(&cfg)
+	if err != nil {
+		// same
+		os.Exit(1)
 	}
 
-	ctx := context.Background()
-	telemetry.TrackStartup(ctx)
-	defer telemetry.TrackShutdown(ctx)
-
-	logger.Info("Starting go-cli-tool", core.Field{Key: "version", Value: "1.0.0"})
-
-	// Initialize Repository
-	repo := repository.NewNeo4jRepository("bolt://localhost:7687", "neo4j", "password")
-	defer repo.Close()
-
-	// Initialize Service
-	graphService := service.NewGraphService(repo)
-
-	// Initialize Presentation Service
-	presentation := service.NewPresentationService(service.OutputFormat(config.LogFormat), logger)
+	// We're starting up
+	cli.Log.Info("Starting neo4j-cli", logger.Field{Key: "version", Value: Version})
 
 	// Create tool registry
 	registry := tools.NewToolRegistry()
 
-	// Register built-in tools
-	registerTools(registry, config, logger, graphService)
-
-	logger.Info("Registered tools", core.Field{Key: "count", Value: registry.Count()})
-
 	// Execute tool directly if specified
 	if execTool != "" {
-		executeToolDirect(registry, logger, telemetry, presentation)
+		executeToolDirect(registry, cli)
 		return
 	}
 
 	// Start shell by default
-	startShell(registry, config, logger, telemetry, presentation)
-}
-
-// loadConfiguration loads configuration from file and environment
-func loadConfiguration() core.Config {
-	// Start with default config
-	configLoader := core.NewJSONConfigLoader()
-
-	// Load from config file if specified
-	if configPath != "" {
-		if config, err := configLoader.Load(configPath); err == nil {
-			// Override with command-line flags
-			if logLevel != "" {
-				config.LogLevel = logLevel
-			}
-			if logFormat != "" {
-				config.LogFormat = logFormat
-			}
-			return config
-		}
-	}
-
-	// Load from environment
-	config := configLoader.LoadFromEnv()
-
-	// Override with command-line flags
-	if logLevel != "" {
-		config.LogLevel = logLevel
-	}
-	if logFormat != "" {
-		config.LogFormat = logFormat
-	}
-
-	// Set defaults if not loaded
-	if config.LogLevel == "" {
-		config.LogLevel = "info"
-	}
-	if config.LogFormat == "" {
-		config.LogFormat = "text"
-	}
-	if config.Shell.Prompt == "" {
-		config.Shell.Prompt = "cli> "
-	}
-	if config.Shell.HistoryFile == "" {
-		config.Shell.HistoryFile = ".cli_history"
-	}
-
-	return config
-}
-
-// createLogger creates a logger based on configuration
-func createLogger(config core.Config) core.Logger {
-	level := core.ParseLogLevel(config.LogLevel)
-	format := core.ParseLogFormat(config.LogFormat)
-	return core.NewLogger(format, level)
+	startShell(registry, cli)
 }
 
 // registerTools registers all available tools

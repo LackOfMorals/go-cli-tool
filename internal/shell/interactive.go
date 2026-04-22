@@ -2,6 +2,7 @@ package shell
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -9,10 +10,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"context"
 
-	"github.com/cli/go-cli-tool/internal/core"
-	"github.com/cli/go-cli-tool/internal/service"
+	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/logger"
+	"github.com/cli/go-cli-tool/internal/presentation"
+	"github.com/cli/go-cli-tool/internal/telemetry"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
 )
@@ -20,11 +22,11 @@ import (
 // InteractiveShell implements Shell with basic input support
 type InteractiveShell struct {
 	// Core components
-	logger    core.Logger
-	config    core.Config
+	logger    *logger.LoggerService
+	config    *config.Config
 	registry  *tools.ToolRegistry
-	telemetry service.TelemetryService
-	presenter *service.PresentationService
+	telemetry *telemetry.TelemetryService
+	presenter *presentation.PresentationService
 
 	// Shell state
 	running bool
@@ -55,13 +57,13 @@ func NewInteractiveShell() *InteractiveShell {
 }
 
 // SetLogger sets the logger
-func (s *InteractiveShell) SetLogger(logger core.Logger) {
+func (s *InteractiveShell) SetLogger(logger *logger.LoggerService) {
 	s.logger = logger
 }
 
 // SetConfig sets the configuration
-func (s *InteractiveShell) SetConfig(config core.Config) {
-	s.config = config
+func (s *InteractiveShell) SetConfig(config config.Config) {
+	s.config = &config
 	if config.Shell.Prompt != "" {
 		s.prompt = config.Shell.Prompt
 	}
@@ -71,12 +73,12 @@ func (s *InteractiveShell) SetConfig(config core.Config) {
 }
 
 // SetTelemetry sets the telemetry service
-func (s *InteractiveShell) SetTelemetry(telemetry service.TelemetryService) {
+func (s *InteractiveShell) SetTelemetry(telemetry *telemetry.TelemetryService) {
 	s.telemetry = telemetry
 }
 
 // SetPresenter sets the presentation service
-func (s *InteractiveShell) SetPresenter(presenter *service.PresentationService) {
+func (s *InteractiveShell) SetPresenter(presenter *presentation.PresentationService) {
 	s.presenter = presenter
 }
 
@@ -339,7 +341,7 @@ func (s *InteractiveShell) builtinSet(args []string) (string, error) {
 	case "log-level":
 		s.config.LogLevel = value
 		if s.logger != nil {
-			s.logger.SetLevel(core.ParseLogLevel(value))
+			s.logger.SetLevel(logger.ParseLogLevel(value))
 		}
 		return fmt.Sprintf("Log level set to: %s", value), nil
 	default:
@@ -356,7 +358,7 @@ func (s *InteractiveShell) builtinLogLevel(args []string) (string, error) {
 	level := args[0]
 	s.config.LogLevel = level
 	if s.logger != nil {
-		s.logger.SetLevel(core.ParseLogLevel(level))
+		s.logger.SetLevel(logger.ParseLogLevel(level))
 	}
 	return fmt.Sprintf("Log level set to: %s", level), nil
 }

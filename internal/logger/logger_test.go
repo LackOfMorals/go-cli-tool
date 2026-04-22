@@ -1,11 +1,11 @@
-package core
+package logger
 
 import (
 	"testing"
 )
 
 func TestLoggerLevel(t *testing.T) {
-	logger := NewLogger(FormatText, LevelInfo)
+	logger := NewLoggerService(FormatText, LevelInfo)
 
 	// Test SetLevel
 	logger.SetLevel(LevelDebug)
@@ -74,19 +74,19 @@ func TestParseLogFormat(t *testing.T) {
 }
 
 func TestNewLogger(t *testing.T) {
-	textLogger := NewLogger(FormatText, LevelInfo)
+	textLogger := NewLoggerService(FormatText, LevelInfo)
 	if textLogger == nil {
 		t.Error("Expected non-nil text logger")
 	}
 
-	jsonLogger := NewLogger(FormatJSON, LevelInfo)
+	jsonLogger := NewLoggerService(FormatJSON, LevelInfo)
 	if jsonLogger == nil {
 		t.Error("Expected non-nil json logger")
 	}
 }
 
 func TestWithFields(t *testing.T) {
-	logger := NewLogger(FormatText, LevelInfo)
+	logger := NewLoggerService(FormatText, LevelInfo)
 	loggerWithFields := logger.WithFields(Field{Key: "app", Value: "test"})
 
 	// Should return a Logger interface

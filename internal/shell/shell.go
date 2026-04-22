@@ -1,8 +1,11 @@
 package shell
 
 import (
-	"github.com/cli/go-cli-tool/internal/core"
-	"github.com/cli/go-cli-tool/internal/service"
+	"github.com/cli/go-cli-tool/internal/config"
+
+	"github.com/cli/go-cli-tool/internal/logger"
+	"github.com/cli/go-cli-tool/internal/presentation"
+	"github.com/cli/go-cli-tool/internal/telemetry"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
@@ -21,16 +24,16 @@ type Shell interface {
 	RegisterCommand(name string, handler CommandHandler)
 
 	// SetLogger sets the logger
-	SetLogger(logger core.Logger)
+	SetLogger(logger logger.LoggerService)
 
 	// SetConfig sets the configuration
-	SetConfig(config core.Config)
+	SetConfig(config config.Config)
 
 	// SetTelemetry sets the telemetry service
-	SetTelemetry(telemetry service.TelemetryService)
+	SetTelemetry(telemetry telemetry.TelemetryService)
 
 	// SetPresenter sets the presentation service
-	SetPresenter(presenter *service.PresentationService)
+	SetPresenter(presenter *presentation.PresentationService)
 
 	// SetRegistry sets the tool registry
 	SetRegistry(registry interface {
@@ -48,16 +51,16 @@ type CommandHandler func(args []string, ctx ShellContext) (string, error)
 // ShellContext provides context for command execution
 type ShellContext struct {
 	// Config is the application configuration
-	Config core.Config
+	Config config.Config
 
 	// Logger is the logger instance
-	Logger core.Logger
+	Logger logger.LoggerService
 
 	// Telemetry is the telemetry service
-	Telemetry service.TelemetryService
+	Telemetry telemetry.TelemetryService
 
 	// Presenter is the presentation service
-	Presenter *service.PresentationService
+	Presenter *presentation.PresentationService
 
 	// Tools is a reference to the tool registry
 	Registry interface {
@@ -75,25 +78,25 @@ func NewShellContext() *ShellContext {
 }
 
 // WithConfig sets the configuration
-func (c *ShellContext) WithConfig(config core.Config) *ShellContext {
-	c.Config = config
+func (c *ShellContext) WithConfig(config *config.Config) *ShellContext {
+	c.Config = *config
 	return c
 }
 
 // WithLogger sets the logger
-func (c *ShellContext) WithLogger(logger core.Logger) *ShellContext {
-	c.Logger = logger
+func (c *ShellContext) WithLogger(logger *logger.LoggerService) *ShellContext {
+	c.Logger = *logger
 	return c
 }
 
 // WithTelemetry sets the telemetry service
-func (c *ShellContext) WithTelemetry(telemetry service.TelemetryService) *ShellContext {
-	c.Telemetry = telemetry
+func (c *ShellContext) WithTelemetry(telemetry *telemetry.TelemetryService) *ShellContext {
+	c.Telemetry = *telemetry
 	return c
 }
 
 // WithPresenter sets the presentation service
-func (c *ShellContext) WithPresenter(presenter *service.PresentationService) *ShellContext {
+func (c *ShellContext) WithPresenter(presenter *presentation.PresentationService) *ShellContext {
 	c.Presenter = presenter
 	return c
 }

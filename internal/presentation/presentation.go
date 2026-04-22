@@ -1,9 +1,10 @@
-package service
+package presentation
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cli/go-cli-tool/internal/core"
+
+	"github.com/cli/go-cli-tool/internal/logger"
 )
 
 // OutputFormat defines the available output formats
@@ -23,11 +24,11 @@ type OutputFormatter interface {
 type PresentationService struct {
 	format     OutputFormat
 	formatters map[OutputFormat]OutputFormatter
-	logger     core.Logger
+	logger     logger.LoggerService
 }
 
 // NewPresentationService creates a new presentation service
-func NewPresentationService(format OutputFormat, logger core.Logger) *PresentationService {
+func NewPresentationService(format OutputFormat, logger logger.LoggerService) *PresentationService {
 	s := &PresentationService{
 		format:     format,
 		formatters: make(map[OutputFormat]OutputFormatter),
@@ -55,7 +56,7 @@ func (s *PresentationService) SetFormat(format OutputFormat) {
 func (s *PresentationService) Format(data any) (string, error) {
 	formatter, ok := s.formatters[s.format]
 	if !ok {
-		s.logger.Warn("Formatter not found, falling back to text", core.Field{Key: "format", Value: string(s.format)})
+		s.logger.Warn("Formatter not found, falling back to text", logger.Field{Key: "format", Value: string(s.format)})
 		formatter = s.formatters[OutputFormatText]
 	}
 
@@ -70,7 +71,7 @@ func (f *TextFormatter) Format(data any) (string, error) {
 	if s, ok := data.(string); ok {
 		return s, nil
 	}
-	
+
 	// For maps or structs, we might want a more sophisticated text representation
 	// For now, use fmt.Sprintf
 	return fmt.Sprintf("%v", data), nil

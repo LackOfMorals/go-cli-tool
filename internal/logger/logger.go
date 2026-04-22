@@ -1,10 +1,12 @@
-package core
+package logger
 
 import (
 	"log/slog"
 	"os"
 	"strings"
 )
+
+// ---- Config types -------------------------------------------------------
 
 // LogLevel represents the severity of a log message
 type LogLevel string
@@ -31,29 +33,19 @@ type Field struct {
 	Value interface{}
 }
 
-// Logger defines the interface for logging operations
-type Logger interface {
-	Debug(msg string, fields ...Field)
-	Info(msg string, fields ...Field)
-	Warn(msg string, fields ...Field)
-	Error(msg string, fields ...Field)
-	Fatal(msg string, fields ...Field)
-	SetLevel(level LogLevel)
-	GetLevel() LogLevel
-	WithFields(fields ...Field) Logger
-}
-
-// slogLogger implements Logger using log/slog
-type slogLogger struct {
+// LoggerService is the concrete implementation of the logger service
+type LoggerService struct {
 	logger *slog.Logger
 	level  *slog.LevelVar
 	format LogFormat
 }
 
-// NewLogger creates a logger based on the specified format
-func NewLogger(format LogFormat, level LogLevel) Logger {
+// ---- Service ------------------------------------------------------------
+
+// NewLoggerService creates a logger based on the specified format and level
+func NewLoggerService(format LogFormat, defaultLevel LogLevel) Service {
 	levelVar := &slog.LevelVar{}
-	levelVar.Set(toSlogLevel(level))
+	levelVar.Set(toSlogLevel(defaultLevel))
 
 	var handler slog.Handler
 	opts := &slog.HandlerOptions{
@@ -66,44 +58,44 @@ func NewLogger(format LogFormat, level LogLevel) Logger {
 		handler = slog.NewTextHandler(os.Stdout, opts)
 	}
 
-	return &slogLogger{
+	return &LoggerService{
 		logger: slog.New(handler),
 		level:  levelVar,
 		format: format,
 	}
 }
 
-func (l *slogLogger) Debug(msg string, fields ...Field) {
+func (l *LoggerService) Debug(msg string, fields ...Field) {
 	l.logger.Debug(msg, toSlogArgs(fields)...)
 }
 
-func (l *slogLogger) Info(msg string, fields ...Field) {
+func (l *LoggerService) Info(msg string, fields ...Field) {
 	l.logger.Info(msg, toSlogArgs(fields)...)
 }
 
-func (l *slogLogger) Warn(msg string, fields ...Field) {
+func (l *LoggerService) Warn(msg string, fields ...Field) {
 	l.logger.Warn(msg, toSlogArgs(fields)...)
 }
 
-func (l *slogLogger) Error(msg string, fields ...Field) {
+func (l *LoggerService) Error(msg string, fields ...Field) {
 	l.logger.Error(msg, toSlogArgs(fields)...)
 }
 
-func (l *slogLogger) Fatal(msg string, fields ...Field) {
+func (l *LoggerService) Fatal(msg string, fields ...Field) {
 	l.logger.Error(msg, append(toSlogArgs(fields), slog.String("fatal", "true"))...)
 	os.Exit(1)
 }
 
-func (l *slogLogger) SetLevel(level LogLevel) {
+func (l *LoggerService) SetLevel(level LogLevel) {
 	l.level.Set(toSlogLevel(level))
 }
 
-func (l *slogLogger) GetLevel() LogLevel {
+func (l *LoggerService) GetLevel() LogLevel {
 	return fromSlogLevel(l.level.Level())
 }
 
-func (l *slogLogger) WithFields(fields ...Field) Logger {
-	return &slogLogger{
+func (l *LoggerService) WithFields(fields ...Field) Service {
+	return &LoggerService{
 		logger: l.logger.With(toSlogArgs(fields)...),
 		level:  l.level,
 		format: l.format,

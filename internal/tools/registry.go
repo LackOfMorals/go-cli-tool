@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cli/go-cli-tool/internal/core"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 

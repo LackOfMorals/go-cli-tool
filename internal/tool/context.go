@@ -2,7 +2,8 @@ package tool
 
 import (
 	"os"
-	"github.com/cli/go-cli-tool/internal/service"
+
+	"github.com/cli/go-cli-tool/internal/presentation"
 )
 
 // Context provides execution context for tools
@@ -26,7 +27,7 @@ type Context struct {
 	IO IOHandler
 
 	// Presenter is the presentation service
-	Presenter *service.PresentationService
+	Presenter *presentation.PresentationService
 
 	// WorkingDir is the current working directory
 	WorkingDir string
@@ -89,7 +90,7 @@ func (c *Context) WithIO(io IOHandler) *Context {
 }
 
 // WithPresenter sets the presentation service
-func (c *Context) WithPresenter(presenter *service.PresentationService) *Context {
+func (c *Context) WithPresenter(presenter *presentation.PresentationService) *Context {
 	c.Presenter = presenter
 	return c
 }
