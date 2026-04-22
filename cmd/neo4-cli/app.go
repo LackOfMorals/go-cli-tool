@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/cli/go-cli-tool/internal/analytics"
-	"github.com/cli/go-cli-tool/internal/cli"
 	"github.com/cli/go-cli-tool/internal/commands"
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/logger"
+	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/repository"
 	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/shell"
@@ -29,32 +29,28 @@ const (
 // ---- CLI flag vars -------------------------------------------------------
 
 var (
-	configPath string
-	logLevel   string
-	logFormat  string
-	shellMode  bool
-	execTool   string
-	execArgs   []string
-	metrics    bool
-
-	// Neo4j connection (non-secret values only — password comes from env/file).
-	neo4jURI      string
-	neo4jUsername string
-	neo4jDatabase string
-
-	// Aura API (non-secret values only — client secret comes from env/file).
-	auraClientID      string
+	configPath         string
+	logLevel           string
+	logFormat          string
+	shellMode          bool
+	execTool           string
+	execArgs           []string
+	metrics            bool
+	neo4jURI           string
+	neo4jUsername      string
+	neo4jDatabase      string
+	auraClientID       string
 	auraTimeoutSeconds int
 )
 
 // ---- App ----------------------------------------------------------------
 
 type App struct {
-	cfg      *config.Config
-	log      logger.Service
-	analytic analytics.Service
-	neo4jCLI *cli.Neo4jCLI
-	registry *tools.ToolRegistry
+	cfg          *config.Config
+	log          logger.Service
+	analytic     analytics.Service
+	presentation *presentation.PresentationService
+	registry     *tools.ToolRegistry
 
 	cypherSvc service.CypherService
 	cloudSvc  service.CloudService
@@ -81,33 +77,64 @@ named tool and exit immediately.`,
 		SilenceErrors: true,
 	}
 
-	// ---- General flags --------------------------------------------------
 	pf := rootCmd.PersistentFlags()
 	pf.StringVar(&configPath, "config-file", "", "Path to a JSON configuration file")
 	pf.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error")
 	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
 	pf.BoolVar(&metrics, "metrics", true, "Send usage metrics to Neo4j")
 	pf.BoolVarP(&shellMode, "shell", "s", false, "Start interactive shell (default when no --exec)")
-
-	// ---- Neo4j connection flags -----------------------------------------
-	// Secrets (password) are intentionally excluded: passing a password on
-	// the command line exposes it in shell history and ps output. Use
-	// CLI_NEO4J_PASSWORD or the config file instead.
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
-	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name (default: neo4j)")
-
-	// ---- Aura API flags -------------------------------------------------
-	// Client secret is excluded for the same reason as the password above.
-	// Use CLI_AURA_CLIENT_SECRET or the config file.
+	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
-	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds (default: 30)")
+	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
 
-	// ---- Exec flags (root-local) ----------------------------------------
 	rootCmd.Flags().StringVar(&execTool, "exec", "", "Execute a named tool directly and exit")
 	rootCmd.Flags().StringSliceVar(&execArgs, "args", []string{}, "Arguments passed to the --exec tool")
 
 	return rootCmd
+}
+
+// overridesFromCmd extracts only the flags the user explicitly set, so a
+// flag default can never silently clobber a value from the config file.
+func overridesFromCmd(cmd *cobra.Command) config.Overrides {
+	o := config.Overrides{}
+	f := cmd.Flags()
+
+	if f.Changed("config-file") {
+		o.ConfigFile, _ = f.GetString("config-file")
+	}
+	if f.Changed("log-level") {
+		o.LogLevel, _ = f.GetString("log-level")
+	}
+	if f.Changed("log-format") {
+		o.LogFormat, _ = f.GetString("log-format")
+	}
+	if f.Changed("metrics") {
+		v, _ := f.GetBool("metrics")
+		o.MetricsEnabled = &v
+	}
+	if f.Changed("shell") {
+		v, _ := f.GetBool("shell")
+		o.ShellEnabled = &v
+	}
+	if f.Changed("neo4j-uri") {
+		o.Neo4jURI, _ = f.GetString("neo4j-uri")
+	}
+	if f.Changed("neo4j-username") {
+		o.Neo4jUsername, _ = f.GetString("neo4j-username")
+	}
+	if f.Changed("neo4j-database") {
+		o.Neo4jDatabase, _ = f.GetString("neo4j-database")
+	}
+	if f.Changed("aura-client-id") {
+		o.AuraClientID, _ = f.GetString("aura-client-id")
+	}
+	if f.Changed("aura-timeout") {
+		v, _ := f.GetInt("aura-timeout")
+		o.AuraTimeout = &v
+	}
+	return o
 }
 
 func runCLI(cmd *cobra.Command, args []string) error {
@@ -119,10 +146,9 @@ func runCLI(cmd *cobra.Command, args []string) error {
 	return app.dispatch()
 }
 
-func newApp(cmd *cobra.Command, args []string) (*App, error) {
-	// 1. Config — flags > env vars > config file > defaults.
-	cfgSvc := config.NewConfigService(cmd, args)
-	cfg, err := cfgSvc.LoadConfiguration()
+func newApp(cmd *cobra.Command, _ []string) (*App, error) {
+	// 1. Config — explicit overrides > env vars > file > defaults.
+	cfg, err := config.NewConfigService(overridesFromCmd(cmd)).LoadConfiguration()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -139,10 +165,14 @@ func newApp(cmd *cobra.Command, args []string) (*App, error) {
 		an.Disable()
 	}
 
-	// 4. CLI facade
-	neo4jCLI, err := cli.NewCLI(&cfg, log, an)
+	// 4. Presentation service
+	format := presentation.OutputFormat(cfg.LogFormat)
+	if !format.IsValid() {
+		format = presentation.OutputFormatText
+	}
+	pres, err := presentation.NewPresentationService(format, log)
 	if err != nil {
-		return nil, fmt.Errorf("init CLI facade: %w", err)
+		return nil, fmt.Errorf("init presentation: %w", err)
 	}
 
 	// 5. Graph repository — shared by cypher and admin services.
@@ -158,29 +188,31 @@ func newApp(cmd *cobra.Command, args []string) (*App, error) {
 	cloudSvc := service.NewCloudService(cfg.Aura)
 	adminSvc := service.NewAdminService(repo)
 
-	// 7. Tool registry
-	registry := buildRegistry(&cfg, neo4jCLI, log, repo)
+	// 7. Tool registry — QueryTool reuses cypherSvc so there is one query path.
+	registry := buildRegistry(&cfg, log, cypherSvc)
 
 	return &App{
-		cfg:       &cfg,
-		log:       log,
-		analytic:  an,
-		neo4jCLI:  neo4jCLI,
-		registry:  registry,
-		cypherSvc: cypherSvc,
-		cloudSvc:  cloudSvc,
-		adminSvc:  adminSvc,
+		cfg:          &cfg,
+		log:          log,
+		analytic:     an,
+		presentation: pres,
+		registry:     registry,
+		cypherSvc:    cypherSvc,
+		cloudSvc:     cloudSvc,
+		adminSvc:     adminSvc,
 	}, nil
 }
 
-func buildRegistry(cfg *config.Config, neo4jCLI *cli.Neo4jCLI, log logger.Service, repo repository.GraphRepository) *tools.ToolRegistry {
-	graphSvc := service.NewGraphService(repo)
+// buildRegistry constructs the tool registry. QueryTool receives the same
+// CypherService used by the 'cypher' shell category — one query path, no
+// duplication.
+func buildRegistry(cfg *config.Config, log logger.Service, cypherSvc service.CypherService) *tools.ToolRegistry {
 	registry := tools.NewToolRegistry()
 
 	for _, t := range []tool.Tool{
 		tools.NewEchoTool(),
 		tools.NewHelpTool(registry),
-		tools.NewQueryTool(graphSvc),
+		tools.NewQueryTool(cypherSvc),
 	} {
 		registerTool(registry, t, cfg, log)
 	}
@@ -230,17 +262,14 @@ func (a *App) executeDirect() error {
 		WithArgs(execArgs).
 		WithLogger(a.log).
 		WithIO(tool.NewDefaultIOHandler()).
-		WithPresenter(a.neo4jCLI.Presentation)
+		WithPresenter(a.presentation)
 
 	result, err := t.Execute(*toolCtx)
 	if err != nil {
 		return fmt.Errorf("execute %q: %w", execTool, err)
 	}
 	if !result.Success {
-		if result.Error != nil {
-			return result.Error
-		}
-		return fmt.Errorf("tool %q reported failure", execTool)
+		return fmt.Errorf("tool %q reported failure: %s", execTool, result.Output)
 	}
 	if result.Output != "" {
 		fmt.Println(result.Output)
@@ -253,9 +282,10 @@ func (a *App) startShell() error {
 	s.SetLogger(a.log)
 	s.SetConfig(*a.cfg)
 	s.SetRegistry(a.registry)
-	s.SetTelemetry(a.neo4jCLI.Telemetry)
-	s.SetPresenter(a.neo4jCLI.Presentation)
+	s.SetTelemetry(a.analytic)
+	s.SetPresenter(a.presentation)
 	s.SetCategories(a.buildCategories())
+	s.SetVersion(Version)
 
 	a.log.Info("starting interactive shell")
 	return s.Start()

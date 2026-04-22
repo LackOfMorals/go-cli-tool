@@ -10,11 +10,13 @@ import (
 type Command struct {
 	Name        string
 	Description string
-	Usage       string // short usage hint, e.g. "pause <id>"
+	Usage       string // short usage hint shown in help, e.g. "pause <id>"
 	Handler     CommandHandler
 }
 
 // Category groups related commands under a top-level keyword.
+//
+// # Nesting
 //
 // Categories can be nested one level deep, enabling input like:
 //
@@ -22,12 +24,17 @@ type Command struct {
 //	neo4j> cloud instances pause <id>
 //
 // A category may also carry a DirectHandler for cases where the entire
-// remaining input should be forwarded verbatim to a single handler:
+// remaining input should be forwarded verbatim:
 //
 //	neo4j> cypher MATCH (n) RETURN n LIMIT 5
 //
-// When a DirectHandler is set and the first token does not match any
-// sub-category or command, the full token slice is passed to it.
+// # Thread safety
+//
+// The builder methods (AddCommand, AddSubcategory, SetDirectHandler) are NOT
+// safe for concurrent use. They are intended to be called once during
+// application startup before any goroutine calls Dispatch, Help, or Find.
+// Dispatch, Help, Find, SubcategoryNames, CommandNames, and Subcat are safe
+// to call concurrently once the category tree is fully built.
 type Category struct {
 	Name          string
 	Description   string
@@ -46,32 +53,64 @@ func NewCategory(name, description string) *Category {
 	}
 }
 
-// SetDirectHandler installs a handler that receives all remaining args when
-// the input doesn't match any sub-category or command name. Returns the
-// receiver so calls can be chained.
+// ---- Builder methods (call only during startup) -------------------------
+
+// SetDirectHandler installs a catch-all handler for free-form input that does
+// not match any sub-category or named command. Returns the receiver for
+// chaining.
 func (c *Category) SetDirectHandler(h CommandHandler) *Category {
 	c.directHandler = h
 	return c
 }
 
-// AddCommand registers a named command under this category.
+// AddCommand registers a named command. Returns the receiver for chaining.
 func (c *Category) AddCommand(cmd *Command) *Category {
 	c.commands[cmd.Name] = cmd
 	return c
 }
 
-// AddSubcategory registers a named sub-category under this category.
+// AddSubcategory registers a nested category. Returns the receiver for
+// chaining.
 func (c *Category) AddSubcategory(sub *Category) *Category {
 	c.subcats[sub.Name] = sub
 	return c
 }
+
+// ---- Read-only accessors (safe for concurrent use after startup) --------
+
+// SubcategoryNames returns the names of all direct sub-categories, sorted.
+func (c *Category) SubcategoryNames() []string {
+	names := make([]string, 0, len(c.subcats))
+	for k := range c.subcats {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// CommandNames returns the names of all direct commands, sorted.
+func (c *Category) CommandNames() []string {
+	names := make([]string, 0, len(c.commands))
+	for k := range c.commands {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// Subcat returns the named sub-category, or nil if it does not exist.
+func (c *Category) Subcat(name string) *Category {
+	return c.subcats[name]
+}
+
+// ---- Dispatch / navigation ----------------------------------------------
 
 // Dispatch routes args through the category tree and calls the matching
 // handler. args should be the tokens that follow the category name on the
 // command line.
 //
 // Resolution order:
-//  1. No args → show help (or usage hint if a DirectHandler is set)
+//  1. No args → show help (or a usage hint if a DirectHandler is set)
 //  2. args[0] matches a sub-category → delegate to sub.Dispatch(args[1:])
 //  3. args[0] matches a command → call cmd.Handler(args[1:])
 //  4. DirectHandler is set → call it with the full args slice
@@ -116,7 +155,8 @@ func (c *Category) Find(path []string) *Category {
 	return nil
 }
 
-// Help returns a formatted summary of all sub-categories and commands.
+// Help returns a formatted summary of all sub-categories and commands,
+// sorted alphabetically.
 func (c *Category) Help() string {
 	var b strings.Builder
 
@@ -124,8 +164,7 @@ func (c *Category) Help() string {
 
 	if len(c.subcats) > 0 {
 		fmt.Fprintln(&b, "\nSub-categories:")
-		keys := sortedKeys(c.subcats)
-		for _, k := range keys {
+		for _, k := range sortedKeys(c.subcats) {
 			sub := c.subcats[k]
 			fmt.Fprintf(&b, "  %-18s %s\n", sub.Name, sub.Description)
 		}
@@ -133,8 +172,7 @@ func (c *Category) Help() string {
 
 	if len(c.commands) > 0 {
 		fmt.Fprintln(&b, "\nCommands:")
-		keys := sortedCmdKeys(c.commands)
-		for _, k := range keys {
+		for _, k := range sortedCmdKeys(c.commands) {
 			cmd := c.commands[k]
 			label := cmd.Name
 			if cmd.Usage != "" {

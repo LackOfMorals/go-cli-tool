@@ -1,41 +1,41 @@
 package shell
 
 import (
-	"bufio"
-	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/tool"
-	"github.com/cli/go-cli-tool/internal/tools"
 )
 
 // InteractiveShell is the concrete REPL implementation of the Shell interface.
 type InteractiveShell struct {
 	log       logger.Service
 	cfg       *config.Config
-	registry  *tools.ToolRegistry
+	registry  Registry
 	telemetry analytics.Service
 	presenter *presentation.PresentationService
+	version   string
 
-	// categories is the top-level command hierarchy (cypher, cloud, admin).
 	categories map[string]*Category
-
-	// handlers holds custom one-off command handlers registered at runtime.
-	handlers map[string]CommandHandler
+	handlers   map[string]CommandHandler
 
 	io          tool.IOHandler
 	prompt      string
 	historyFile string
+
+	// rl is the active readline instance. It is set inside Start() before
+	// runLoop is entered and cleared after runLoop returns. Protected by mu.
+	rl *readline.Instance
 
 	running bool
 	mu      sync.RWMutex
@@ -49,6 +49,7 @@ func NewInteractiveShell() *InteractiveShell {
 		io:          tool.NewDefaultIOHandler(),
 		prompt:      "neo4j> ",
 		historyFile: ".neo4j_history",
+		version:     "development",
 	}
 }
 
@@ -58,6 +59,8 @@ func (s *InteractiveShell) SetLogger(log logger.Service)                     { s
 func (s *InteractiveShell) SetTelemetry(tel analytics.Service)               { s.telemetry = tel }
 func (s *InteractiveShell) SetPresenter(p *presentation.PresentationService) { s.presenter = p }
 func (s *InteractiveShell) SetCategories(cats map[string]*Category)          { s.categories = cats }
+func (s *InteractiveShell) SetVersion(v string)                              { s.version = v }
+func (s *InteractiveShell) SetRegistry(r Registry)                           { s.registry = r }
 
 func (s *InteractiveShell) SetConfig(cfg config.Config) {
 	s.cfg = &cfg
@@ -69,45 +72,78 @@ func (s *InteractiveShell) SetConfig(cfg config.Config) {
 	}
 }
 
-func (s *InteractiveShell) SetRegistry(registry interface {
-	Get(name string) (tool.Tool, error)
-	ListNames() []string
-}) {
-	if reg, ok := registry.(*tools.ToolRegistry); ok {
-		s.registry = reg
-	}
-}
-
 // ---- Shell interface ----------------------------------------------------
 
-// Start runs the REPL and blocks until the user exits or a signal fires.
+// Start initialises readline and runs the REPL, blocking until the user exits
+// or a termination signal is received.
+//
+// readline handles SIGINT (Ctrl+C) internally — it returns ErrInterrupt
+// immediately so the REPL is never stuck waiting for a newline. We only
+// intercept SIGTERM for a clean teardown.
 func (s *InteractiveShell) Start() error {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
 		return fmt.Errorf("shell is already running")
 	}
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          s.prompt,
+		HistoryFile:     s.historyFile,
+		HistoryLimit:    500,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		AutoComplete:    s.buildCompleter(),
+	})
+	if err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("init readline: %w", err)
+	}
+
 	s.running = true
+	s.rl = rl
 	s.mu.Unlock()
 
+	// Defer cleanup so it always runs, even if runLoop panics.
+	defer func() {
+		_ = rl.Close()
+		s.mu.Lock()
+		s.rl = nil
+		s.mu.Unlock()
+	}()
+
+	// SIGTERM: close readline so Readline() unblocks and the loop exits.
+	// Do NOT intercept SIGINT here — readline owns it.
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		_ = s.Stop()
+		// Grab the pointer under the lock in case Stop() has already cleared it.
+		s.mu.RLock()
+		rl := s.rl
+		s.mu.RUnlock()
+		if rl != nil {
+			_ = rl.Close()
+		}
 	}()
 
 	s.printWelcome()
-	s.runLoop()
+	s.runLoop(rl)
 
 	signal.Stop(sigChan)
+	_ = s.Stop() // ensure running = false however the loop exited
 	return nil
 }
 
+// Stop marks the shell as stopped. If readline is active it is closed so that
+// any in-progress Readline() call unblocks immediately.
 func (s *InteractiveShell) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.running = false
+	if s.rl != nil {
+		_ = s.rl.Close()
+	}
 	return nil
 }
 
@@ -125,10 +161,9 @@ func (s *InteractiveShell) RegisterCommand(name string, handler CommandHandler) 
 //
 // Routing order:
 //  1. Built-in commands (exit, help, config, …)
-//  2. Top-level categories (cypher, cloud, admin) — routing inside the
-//     category tree is handled by Category.Dispatch
+//  2. Top-level categories — routing within is handled by Category.Dispatch
 //  3. Custom handlers registered via RegisterCommand
-//  4. Tool registry (legacy flat tools)
+//  4. Tool registry
 func (s *InteractiveShell) Execute(cmd string) (string, error) {
 	args := parseCommand(cmd)
 	if len(args) == 0 {
@@ -143,11 +178,11 @@ func (s *InteractiveShell) Execute(cmd string) (string, error) {
 	}
 
 	if cat, ok := s.categories[name]; ok {
-		return cat.Dispatch(rest, *s.createContext())
+		return cat.Dispatch(rest, s.makeContext())
 	}
 
 	if handler, ok := s.handlers[name]; ok {
-		return handler(rest, *s.createContext())
+		return handler(rest, s.makeContext())
 	}
 
 	if s.registry != nil {
@@ -161,14 +196,21 @@ func (s *InteractiveShell) Execute(cmd string) (string, error) {
 
 // ---- REPL loop ----------------------------------------------------------
 
-func (s *InteractiveShell) runLoop() {
-	reader := bufio.NewReader(os.Stdin)
+func (s *InteractiveShell) runLoop(rl *readline.Instance) {
+	for {
+		line, err := rl.Readline()
 
-	for s.IsRunning() {
-		fmt.Print(s.prompt)
+		if err == readline.ErrInterrupt {
+			// Ctrl+C with a partial line: discard input and continue.
+			// Ctrl+C on an empty line: show a hint so the user knows how to exit.
+			if strings.TrimSpace(line) == "" {
+				fmt.Fprintln(os.Stderr, "(type 'exit' or press Ctrl+D to quit)")
+			}
+			continue
+		}
 
-		line, err := reader.ReadString('\n')
-		if err != nil {
+		if err == io.EOF || err != nil {
+			// Ctrl+D or readline closed (SIGTERM / Stop() called).
 			fmt.Println()
 			break
 		}
@@ -178,26 +220,82 @@ func (s *InteractiveShell) runLoop() {
 			continue
 		}
 
-		output, err := s.Execute(cmd)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		output, execErr := s.Execute(cmd)
+		if execErr != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
 		}
 		if output != "" {
 			fmt.Println(output)
 		}
-	}
 
-	_ = s.Stop()
+		// Break if Execute() triggered Stop() (e.g. 'exit' / 'quit' command).
+		if !s.IsRunning() {
+			break
+		}
+	}
 }
 
-func (s *InteractiveShell) createContext() *ShellContext {
-	return NewShellContext().
-		WithConfig(s.cfg).
-		WithLogger(s.log).
-		WithTelemetry(s.telemetry).
-		WithPresenter(s.presenter).
-		WithRegistry(s.registry).
-		WithIO(s.io)
+// ---- Tab completion -----------------------------------------------------
+
+// buildCompleter constructs a readline AutoCompleter from the registered
+// categories, commands, and tool registry. It is called once when Start()
+// initialises readline and reflects the state at that point.
+func (s *InteractiveShell) buildCompleter() readline.AutoCompleter {
+	var items []readline.PrefixCompleterInterface
+
+	// Built-in commands
+	for name := range builtins {
+		items = append(items, readline.PcItem(name))
+	}
+
+	// Category tree: category → sub-category → commands
+	for catName, cat := range s.categories {
+		var catChildren []readline.PrefixCompleterInterface
+
+		for _, subName := range cat.SubcategoryNames() {
+			sub := cat.Subcat(subName)
+			if sub == nil {
+				continue
+			}
+			var cmdItems []readline.PrefixCompleterInterface
+			for _, cmdName := range sub.CommandNames() {
+				cmdItems = append(cmdItems, readline.PcItem(cmdName))
+			}
+			catChildren = append(catChildren, readline.PcItem(subName, cmdItems...))
+		}
+
+		for _, cmdName := range cat.CommandNames() {
+			catChildren = append(catChildren, readline.PcItem(cmdName))
+		}
+
+		items = append(items, readline.PcItem(catName, catChildren...))
+	}
+
+	// Tool registry
+	if s.registry != nil {
+		for _, name := range s.registry.ListNames() {
+			items = append(items, readline.PcItem(name))
+		}
+	}
+
+	return readline.NewPrefixCompleter(items...)
+}
+
+// ---- Context ------------------------------------------------------------
+
+func (s *InteractiveShell) makeContext() ShellContext {
+	cfg := config.Config{}
+	if s.cfg != nil {
+		cfg = *s.cfg
+	}
+	return ShellContext{
+		Config:    cfg,
+		Logger:    s.log,
+		Telemetry: s.telemetry,
+		Presenter: s.presenter,
+		Registry:  s.registry,
+		IO:        s.io,
+	}
 }
 
 func (s *InteractiveShell) printWelcome() {
@@ -229,11 +327,6 @@ func (s *InteractiveShell) executeBuiltin(command string, args []string) (string
 	}
 }
 
-// builtinHelp handles:
-//
-//	help                   — full overview of categories + builtins
-//	help cypher            — category help
-//	help cloud instances   — sub-category help (uses Category.Find)
 func (s *InteractiveShell) builtinHelp(args []string) (string, error) {
 	if len(args) == 0 {
 		return CategoryHelpOverview(s.categories), nil
@@ -244,7 +337,6 @@ func (s *InteractiveShell) builtinHelp(args []string) (string, error) {
 		return "", fmt.Errorf("unknown category: %s", args[0])
 	}
 
-	// Deeper navigation (e.g. "help cloud instances") uses Category.Find.
 	if len(args) > 1 {
 		sub := cat.Find(args[1:])
 		if sub == nil {
@@ -272,6 +364,12 @@ func (s *InteractiveShell) builtinSet(args []string) (string, error) {
 	case "prompt":
 		s.cfg.Shell.Prompt = args[1]
 		s.prompt = args[1]
+		// Update readline's live prompt so the change takes effect immediately.
+		s.mu.RLock()
+		if s.rl != nil {
+			s.rl.SetPrompt(args[1])
+		}
+		s.mu.RUnlock()
 		return fmt.Sprintf("prompt set to: %s", args[1]), nil
 	case "log-level":
 		s.cfg.LogLevel = args[1]
@@ -306,7 +404,7 @@ func (s *InteractiveShell) builtinClear(_ []string) (string, error) {
 }
 
 func (s *InteractiveShell) builtinVersion(_ []string) (string, error) {
-	return "neo4j-cli (version injected at build time via -ldflags)", nil
+	return fmt.Sprintf("neo4j-cli %s", s.version), nil
 }
 
 // ---- Tool execution -----------------------------------------------------
@@ -316,9 +414,6 @@ func (s *InteractiveShell) executeTool(t tool.Tool, args []string) (string, erro
 		s.telemetry.EmitEvent(analytics.TrackEvent{Event: "tool_used"})
 	}
 
-	start := time.Now()
-	_ = context.Background()
-
 	toolCtx := tool.NewContext().
 		WithArgs(args).
 		WithLogger(s.log).
@@ -326,15 +421,10 @@ func (s *InteractiveShell) executeTool(t tool.Tool, args []string) (string, erro
 		WithPresenter(s.presenter)
 
 	result, err := t.Execute(*toolCtx)
-	_ = time.Since(start)
-
 	if err != nil {
 		return "", err
 	}
 	if !result.Success {
-		if result.Error != nil {
-			return result.Output, result.Error
-		}
 		return result.Output, fmt.Errorf("tool execution failed")
 	}
 	return result.Output, nil
@@ -342,11 +432,14 @@ func (s *InteractiveShell) executeTool(t tool.Tool, args []string) (string, erro
 
 // ---- Input parsing ------------------------------------------------------
 
+// parseCommand splits a raw input line into tokens, honouring single and
+// double quotes so arguments with spaces can be passed. Both spaces and tabs
+// are treated as whitespace.
 func parseCommand(cmd string) []string {
 	var args []string
 	var current strings.Builder
 	inQuote := false
-	quoteChar := ' '
+	quoteChar := rune(0)
 
 	for _, ch := range cmd {
 		switch {
@@ -355,7 +448,8 @@ func parseCommand(cmd string) []string {
 			quoteChar = ch
 		case ch == quoteChar && inQuote:
 			inQuote = false
-		case ch == ' ' && !inQuote:
+			quoteChar = 0
+		case (ch == ' ' || ch == '\t') && !inQuote:
 			if current.Len() > 0 {
 				args = append(args, current.String())
 				current.Reset()
