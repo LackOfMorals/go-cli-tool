@@ -30,7 +30,7 @@ func TestCypherService_EmptyQuery_ReturnsError(t *testing.T) {
 		},
 	}
 	svc := service.NewCypherService(repo)
-	_, err := svc.Execute(context.Background(), "")
+	_, err := svc.Execute(context.Background(), "", nil)
 	if err == nil {
 		t.Fatal("expected error for empty query")
 	}
@@ -47,15 +47,35 @@ func TestCypherService_ExecutesCypher(t *testing.T) {
 		},
 	}
 	svc := service.NewCypherService(repo)
-	out, err := svc.Execute(context.Background(), query)
+	result, err := svc.Execute(context.Background(), query, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if gotQuery != query {
 		t.Errorf("repo received %q, want %q", gotQuery, query)
 	}
-	if out == "" {
-		t.Error("expected non-empty output")
+	if len(result.Rows) == 0 {
+		t.Error("expected at least one result row")
+	}
+}
+
+func TestCypherService_PassesParams(t *testing.T) {
+	want := map[string]interface{}{"name": "Alice"}
+	var gotParams map[string]interface{}
+
+	repo := &mockGraphRepository{
+		executeFunc: func(_ context.Context, _ string, params map[string]interface{}) (interface{}, error) {
+			gotParams = params
+			return "ok", nil
+		},
+	}
+	svc := service.NewCypherService(repo)
+	_, err := svc.Execute(context.Background(), "MATCH (n) RETURN n", want)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotParams["name"] != "Alice" {
+		t.Errorf("params not passed to repo: got %v, want %v", gotParams, want)
 	}
 }
 
@@ -67,7 +87,7 @@ func TestCypherService_RepoError_Propagated(t *testing.T) {
 		},
 	}
 	svc := service.NewCypherService(repo)
-	_, err := svc.Execute(context.Background(), "MATCH (n) RETURN n")
+	_, err := svc.Execute(context.Background(), "MATCH (n) RETURN n", nil)
 	if err == nil {
 		t.Fatal("expected error from repo")
 	}
@@ -88,7 +108,7 @@ func TestCypherService_ContextPropagated(t *testing.T) {
 		},
 	}
 	svc := service.NewCypherService(repo)
-	_, err := svc.Execute(ctx, "MATCH (n) RETURN n")
+	_, err := svc.Execute(ctx, "MATCH (n) RETURN n", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,18 +117,31 @@ func TestCypherService_ContextPropagated(t *testing.T) {
 	}
 }
 
-func TestCypherService_ResultFormattedAsString(t *testing.T) {
+func TestCypherService_WrapsScalarResult(t *testing.T) {
 	repo := &mockGraphRepository{
 		executeFunc: func(_ context.Context, _ string, _ map[string]interface{}) (interface{}, error) {
-			return 42, nil // non-string result
+			return 42, nil
 		},
 	}
 	svc := service.NewCypherService(repo)
-	out, err := svc.Execute(context.Background(), "RETURN 42")
+	result, err := svc.Execute(context.Background(), "RETURN 42", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out != "42" {
-		t.Errorf("got %q, want %q", out, "42")
+	if len(result.Columns) == 0 {
+		t.Fatal("expected at least one column")
+	}
+	if len(result.Rows) == 0 {
+		t.Fatal("expected at least one row")
+	}
+	// The value "42" should appear somewhere in the first row.
+	found := false
+	for _, v := range result.Rows[0] {
+		if v == "42" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("result rows: %v — expected to find \"42\"", result.Rows)
 	}
 }

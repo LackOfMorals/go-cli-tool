@@ -3,8 +3,10 @@ package tools_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
 )
@@ -12,16 +14,24 @@ import (
 // ---- mockCypherService --------------------------------------------------
 
 type mockCypherService struct {
-	result  string
+	result  service.QueryResult
 	err     error
 	lastCtx context.Context
 	lastQry string
 }
 
-func (m *mockCypherService) Execute(ctx context.Context, query string) (string, error) {
+func (m *mockCypherService) Execute(ctx context.Context, query string, _ map[string]interface{}) (service.QueryResult, error) {
 	m.lastCtx = ctx
 	m.lastQry = query
 	return m.result, m.err
+}
+
+// singleCol builds a one-column QueryResult for simple test fixtures.
+func singleCol(val string) service.QueryResult {
+	return service.QueryResult{
+		Columns: []string{"result"},
+		Rows:    []service.QueryRow{{"result": val}},
+	}
 }
 
 // ---- QueryTool tests ----------------------------------------------------
@@ -38,7 +48,7 @@ func TestQueryTool_NoArgs_ReturnsError(t *testing.T) {
 }
 
 func TestQueryTool_ExecutesQuery(t *testing.T) {
-	svc := &mockCypherService{result: "node1"}
+	svc := &mockCypherService{result: singleCol("node1")}
 	qt := tools.NewQueryTool(svc)
 
 	ctx := tool.NewContext().WithArgs([]string{"MATCH (n) RETURN n"})
@@ -49,8 +59,8 @@ func TestQueryTool_ExecutesQuery(t *testing.T) {
 	if !result.Success {
 		t.Error("expected successful result")
 	}
-	if result.Output != "node1" {
-		t.Errorf("output: got %q, want %q", result.Output, "node1")
+	if !strings.Contains(result.Output, "node1") {
+		t.Errorf("output should contain 'node1'; got: %q", result.Output)
 	}
 }
 
@@ -73,7 +83,7 @@ func TestQueryTool_ContextPropagated(t *testing.T) {
 	type key struct{}
 	cmdCtx := context.WithValue(context.Background(), key{}, "sentinel")
 
-	svc := &mockCypherService{result: "ok"}
+	svc := &mockCypherService{result: singleCol("ok")}
 	qt := tools.NewQueryTool(svc)
 
 	ctx := tool.NewContext().
@@ -90,16 +100,14 @@ func TestQueryTool_ContextPropagated(t *testing.T) {
 }
 
 func TestQueryTool_OnlyFirstArgUsedAsQuery(t *testing.T) {
-	svc := &mockCypherService{result: "ok"}
+	svc := &mockCypherService{result: singleCol("ok")}
 	qt := tools.NewQueryTool(svc)
 
-	// QueryTool is designed for --exec mode where the full query is one arg.
-	// Only the first arg should be sent to the service.
 	ctx := tool.NewContext().WithArgs([]string{"MATCH (n) RETURN n", "extra"})
 	_, _ = qt.Execute(*ctx)
 
-	if svc.lastQry != "MATCH (n) RETURN n" {
-		t.Errorf("service received %q, expected only the first arg", svc.lastQry)
+	if svc.lastQry != "MATCH (n) RETURN n LIMIT 100" {
+		t.Errorf("service received %q, expected first arg with LIMIT injected", svc.lastQry)
 	}
 }
 

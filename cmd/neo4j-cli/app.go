@@ -199,27 +199,22 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		an.Disable()
 	}
 
-	// 4. Presentation service
-	format := presentation.OutputFormat(cfg.LogFormat)
-	if !format.IsValid() {
-		format = presentation.OutputFormatText
-	}
-	pres, err := presentation.NewPresentationService(format, log)
+	// 4. Presentation service — always start in table mode for a CLI.
+	// Commands use FormatAs for per-query overrides; the session default
+	// can be changed with `set cypher-format <format>`.
+	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
 	if err != nil {
 		return nil, fmt.Errorf("init presentation: %w", err)
 	}
 
 	// 5. Graph repository — shared by cypher and admin services.
-	repo := repository.NewNeo4jRepository(
-		cfg.Neo4j.URI,
-		cfg.Neo4j.Username,
-		cfg.Neo4j.Password,
-		cfg.Neo4j.Database,
-	)
+	// Receives a pointer to cfg.Neo4j so that credentials provided
+	// interactively by InteractiveNeo4jPrerequisite are visible on first use.
+	repo := repository.NewNeo4jRepository(&cfg.Neo4j)
 
 	// 6. Domain services
 	cypherSvc := service.NewCypherService(repo)
-	cloudSvc := service.NewCloudService(cfg.Aura)
+	cloudSvc := service.NewCloudService(&cfg.Aura) // pointer so interactive prerequisite can populate credentials
 	adminSvc := service.NewAdminService(repo)
 
 	// 7. Tool registry — QueryTool reuses cypherSvc so there is one query path.
@@ -279,12 +274,14 @@ func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log lo
 
 func (a *App) buildCategories() map[string]*shell.Category {
 	return map[string]*shell.Category{
+		// InteractiveNeo4jPrerequisite prompts for URI/username/password on
+		// first use and saves them so subsequent sessions skip the prompt.
 		"cypher": commands.BuildCypherCategory(a.cypherSvc).
-			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
 		"cloud": commands.BuildCloudCategory(a.cloudSvc).
-			SetPrerequisite(commands.AuraPrerequisite(&a.cfg.Aura)),
+			SetPrerequisite(commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, configPath)),
 		"admin": commands.BuildAdminCategory(a.adminSvc).
-			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
 	}
 }
 

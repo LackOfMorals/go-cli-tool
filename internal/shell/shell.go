@@ -92,7 +92,7 @@ func CategoryHelpOverview(categories map[string]*Category) string {
 	fmt.Fprintln(&b, "  exit / quit        Exit the shell")
 	fmt.Fprintln(&b, "  help [cat [sub]]   Show this help or help for a category")
 	fmt.Fprintln(&b, "  config             Show full configuration (connection, telemetry, shell)")
-	fmt.Fprintln(&b, "  set <key> <val>    Set a config value (prompt, log-level)")
+	fmt.Fprintln(&b, "  set <key> <val>    Set a config value (prompt, log-level, cypher-format, cypher-limit)")
 	fmt.Fprintln(&b, "  log-level [level]  Get or set the log level")
 	fmt.Fprintln(&b, "  clear              Clear the screen")
 	fmt.Fprintln(&b, "  version            Show version")

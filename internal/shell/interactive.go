@@ -478,6 +478,23 @@ func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
 	row("Client secret", secret(c.Aura.ClientSecret))
 	row("Timeout", fmt.Sprintf("%ds", c.Aura.TimeoutSeconds))
 
+	sec("Cypher")
+	cypherFmt := c.Cypher.OutputFormat
+	if cypherFmt == "" {
+		cypherFmt = "table"
+	}
+	row("Output format", cypherFmt)
+	shellLim := c.Cypher.ShellLimit
+	if shellLim == 0 {
+		shellLim = 25
+	}
+	execLim := c.Cypher.ExecLimit
+	if execLim == 0 {
+		execLim = 100
+	}
+	row("Shell limit", fmt.Sprintf("%d rows", shellLim))
+	row("Exec limit", fmt.Sprintf("%d rows", execLim))
+
 	sec("Telemetry")
 	metricsStatus := "enabled"
 	if !c.Telemetry.Metrics {
@@ -489,8 +506,29 @@ func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
 }
 
 func (s *InteractiveShell) builtinSet(args []string) (string, error) {
-	if len(args) < 2 {
-		return "", fmt.Errorf("usage: set <key> <value>")
+	if len(args) == 0 {
+		return "", fmt.Errorf(
+			"usage: set <key> <value>\n" +
+				"  keys: prompt, log-level, cypher-format, cypher-limit")
+	}
+	// Single-arg form: "set <key>" — show current value.
+	if len(args) == 1 {
+		switch args[0] {
+		case "cypher-format":
+			fmt := "table"
+			if s.cfg != nil && s.cfg.Cypher.OutputFormat != "" {
+				fmt = s.cfg.Cypher.OutputFormat
+			}
+			return fmt, nil
+		case "cypher-limit":
+			lim := 25
+			if s.cfg != nil && s.cfg.Cypher.ShellLimit > 0 {
+				lim = s.cfg.Cypher.ShellLimit
+			}
+			return fmt.Sprintf("%d", lim), nil
+		default:
+			return "", fmt.Errorf("usage: set <key> <value>  (keys: prompt, log-level, cypher-format, cypher-limit)")
+		}
 	}
 	switch args[0] {
 	case "prompt":
@@ -509,8 +547,26 @@ func (s *InteractiveShell) builtinSet(args []string) (string, error) {
 			s.log.SetLevel(logger.ParseLogLevel(args[1]))
 		}
 		return fmt.Sprintf("log level set to: %s", args[1]), nil
+	case "cypher-format":
+		v := strings.ToLower(args[1])
+		if v != "table" && v != "graph" && v != "json" && v != "pretty-json" {
+			return "", fmt.Errorf("cypher-format must be table, graph, json, or pretty-json")
+		}
+		if s.cfg != nil {
+			s.cfg.Cypher.OutputFormat = v
+		}
+		return fmt.Sprintf("cypher output format set to: %s", v), nil
+	case "cypher-limit":
+		var n int
+		if _, err := fmt.Sscanf(args[1], "%d", &n); err != nil || n < 1 {
+			return "", fmt.Errorf("cypher-limit must be a positive integer")
+		}
+		if s.cfg != nil {
+			s.cfg.Cypher.ShellLimit = n
+		}
+		return fmt.Sprintf("cypher row limit set to: %d", n), nil
 	default:
-		return "", fmt.Errorf("unknown config key: %s", args[0])
+		return "", fmt.Errorf("unknown key %q  (keys: prompt, log-level, cypher-format, cypher-limit)", args[0])
 	}
 }
 
