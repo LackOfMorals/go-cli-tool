@@ -8,19 +8,18 @@ import (
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
-// ToolLister interface for listing tools
+// ToolLister is the interface HelpTool needs from the registry.
 type ToolLister interface {
 	List() []tool.Tool
 	ListNames() []string
 }
 
-// HelpTool provides help information for all registered tools
+// HelpTool displays help information for registered tools.
 type HelpTool struct {
 	*tool.BaseTool
 	registry ToolLister
 }
 
-// NewHelpTool creates a new help tool
 func NewHelpTool(registry ToolLister) *HelpTool {
 	return &HelpTool{
 		BaseTool: tool.NewBaseTool(
@@ -32,110 +31,73 @@ func NewHelpTool(registry ToolLister) *HelpTool {
 	}
 }
 
-// Execute implements Tool interface
 func (t *HelpTool) Execute(ctx tool.Context) (tool.Result, error) {
-	result := tool.NewResult()
+	if len(ctx.Args) > 0 {
+		help, err := t.getToolHelp(ctx.Args[0])
+		if err != nil {
+			return tool.ErrorResult("tool not found"), err
+		}
+		return tool.SuccessResult(help), nil
+	}
 
 	var output strings.Builder
 	writer := tabwriter.NewWriter(&output, 0, 8, 2, ' ', 0)
 
-	// Get tool name from args if provided
-	if len(ctx.Args) > 0 {
-		toolName := ctx.Args[0]
-		help, err := t.getToolHelp(toolName)
-		if err != nil {
-			result.SetError("tool not found", err)
-			return *result, err
-		}
-		result.SetSuccess(help)
-		return *result, nil
-	}
-
-	// Show general help
 	fmt.Fprintln(writer, "Available Tools:")
 	fmt.Fprintln(writer, "================")
 	fmt.Fprintln(writer)
 
 	if t.registry != nil {
-		for _, name := range t.registry.ListNames() {
-			tools := t.registry.List()
-			for _, t := range tools {
-				if t.Name() == name {
-					fmt.Fprintf(writer, "  %s\t%s\n", name, t.Description())
-					break
-				}
-			}
+		for _, listed := range t.registry.List() {
+			fmt.Fprintf(writer, "  %s\t%s\n", listed.Name(), listed.Description())
 		}
 	}
-
 	writer.Flush()
 
-	// Add usage information
 	output.WriteString("\nUsage:\n")
 	output.WriteString("======\n")
 	output.WriteString("  help [tool-name]  - Show help for a specific tool or list all tools\n")
 
-	result.SetSuccess(output.String())
-	return *result, nil
+	return tool.SuccessResult(output.String()), nil
 }
 
-// Validate implements Tool interface
-func (t *HelpTool) Validate(ctx tool.Context) error {
-	return nil
-}
-
-// Configure implements Tool interface
+func (t *HelpTool) Validate(_ tool.Context) error        { return nil }
+func (t *HelpTool) DefaultParams() map[string]interface{} { return map[string]interface{}{} }
 func (t *HelpTool) Configure(params map[string]interface{}) error {
 	return t.BaseTool.Configure(params)
 }
 
-// DefaultParams implements Tool interface
-func (t *HelpTool) DefaultParams() map[string]interface{} {
-	return map[string]interface{}{}
-}
-
-// getToolHelp returns help text for a specific tool
 func (t *HelpTool) getToolHelp(toolName string) (string, error) {
 	if t.registry == nil {
 		return "", fmt.Errorf("no tools registered")
 	}
 
-	tools := t.registry.List()
-	var foundTool tool.Tool
-	for _, t := range tools {
+	var found tool.Tool
+	for _, t := range t.registry.List() {
 		if t.Name() == toolName {
-			foundTool = t
+			found = t
 			break
 		}
 	}
-
-	if foundTool == nil {
+	if found == nil {
 		return "", fmt.Errorf("tool not found: %s", toolName)
 	}
 
-	var output strings.Builder
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("%s (v%s)\n", found.Name(), found.Version()))
+	b.WriteString(strings.Repeat("=", len(found.Name())+10))
+	b.WriteString("\n\nDescription:\n")
+	b.WriteString("-------------\n")
+	b.WriteString(found.Description())
+	b.WriteString("\n\n")
 
-	// Tool header
-	output.WriteString(fmt.Sprintf("%s (v%s)\n", foundTool.Name(), foundTool.Version()))
-	output.WriteString(strings.Repeat("=", len(foundTool.Name())+10))
-	output.WriteString("\n\n")
-
-	// Description
-	output.WriteString("Description:\n")
-	output.WriteString("-------------\n")
-	output.WriteString(foundTool.Description())
-	output.WriteString("\n\n")
-
-	// Parameters
-	defaults := foundTool.DefaultParams()
-	if len(defaults) > 0 {
-		output.WriteString("Default Parameters:\n")
-		output.WriteString("-------------------\n")
+	if defaults := found.DefaultParams(); len(defaults) > 0 {
+		b.WriteString("Default Parameters:\n")
+		b.WriteString("-------------------\n")
 		for key, value := range defaults {
-			output.WriteString(fmt.Sprintf("  %s: %v\n", key, value))
+			b.WriteString(fmt.Sprintf("  %s: %v\n", key, value))
 		}
-		output.WriteString("\n")
 	}
 
-	return output.String(), nil
+	return b.String(), nil
 }

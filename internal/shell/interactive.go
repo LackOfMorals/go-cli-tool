@@ -1,448 +1,631 @@
 package shell
 
 import (
-	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
-	"context"
 
-	"github.com/cli/go-cli-tool/internal/core"
-	"github.com/cli/go-cli-tool/internal/service"
+	"github.com/chzyer/readline"
+	"github.com/google/shlex"
+	"github.com/cli/go-cli-tool/internal/analytics"
+	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/logger"
+	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/tool"
-	"github.com/cli/go-cli-tool/internal/tools"
 )
 
-// InteractiveShell implements Shell with basic input support
+// InteractiveShell is the concrete REPL implementation of the Shell interface.
 type InteractiveShell struct {
-	// Core components
-	logger    core.Logger
-	config    core.Config
-	registry  *tools.ToolRegistry
-	telemetry service.TelemetryService
-	presenter *service.PresentationService
+	log       logger.Service
+	cfg       *config.Config
+	registry  Registry
+	telemetry analytics.Service
+	presenter *presentation.PresentationService
+	version   string
 
-	// Shell state
-	running bool
-	mu      sync.RWMutex
+	categories map[string]*Category
+	handlers   map[string]CommandHandler
+	handlersMu sync.RWMutex // protects handlers; separate from mu to avoid deadlock
 
-	// Command handlers
-	handlers map[string]CommandHandler
-
-	// IO handler
-	io tool.IOHandler
-
-	// History file
+	io          tool.IOHandler
+	prompt      string
 	historyFile string
 
-	// Prompt
-	prompt string
+	// rl is the active readline instance. It is set inside Start() before
+	// runLoop is entered and cleared after runLoop returns. Protected by mu.
+	rl *readline.Instance
+
+	running bool
+	mu      sync.RWMutex
 }
 
-// NewInteractiveShell creates a new interactive shell
+// NewInteractiveShell creates a shell with sensible defaults.
 func NewInteractiveShell() *InteractiveShell {
 	return &InteractiveShell{
+		categories:  make(map[string]*Category),
 		handlers:    make(map[string]CommandHandler),
-		running:     false,
-		prompt:      "cli> ",
-		historyFile: ".cli_history",
 		io:          tool.NewDefaultIOHandler(),
+		prompt:      "neo4j> ",
+		historyFile: ".neo4j_history",
+		version:     "development",
 	}
 }
 
-// SetLogger sets the logger
-func (s *InteractiveShell) SetLogger(logger core.Logger) {
-	s.logger = logger
-}
+// ---- Setters ------------------------------------------------------------
 
-// SetConfig sets the configuration
-func (s *InteractiveShell) SetConfig(config core.Config) {
-	s.config = config
-	if config.Shell.Prompt != "" {
-		s.prompt = config.Shell.Prompt
+func (s *InteractiveShell) SetLogger(log logger.Service)                     { s.log = log }
+func (s *InteractiveShell) SetTelemetry(tel analytics.Service)               { s.telemetry = tel }
+func (s *InteractiveShell) SetPresenter(p *presentation.PresentationService) { s.presenter = p }
+func (s *InteractiveShell) SetCategories(cats map[string]*Category)          { s.categories = cats }
+func (s *InteractiveShell) SetVersion(v string)                              { s.version = v }
+func (s *InteractiveShell) SetRegistry(r Registry)                           { s.registry = r }
+
+func (s *InteractiveShell) SetConfig(cfg config.Config) {
+	s.cfg = &cfg
+	if cfg.Shell.Prompt != "" {
+		s.prompt = cfg.Shell.Prompt
 	}
-	if config.Shell.HistoryFile != "" {
-		s.historyFile = config.Shell.HistoryFile
-	}
-}
-
-// SetTelemetry sets the telemetry service
-func (s *InteractiveShell) SetTelemetry(telemetry service.TelemetryService) {
-	s.telemetry = telemetry
-}
-
-// SetPresenter sets the presentation service
-func (s *InteractiveShell) SetPresenter(presenter *service.PresentationService) {
-	s.presenter = presenter
-}
-
-// SetRegistry sets the tool registry
-func (s *InteractiveShell) SetRegistry(registry interface {
-	Get(name string) (tool.Tool, error)
-	ListNames() []string
-}) {
-	// Type assertion to get the concrete type
-	if reg, ok := registry.(*tools.ToolRegistry); ok {
-		s.registry = reg
+	if cfg.Shell.HistoryFile != "" {
+		s.historyFile = cfg.Shell.HistoryFile
 	}
 }
 
-// Start starts the interactive shell
+// ---- Shell interface ----------------------------------------------------
+
+// Start initialises readline and runs the REPL, blocking until the user exits
+// or a termination signal is received.
+//
+// readline handles SIGINT (Ctrl+C) internally — it returns ErrInterrupt
+// immediately so the REPL is never stuck waiting for a newline. We only
+// intercept SIGTERM for a clean teardown.
 func (s *InteractiveShell) Start() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.running {
+		s.mu.Unlock()
 		return fmt.Errorf("shell is already running")
 	}
 
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          s.prompt,
+		HistoryFile:     s.historyFile,
+		HistoryLimit:    500,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		AutoComplete:    s.buildCompleter(),
+	})
+	if err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("init readline: %w", err)
+	}
+
 	s.running = true
+	s.rl = rl
+	s.mu.Unlock()
 
-	// Handle signals
+	// Defer cleanup so it always runs, even if runLoop panics.
+	defer func() {
+		_ = rl.Close()
+		s.mu.Lock()
+		s.rl = nil
+		s.mu.Unlock()
+	}()
+
+	// SIGTERM: close readline so Readline() unblocks and the loop exits.
+	// Do NOT intercept SIGINT here — readline owns it.
+	//
+	// ctx/cancel ensures the signal goroutine exits cleanly when Start()
+	// returns, preventing a goroutine leak across multiple Start() calls
+	// (common in tests).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
+	signal.Notify(sigChan, syscall.SIGTERM)
 	go func() {
-		for {
-			select {
-			case <-sigChan:
-				s.Stop()
-				return
+		select {
+		case <-sigChan:
+			// Grab the pointer under the lock in case Stop() has already cleared it.
+			s.mu.RLock()
+			rl := s.rl
+			s.mu.RUnlock()
+			if rl != nil {
+				_ = rl.Close()
 			}
+		case <-ctx.Done():
+			// Start() is returning; exit cleanly.
 		}
 	}()
 
-	// Main loop
-	go s.runLoop()
+	s.printWelcome()
+	s.runLoop(rl)
 
+	signal.Stop(sigChan)
+	_ = s.Stop() // ensure running = false however the loop exited
 	return nil
 }
 
-// Stop stops the shell
+// Stop marks the shell as stopped. If readline is active it is closed so that
+// any in-progress Readline() call unblocks immediately.
 func (s *InteractiveShell) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	s.running = false
+	if s.rl != nil {
+		_ = s.rl.Close()
+	}
 	return nil
 }
 
-// IsRunning returns whether the shell is running
 func (s *InteractiveShell) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.running
 }
 
-// Execute executes a command string
-func (s *InteractiveShell) Execute(cmd string) (string, error) {
-	if cmd == "" {
-		return "", nil
-	}
+func (s *InteractiveShell) RegisterCommand(name string, handler CommandHandler) {
+	s.handlersMu.Lock()
+	defer s.handlersMu.Unlock()
+	s.handlers[name] = handler
+}
 
-	// Parse command
+// Execute implements Shell. For callers outside the REPL (e.g. tests or
+// programmatic use) it runs the command with a background context —
+// cancellation is not available. The REPL loop uses executeWithContext
+// directly so that Ctrl+C can cancel in-flight service calls.
+func (s *InteractiveShell) Execute(cmd string) (string, error) {
+	return s.executeWithContext(context.Background(), cmd)
+}
+
+// executeWithContext is the internal dispatch entry-point. ctx should be the
+// per-command context created in runLoop so that Ctrl+C propagates.
+func (s *InteractiveShell) executeWithContext(ctx context.Context, cmd string) (string, error) {
 	args := parseCommand(cmd)
 	if len(args) == 0 {
 		return "", nil
 	}
 
-	command := args[0]
-	cmdArgs := args[1:]
+	name := args[0]
+	rest := args[1:]
 
-	// Check for built-in commands first
-	if IsBuiltinCommand(command) {
-		return s.executeBuiltin(command, cmdArgs)
+	if IsBuiltinCommand(name) {
+		return s.executeBuiltin(name, rest)
 	}
 
-	// Check custom handlers
-	if handler, ok := s.handlers[command]; ok {
-		ctx := s.createContext()
-		return handler(cmdArgs, *ctx)
+	if cat, ok := s.categories[name]; ok {
+		return cat.Dispatch(rest, s.makeContext(ctx))
 	}
 
-	// Check for tool execution
+	s.handlersMu.RLock()
+	handler, hasHandler := s.handlers[name]
+	s.handlersMu.RUnlock()
+	if hasHandler {
+		return handler(rest, s.makeContext(ctx))
+	}
+
 	if s.registry != nil {
-		if t, err := s.registry.Get(command); err == nil {
-			return s.executeTool(t, cmdArgs)
+		if t, err := s.registry.Get(name); err == nil {
+			return s.executeTool(ctx, t, rest)
 		}
 	}
 
-	return "", fmt.Errorf("command not found: %s", command)
+	return "", fmt.Errorf("unknown command: %q  (type 'help' to see available commands)", name)
 }
 
-// RegisterCommand registers a command handler
-func (s *InteractiveShell) RegisterCommand(name string, handler CommandHandler) {
-	s.handlers[name] = handler
-}
+// ---- REPL loop ----------------------------------------------------------
 
-// runLoop runs the main shell loop
-func (s *InteractiveShell) runLoop() {
-	reader := bufio.NewReader(os.Stdin)
+func (s *InteractiveShell) runLoop(rl *readline.Instance) {
+	for {
+		line, err := rl.Readline()
 
-	for s.IsRunning() {
-		fmt.Print(s.prompt)
-		line, _, err := reader.ReadLine()
-		if err != nil {
+		if err == readline.ErrInterrupt {
+			// Ctrl+C at the prompt: discard any partial input.
+			// Ctrl+C on an empty line: show a hint.
+			if strings.TrimSpace(line) == "" {
+				fmt.Fprintln(os.Stderr, "(type 'exit' or press Ctrl+D to quit)")
+			}
+			continue
+		}
+
+		if err == io.EOF || err != nil {
+			// Ctrl+D or readline closed (SIGTERM / Stop() called).
+			fmt.Println()
 			break
 		}
 
-		cmd := strings.TrimSpace(string(line))
+		// Collect continuation lines when the input ends with \.
+		collected, contErr := s.collectInput(rl, line)
+		if contErr == readline.ErrInterrupt {
+			// Ctrl+C mid-continuation: discard accumulated input.
+			continue
+		}
+		if contErr != nil {
+			// EOF or readline closed during continuation.
+			fmt.Println()
+			break
+		}
+
+		cmd := strings.TrimSpace(collected)
 		if cmd == "" {
 			continue
 		}
 
-		output, err := s.Execute(cmd)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		// Create a per-command context. While the command runs we register a
+		// SIGINT handler so that Ctrl+C cancels the in-flight context rather
+		// than killing the process. readline owns SIGINT at the prompt; we
+		// take it back for the duration of each command and restore it after.
+		cmdCtx, cmdCancel := context.WithCancel(context.Background())
+		interruptCh := make(chan os.Signal, 1)
+		signal.Notify(interruptCh, os.Interrupt)
+		go func() {
+			select {
+			case <-interruptCh:
+				fmt.Fprintln(os.Stderr, "^C")
+				cmdCancel()
+			case <-cmdCtx.Done():
+				// Command finished normally; exit the goroutine cleanly.
+			}
+		}()
+
+		output, execErr := s.executeWithContext(cmdCtx, cmd)
+
+		cmdCancel() // always release resources, even on normal return
+		signal.Stop(interruptCh)
+
+		if errors.Is(execErr, context.Canceled) {
+			// Suppress the generic "context canceled" message — the interrupt
+			// goroutine already printed "^C" to stderr.
+		} else {
+			if execErr != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
+			}
+			if output != "" {
+				fmt.Println(output)
+			}
 		}
-		if output != "" {
-			fmt.Println(output)
+
+		// Break if Execute() triggered Stop() (e.g. 'exit' / 'quit' command).
+		if !s.IsRunning() {
+			break
 		}
 	}
 }
 
-// createContext creates a shell context
-func (s *InteractiveShell) createContext() *ShellContext {
-	return NewShellContext().
-		WithConfig(s.config).
-		WithLogger(s.logger).
-		WithTelemetry(s.telemetry).
-		WithPresenter(s.presenter).
-		WithRegistry(s.registry).
-		WithIO(s.io)
+// ---- Tab completion -----------------------------------------------------
+
+// buildCompleter constructs a readline AutoCompleter from the registered
+// categories, commands, and tool registry. It is called once when Start()
+// initialises readline and reflects the state at that point.
+func (s *InteractiveShell) buildCompleter() readline.AutoCompleter {
+	var items []readline.PrefixCompleterInterface
+
+	// Built-in commands
+	for name := range builtins {
+		items = append(items, readline.PcItem(name))
+	}
+
+	// Category tree: category → sub-category → commands
+	for catName, cat := range s.categories {
+		var catChildren []readline.PrefixCompleterInterface
+
+		for _, subName := range cat.SubcategoryNames() {
+			sub := cat.Subcat(subName)
+			if sub == nil {
+				continue
+			}
+			var cmdItems []readline.PrefixCompleterInterface
+			for _, cmdName := range sub.CommandNames() {
+				cmdItems = append(cmdItems, readline.PcItem(cmdName))
+			}
+			catChildren = append(catChildren, readline.PcItem(subName, cmdItems...))
+		}
+
+		for _, cmdName := range cat.AllCommandNames() {
+			catChildren = append(catChildren, readline.PcItem(cmdName))
+		}
+
+		items = append(items, readline.PcItem(catName, catChildren...))
+	}
+
+	// Tool registry
+	if s.registry != nil {
+		for _, name := range s.registry.ListNames() {
+			items = append(items, readline.PcItem(name))
+		}
+	}
+
+	return readline.NewPrefixCompleter(items...)
 }
 
-// executeBuiltin executes a built-in command
+// ---- Context ------------------------------------------------------------
+
+func (s *InteractiveShell) makeContext(ctx context.Context) ShellContext {
+	cfg := config.Config{}
+	if s.cfg != nil {
+		cfg = *s.cfg
+	}
+	return ShellContext{
+		Context:   ctx,
+		Config:    cfg,
+		Logger:    s.log,
+		Telemetry: s.telemetry,
+		Presenter: s.presenter,
+		Registry:  s.registry,
+		IO:        s.io,
+	}
+}
+
+func (s *InteractiveShell) printWelcome() {
+	fmt.Println("Neo4j CLI — type 'help' for commands, 'exit' to quit.")
+	fmt.Println()
+}
+
+// ---- Built-in commands --------------------------------------------------
+
 func (s *InteractiveShell) executeBuiltin(command string, args []string) (string, error) {
 	switch command {
 	case "exit", "quit":
-		s.Stop()
+		_ = s.Stop()
 		return "Goodbye!", nil
-
 	case "help":
 		return s.builtinHelp(args)
-
-	case "list":
-		return s.builtinList(args)
-
-	case "exec":
-		return s.builtinExec(args)
-
 	case "config":
 		return s.builtinConfig(args)
-
 	case "set":
 		return s.builtinSet(args)
-
 	case "log-level":
 		return s.builtinLogLevel(args)
-
 	case "clear":
 		return s.builtinClear(args)
-
 	case "version":
 		return s.builtinVersion(args)
-
 	default:
-		return "", fmt.Errorf("unknown built-in command: %s", command)
+		return "", fmt.Errorf("unknown built-in: %s", command)
 	}
 }
 
-// builtinHelp shows help information
 func (s *InteractiveShell) builtinHelp(args []string) (string, error) {
-	if len(args) > 0 {
-		toolName := args[0]
-		if s.registry != nil {
-			if t, err := s.registry.Get(toolName); err == nil {
-				return fmt.Sprintf("%s (v%s)\n\n%s", t.Name(), t.Version(), t.Description()), nil
-			}
-		}
-		return "", fmt.Errorf("tool not found: %s", toolName)
-	}
-
-	return "Available commands:\n" +
-		"  exit, quit  - Exit the shell\n" +
-		"  help [cmd]  - Show help information\n" +
-		"  list        - List all available tools\n" +
-		"  exec <tool> [args] - Execute a tool\n" +
-		"  config      - Show current configuration\n" +
-		"  set <key> <value> - Set configuration value\n" +
-		"  log-level <level>  - Change log level\n" +
-		"  clear       - Clear the screen\n" +
-		"  version     - Show version information", nil
-}
-
-// builtinList lists all available tools
-func (s *InteractiveShell) builtinList(args []string) (string, error) {
-	if s.registry == nil {
-		return "", fmt.Errorf("no tools registered")
-	}
-
-	tools := s.registry.ListNames()
-	if len(tools) == 0 {
-		return "No tools available", nil
-	}
-
-	var builder strings.Builder
-	builder.WriteString("Available tools:\n")
-	for _, name := range tools {
-		builder.WriteString(fmt.Sprintf("  - %s\n", name))
-	}
-	return builder.String(), nil
-}
-
-// builtinExec executes a tool
-func (s *InteractiveShell) builtinExec(args []string) (string, error) {
 	if len(args) == 0 {
-		return "", fmt.Errorf("usage: exec <tool> [args]")
+		return CategoryHelpOverview(s.categories), nil
 	}
 
-	toolName := args[0]
-	toolArgs := args[1:]
-
-	if s.registry == nil {
-		return "", fmt.Errorf("no tools registered")
+	cat, ok := s.categories[args[0]]
+	if !ok {
+		return "", fmt.Errorf("unknown category: %s", args[0])
 	}
 
-	t, err := s.registry.Get(toolName)
-	if err != nil {
-		return "", err
+	if len(args) > 1 {
+		sub := cat.Find(args[1:])
+		if sub == nil {
+			return "", fmt.Errorf("unknown: %s", strings.Join(args, " "))
+		}
+		return sub.Help(), nil
 	}
 
-	return s.executeTool(t, toolArgs)
+	return cat.Help(), nil
 }
 
-// builtinConfig shows configuration
-func (s *InteractiveShell) builtinConfig(args []string) (string, error) {
-	return fmt.Sprintf("Log Level: %s\nLog Format: %s\nPrompt: %s\nHistory File: %s",
-		s.config.LogLevel, s.config.LogFormat, s.config.Shell.Prompt, s.config.Shell.HistoryFile), nil
+func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
+	if s.cfg == nil {
+		return "no configuration loaded", nil
+	}
+
+	c := s.cfg
+	var b strings.Builder
+
+	// sec prints a section header preceded by a blank line (except at the top).
+	sec := func(name string) {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "%s\n%s\n", name, strings.Repeat("─", len(name)))
+	}
+	// row prints a two-column line indented by two spaces.
+	// Label column is 14 chars wide so all values align across sections.
+	row := func(label, value string) {
+		fmt.Fprintf(&b, "  %-14s  %s\n", label, value)
+	}
+	// secret returns "(set)" or "(not set)" — never the actual credential.
+	secret := func(v string) string {
+		if v == "" {
+			return "(not set)"
+		}
+		return "(set)"
+	}
+	// orNotSet returns the value itself, or "(not set)" when empty.
+	orNotSet := func(v string) string {
+		if v == "" {
+			return "(not set)"
+		}
+		return v
+	}
+
+	sec("Logging")
+	row("Level", c.LogLevel)
+	row("Format", c.LogFormat)
+	row("Output", func() string {
+		if c.LogOutput == "" {
+			return "stderr"
+		}
+		return c.LogOutput
+	}())
+	if c.LogOutput == "file" {
+		row("Log file", func() string {
+			if c.LogFile == "" {
+				return "(default: ~/.neo4j-cli/neo4j-cli.log)"
+			}
+			return c.LogFile
+		}())
+	}
+
+	sec("Shell")
+	row("Prompt", c.Shell.Prompt)
+	row("History file", c.Shell.HistoryFile)
+
+	sec("Neo4j")
+	row("URI", orNotSet(c.Neo4j.URI))
+	row("Username", orNotSet(c.Neo4j.Username))
+	row("Database", orNotSet(c.Neo4j.Database))
+	row("Password", secret(c.Neo4j.Password))
+
+	sec("Aura")
+	row("Client ID", orNotSet(c.Aura.ClientID))
+	row("Client secret", secret(c.Aura.ClientSecret))
+	row("Timeout", fmt.Sprintf("%ds", c.Aura.TimeoutSeconds))
+
+	sec("Telemetry")
+	metricsStatus := "enabled"
+	if !c.Telemetry.Metrics {
+		metricsStatus = "disabled"
+	}
+	row("Metrics", metricsStatus)
+
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
-// builtinSet sets a configuration value
 func (s *InteractiveShell) builtinSet(args []string) (string, error) {
 	if len(args) < 2 {
 		return "", fmt.Errorf("usage: set <key> <value>")
 	}
-
-	key := args[0]
-	value := args[1]
-
-	switch key {
+	switch args[0] {
 	case "prompt":
-		s.config.Shell.Prompt = value
-		s.prompt = value
-		return fmt.Sprintf("Prompt set to: %s", value), nil
-	case "log-level":
-		s.config.LogLevel = value
-		if s.logger != nil {
-			s.logger.SetLevel(core.ParseLogLevel(value))
+		s.cfg.Shell.Prompt = args[1]
+		s.prompt = args[1]
+		// Update readline's live prompt so the change takes effect immediately.
+		s.mu.RLock()
+		if s.rl != nil {
+			s.rl.SetPrompt(args[1])
 		}
-		return fmt.Sprintf("Log level set to: %s", value), nil
+		s.mu.RUnlock()
+		return fmt.Sprintf("prompt set to: %s", args[1]), nil
+	case "log-level":
+		s.cfg.LogLevel = args[1]
+		if s.log != nil {
+			s.log.SetLevel(logger.ParseLogLevel(args[1]))
+		}
+		return fmt.Sprintf("log level set to: %s", args[1]), nil
 	default:
-		return "", fmt.Errorf("unknown config key: %s", key)
+		return "", fmt.Errorf("unknown config key: %s", args[0])
 	}
 }
 
-// builtinLogLevel changes the log level
 func (s *InteractiveShell) builtinLogLevel(args []string) (string, error) {
 	if len(args) == 0 {
-		return fmt.Sprintf("Current log level: %s", s.config.LogLevel), nil
+		if s.cfg != nil {
+			return fmt.Sprintf("current log level: %s", s.cfg.LogLevel), nil
+		}
+		return "log level: unknown", nil
 	}
-
-	level := args[0]
-	s.config.LogLevel = level
-	if s.logger != nil {
-		s.logger.SetLevel(core.ParseLogLevel(level))
+	if s.cfg != nil {
+		s.cfg.LogLevel = args[0]
 	}
-	return fmt.Sprintf("Log level set to: %s", level), nil
+	if s.log != nil {
+		s.log.SetLevel(logger.ParseLogLevel(args[0]))
+	}
+	return fmt.Sprintf("log level set to: %s", args[0]), nil
 }
 
-// builtinClear clears the screen
-func (s *InteractiveShell) builtinClear(args []string) (string, error) {
+func (s *InteractiveShell) builtinClear(_ []string) (string, error) {
 	fmt.Print("\033[2J\033[H")
 	return "", nil
 }
 
-// builtinVersion shows version
-func (s *InteractiveShell) builtinVersion(args []string) (string, error) {
-	return "go-cli-tool v1.0.0", nil
+func (s *InteractiveShell) builtinVersion(_ []string) (string, error) {
+	return fmt.Sprintf("neo4j-cli %s", s.version), nil
 }
 
-// executeTool executes a tool with given arguments
-func (s *InteractiveShell) executeTool(t tool.Tool, args []string) (string, error) {
-	ctx := context.Background()
-	if s.telemetry != nil {
-		s.telemetry.TrackToolUsed(ctx, t.Name(), args)
-	}
-	start := time.Now()
+// ---- Tool execution -----------------------------------------------------
 
+func (s *InteractiveShell) executeTool(ctx context.Context, t tool.Tool, args []string) (string, error) {
 	toolCtx := tool.NewContext().
+		WithContext(ctx).
 		WithArgs(args).
-		WithLogger(s.logger).
+		WithLogger(s.log).
 		WithIO(s.io).
 		WithPresenter(s.presenter)
 
-	result, err := t.Execute(*toolCtx)
-	duration := time.Since(start).Seconds()
-
-	if err != nil {
-		if s.telemetry != nil {
-			s.telemetry.TrackToolError(ctx, t.Name(), err)
-		}
+	// Validate before Execute so that tool-level prerequisite checks
+	// (e.g. required config, service availability) produce a clear error
+	// before any real work begins. BaseTool.Validate is a no-op by default.
+	if err := t.Validate(*toolCtx); err != nil {
 		return "", err
 	}
 
+	result, err := t.Execute(*toolCtx)
+
+	// Emit after execution so we can record the actual outcome.
+	if s.telemetry != nil {
+		s.telemetry.EmitToolEvent(t.Name(), err == nil && result.Success)
+	}
+
+	if err != nil {
+		return "", err
+	}
 	if !result.Success {
-		if s.telemetry != nil {
-			if result.Error != nil {
-				s.telemetry.TrackToolError(ctx, t.Name(), result.Error)
-			} else {
-				s.telemetry.TrackToolError(ctx, t.Name(), fmt.Errorf("tool execution failed"))
-			}
-		}
-		if result.Error != nil {
-			return result.Output, result.Error
-		}
 		return result.Output, fmt.Errorf("tool execution failed")
 	}
-
-	if s.telemetry != nil {
-		s.telemetry.TrackToolSuccess(ctx, t.Name(), duration)
-	}
-
 	return result.Output, nil
 }
 
-// parseCommand parses a command string into arguments
-func parseCommand(cmd string) []string {
-	var args []string
-	var current strings.Builder
-	inQuote := false
-	quoteChar := ' '
+// ---- Input collection --------------------------------------------------
 
-	for _, ch := range cmd {
-		if (ch == '"' || ch == '\'') && !inQuote {
-			inQuote = true
-			quoteChar = ch
-		} else if ch == quoteChar && inQuote {
-			inQuote = false
-		} else if ch == ' ' && !inQuote {
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
-		} else {
-			current.WriteRune(ch)
+// collectInput reads continuation lines when the first line ends with a
+// trailing backslash. Each continuation is prompted with "...> " and
+// appended (without the backslash) until a line with no trailing backslash
+// is received or an error occurs.
+//
+// This lets users spread long Cypher queries across multiple lines:
+//
+//	neo4j> cypher MATCH (n:Person) \
+//	...>         WHERE n.age > 30 \
+//	...>         RETURN n LIMIT 10
+func (s *InteractiveShell) collectInput(rl *readline.Instance, firstLine string) (string, error) {
+	const contPrompt = "...> "
+
+	line := strings.TrimRight(firstLine, " \t")
+	if !strings.HasSuffix(line, `\`) {
+		return line, nil
+	}
+
+	// Switch to continuation prompt and restore on exit.
+	rl.SetPrompt(contPrompt)
+	defer rl.SetPrompt(s.prompt)
+
+	var buf strings.Builder
+	for {
+		buf.WriteString(strings.TrimSuffix(line, `\`))
+		buf.WriteByte(' ')
+
+		next, err := rl.Readline()
+		if err != nil {
+			return strings.TrimSpace(buf.String()), err
+		}
+
+		line = strings.TrimRight(next, " \t")
+		if !strings.HasSuffix(line, `\`) {
+			buf.WriteString(line)
+			return buf.String(), nil
 		}
 	}
+}
 
-	if current.Len() > 0 {
-		args = append(args, current.String())
+// ---- Input parsing ------------------------------------------------------
+
+// parseCommand splits a raw input line into POSIX shell tokens using
+// github.com/google/shlex. It handles single/double quotes and backslash
+// escapes correctly. On a parse error (e.g. unclosed quote) it falls back
+// to simple whitespace splitting so the shell never silently swallows input.
+func parseCommand(cmd string) []string {
+	args, err := shlex.Split(cmd)
+	if err != nil {
+		// Best-effort fallback: whitespace split preserves the tokens even
+		// if quoting is malformed (e.g. an unclosed quote in a Cypher query).
+		return strings.Fields(cmd)
 	}
-
 	return args
 }

@@ -1,0 +1,85 @@
+package analytics
+
+import (
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"log/slog"
+)
+
+const eventNamePrefix = "NEO4J-CLI"
+
+// baseProperties are the fields attached to every Mixpanel track event.
+type baseProperties struct {
+	Token      string `json:"token"`
+	Time       int64  `json:"time"`
+	DistinctID string `json:"distinct_id"`
+	InsertID   string `json:"$insert_id"`
+	Uptime     int64  `json:"uptime"`
+	OS         string `json:"$os"`
+	OSArch     string `json:"os_arch"`
+	CLIVersion string `json:"cli_version,omitempty"`
+	MachineID  string `json:"machine_id,omitempty"`
+	BinaryPath string `json:"binary_path,omitempty"`
+}
+
+// toolEventProperties carries the fields for a TOOL_USED event.
+type toolEventProperties struct {
+	baseProperties
+	ToolName string `json:"tool_name"`
+	Success  bool   `json:"success"`
+}
+
+// TrackEvent is the envelope sent to Mixpanel for every analytics event.
+type TrackEvent struct {
+	Event      string      `json:"event"`
+	Properties interface{} `json:"properties"`
+}
+
+// NewStartupEvent records that the CLI has started.
+func (a *Analytics) NewStartupEvent() TrackEvent {
+	return TrackEvent{
+		Event:      strings.Join([]string{eventNamePrefix, "STARTUP"}, "_"),
+		Properties: a.getBaseProperties(),
+	}
+}
+
+// NewToolEvent records a tool invocation outcome.
+func (a *Analytics) NewToolEvent(toolName string, success bool) TrackEvent {
+	return TrackEvent{
+		Event: strings.Join([]string{eventNamePrefix, "TOOL_USED"}, "_"),
+		Properties: toolEventProperties{
+			baseProperties: a.getBaseProperties(),
+			ToolName:       toolName,
+			Success:        success,
+		},
+	}
+}
+
+// getBaseProperties assembles properties common to all events.
+func (a *Analytics) getBaseProperties() baseProperties {
+	uptime := time.Now().Unix() - a.cfg.startupTime
+	return baseProperties{
+		Token:      a.cfg.token,
+		DistinctID: a.cfg.distinctID,
+		Time:       time.Now().UnixMilli(),
+		InsertID:   a.newInsertID(),
+		Uptime:     uptime,
+		OS:         runtime.GOOS,
+		OSArch:     runtime.GOARCH,
+		CLIVersion: a.cfg.cliVersion,
+		MachineID:  a.cfg.machineID,
+		BinaryPath: a.cfg.binaryPath,
+	}
+}
+
+func (a *Analytics) newInsertID() string {
+	id, err := uuid.NewV6()
+	if err != nil {
+		slog.Error("error generating insert ID for analytics", "error", err.Error())
+		return ""
+	}
+	return id.String()
+}
