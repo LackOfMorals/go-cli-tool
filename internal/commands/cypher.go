@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -20,6 +19,6 @@ func BuildCypherCategory(svc service.CypherService) *shell.Category {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cypher <query>  (e.g. cypher MATCH (n) RETURN n LIMIT 5)")
 			}
-			return svc.Execute(context.Background(), strings.Join(args, " "))
+			return svc.Execute(ctx.Context, strings.Join(args, " "))
 		})
 }

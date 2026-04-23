@@ -3,7 +3,7 @@
 
 package analytics
 
-//go:generate mockgen -destination=mocks/mock_analytics.go -package=analytics_mocks -typed github.com/neo4j-labs/neo4j-mcp-canary/internal/analytics Service,HTTPClient
+//go:generate mockgen -destination=mocks/mock_analytics.go -package=analytics_mocks -typed github.com/cli/go-cli-tool/internal/analytics Service,HTTPClient
 
 import (
 	"io"
@@ -19,5 +19,13 @@ type Service interface {
 	Disable()
 	Enable()
 	IsEnabled() bool
+	// EmitEvent queues a pre-built event. Prefer EmitToolEvent for tool
+	// invocations — it attaches all standard properties automatically.
 	EmitEvent(event TrackEvent)
+	// EmitToolEvent records a tool invocation with the correct event name and
+	// all standard base properties (OS, machine ID, uptime, etc.).
+	EmitToolEvent(toolName string, success bool)
+	// Flush blocks until all in-flight async EmitEvent goroutines have completed.
+	// Call it during shutdown to avoid dropping events.
+	Flush()
 }

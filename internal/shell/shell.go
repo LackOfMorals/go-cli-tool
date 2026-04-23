@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -41,7 +42,11 @@ type CommandHandler func(args []string, ctx ShellContext) (string, error)
 
 // ShellContext carries the services a CommandHandler may need.
 // It is a plain value type built fresh on each dispatch — no builder chain.
+//
+// Context is the per-command context created by the REPL. Handlers should
+// pass it to every service call instead of using context.Background().
 type ShellContext struct {
+	Context   context.Context
 	Config    config.Config
 	Logger    logger.Service
 	Telemetry analytics.Service
@@ -86,7 +91,7 @@ func CategoryHelpOverview(categories map[string]*Category) string {
 	fmt.Fprintln(&b, "Built-in commands:")
 	fmt.Fprintln(&b, "  exit / quit        Exit the shell")
 	fmt.Fprintln(&b, "  help [cat [sub]]   Show this help or help for a category")
-	fmt.Fprintln(&b, "  config             Show current configuration")
+	fmt.Fprintln(&b, "  config             Show full configuration (connection, telemetry, shell)")
 	fmt.Fprintln(&b, "  set <key> <val>    Set a config value (prompt, log-level)")
 	fmt.Fprintln(&b, "  log-level [level]  Get or set the log level")
 	fmt.Fprintln(&b, "  clear              Clear the screen")

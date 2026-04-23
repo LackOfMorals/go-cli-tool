@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"os"
 
 	"github.com/cli/go-cli-tool/internal/logger"
@@ -8,7 +9,15 @@ import (
 )
 
 // Context provides execution context for tools.
+//
+// Context.Context carries the per-command context created by the REPL. Tools
+// should pass it to every service and I/O call so that a Ctrl+C (or any other
+// cancellation) propagates cleanly through the call stack.
 type Context struct {
+	// Context is the per-command context. It is cancelled when the user presses
+	// Ctrl+C while the command is running. Always prefer this over
+	// context.Background() inside a tool's Execute method.
+	Context    context.Context
 	Args       []string
 	Flags      map[string]string
 	EnvVars    map[string]string
@@ -21,6 +30,7 @@ type Context struct {
 
 func NewContext() *Context {
 	return &Context{
+		Context:    context.Background(),
 		Args:       []string{},
 		Flags:      make(map[string]string),
 		EnvVars:    make(map[string]string),
@@ -39,6 +49,7 @@ func workingDir() string {
 
 // ---- Builder methods ----------------------------------------------------
 
+func (c *Context) WithContext(ctx context.Context) *Context { c.Context = ctx; return c }
 func (c *Context) WithArgs(args []string) *Context          { c.Args = args; return c }
 func (c *Context) WithIO(io IOHandler) *Context             { c.IO = io; return c }
 func (c *Context) WithPresenter(p *presentation.PresentationService) *Context {

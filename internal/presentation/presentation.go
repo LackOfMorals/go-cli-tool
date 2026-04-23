@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/cli/go-cli-tool/internal/logger"
 )
@@ -31,7 +32,9 @@ func (f OutputFormat) IsValid() bool {
 }
 
 // PresentationService is the default Service implementation.
+// All exported methods are safe for concurrent use by multiple goroutines.
 type PresentationService struct {
+	mu         sync.RWMutex
 	format     OutputFormat
 	formatters map[OutputFormat]OutputFormatter
 	logger     logger.Service
@@ -70,12 +73,16 @@ func (s *PresentationService) RegisterFormatter(format OutputFormat, formatter O
 	if formatter == nil {
 		return fmt.Errorf("formatter for %q cannot be nil", format)
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.formatters[format] = formatter
 	return nil
 }
 
 // SetFormat switches the active format. The format must already be registered.
 func (s *PresentationService) SetFormat(format OutputFormat) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, ok := s.formatters[format]; !ok {
 		return fmt.Errorf("no formatter registered for format %q", format)
 	}
@@ -86,15 +93,29 @@ func (s *PresentationService) SetFormat(format OutputFormat) error {
 // Format renders data using the current format. If the current format has no
 // registered formatter it falls back to text; if text is also unavailable it
 // returns an error rather than panicking.
+//
+// The formatters map and active format are read under a shared (read) lock.
+// The actual formatting work happens outside the lock so a slow formatter
+// cannot block concurrent Format or SetFormat calls.
 func (s *PresentationService) Format(data any) (string, error) {
+	// Capture both the primary formatter and the text fallback atomically so
+	// we never observe a partially-updated formatters map.
+	s.mu.RLock()
 	formatter, ok := s.formatters[s.format]
+	var fallback OutputFormatter
 	if !ok {
-		s.logger.Warn("formatter not found, falling back to text",
-			logger.Field{Key: "format", Value: string(s.format)})
-		formatter, ok = s.formatters[OutputFormatText]
-		if !ok {
-			return "", fmt.Errorf("no formatter for %q and no text fallback available", s.format)
+		fallback = s.formatters[OutputFormatText]
+	}
+	currentFormat := s.format
+	s.mu.RUnlock()
+
+	if !ok {
+		if fallback == nil {
+			return "", fmt.Errorf("no formatter for %q and no text fallback available", currentFormat)
 		}
+		s.logger.Warn("formatter not found, falling back to text",
+			logger.Field{Key: "format", Value: string(currentFormat)})
+		formatter = fallback
 	}
 	return formatter.Format(data)
 }

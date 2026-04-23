@@ -78,6 +78,28 @@ func (mr *MockServiceMockRecorder) EmitEvent(event any) *gomock.Call {
 		reflect.TypeOf((*MockService)(nil).EmitEvent), event)
 }
 
+func (m *MockService) Flush() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Flush")
+}
+
+func (mr *MockServiceMockRecorder) Flush() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush",
+		reflect.TypeOf((*MockService)(nil).Flush))
+}
+
+func (m *MockService) EmitToolEvent(toolName string, success bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "EmitToolEvent", toolName, success)
+}
+
+func (mr *MockServiceMockRecorder) EmitToolEvent(toolName, success any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmitToolEvent",
+		reflect.TypeOf((*MockService)(nil).EmitToolEvent), toolName, success)
+}
+
 // ---- MockHTTPClient -----------------------------------------------------
 
 // MockHTTPClient is a mock of the analytics.HTTPClient interface.

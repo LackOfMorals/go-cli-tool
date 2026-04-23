@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/signal"
 
 	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/commands"
@@ -32,10 +37,12 @@ var (
 	configPath         string
 	logLevel           string
 	logFormat          string
+	logOutput          string
+	logFile            string
 	shellMode          bool
 	execTool           string
 	execArgs           []string
-	metrics            bool
+	noMetrics          bool
 	neo4jURI           string
 	neo4jUsername      string
 	neo4jDatabase      string
@@ -48,9 +55,11 @@ var (
 type App struct {
 	cfg          *config.Config
 	log          logger.Service
+	logCloser    io.Closer // non-nil when logging to a file; closed last in close()
 	analytic     analytics.Service
 	presentation *presentation.PresentationService
 	registry     *tools.ToolRegistry
+	repo         repository.GraphRepository // held so close() can release driver resources
 
 	cypherSvc service.CypherService
 	cloudSvc  service.CloudService
@@ -81,7 +90,9 @@ named tool and exit immediately.`,
 	pf.StringVar(&configPath, "config-file", "", "Path to a JSON configuration file")
 	pf.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error")
 	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
-	pf.BoolVar(&metrics, "metrics", true, "Send usage metrics to Neo4j")
+	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
+	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.neo4j-cli/neo4j-cli.log)")
+	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var)")
 	pf.BoolVarP(&shellMode, "shell", "s", false, "Start interactive shell (default when no --exec)")
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
@@ -110,8 +121,14 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 	if f.Changed("log-format") {
 		o.LogFormat, _ = f.GetString("log-format")
 	}
-	if f.Changed("metrics") {
-		v, _ := f.GetBool("metrics")
+	if f.Changed("log-output") {
+		o.LogOutput, _ = f.GetString("log-output")
+	}
+	if f.Changed("log-file") {
+		o.LogFile, _ = f.GetString("log-file")
+	}
+	if f.Changed("no-metrics") {
+		v := !noMetrics // --no-metrics disables; --no-metrics=false re-enables
 		o.MetricsEnabled = &v
 	}
 	if f.Changed("shell") {
@@ -153,14 +170,31 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	// 2. Logger
-	log := logger.NewLoggerService(
+	// 2. Logger — resolve output destination then create the service.
+	// The logCloser is non-nil only when writing to a file; it is closed
+	// last in App.close() so log messages from earlier cleanup steps are
+	// still captured.
+	var logCloser io.Closer
+	logOut := logger.ParseLogOutput(cfg.LogOutput)
+	var logWriter io.Writer
+	if logOut == logger.OutputFile {
+		f, err := logger.OpenLogFile(cfg.LogFile)
+		if err != nil {
+			return nil, fmt.Errorf("open log file: %w", err)
+		}
+		logWriter = f
+		logCloser = f
+	} else {
+		logWriter = logger.WriterFor(logOut)
+	}
+	log := logger.NewLoggerServiceToWriter(
 		logger.ParseLogFormat(cfg.LogFormat),
 		logger.ParseLogLevel(cfg.LogLevel),
+		logWriter,
 	)
 
 	// 3. Analytics
-	an := analytics.NewAnalytics(mixPanelToken, mixPanelEndpoint, cfg.Neo4j.URI)
+	an := analytics.NewAnalytics(mixPanelToken, mixPanelEndpoint, cfg.Neo4j.URI, Version, log)
 	if !cfg.Telemetry.Metrics {
 		an.Disable()
 	}
@@ -194,9 +228,11 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 	return &App{
 		cfg:          &cfg,
 		log:          log,
+		logCloser:    logCloser,
 		analytic:     an,
 		presentation: pres,
 		registry:     registry,
+		repo:         repo,
 		cypherSvc:    cypherSvc,
 		cloudSvc:     cloudSvc,
 		adminSvc:     adminSvc,
@@ -221,6 +257,12 @@ func buildRegistry(cfg *config.Config, log logger.Service, cypherSvc service.Cyp
 }
 
 func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log logger.Service) {
+	// If the tool has an explicit config entry and is marked disabled, skip it entirely.
+	if toolCfg, ok := cfg.Tools[t.Name()]; ok && !toolCfg.Enabled {
+		log.Debug("skipping disabled tool", logger.Field{Key: "tool", Value: t.Name()})
+		return
+	}
+
 	var err error
 	if toolCfg, ok := cfg.Tools[t.Name()]; ok {
 		err = r.RegisterWithConfig(t, toolCfg)
@@ -244,7 +286,7 @@ func (a *App) buildCategories() map[string]*shell.Category {
 }
 
 func (a *App) dispatch() error {
-	a.log.Info("starting neo4j-cli", logger.Field{Key: "version", Value: Version})
+	a.log.Debug("starting neo4j-cli", logger.Field{Key: "version", Value: Version})
 
 	if execTool != "" {
 		return a.executeDirect()
@@ -258,7 +300,12 @@ func (a *App) executeDirect() error {
 		return fmt.Errorf("tool %q not found", execTool)
 	}
 
+	// Cancel the tool if the user presses Ctrl+C.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	toolCtx := tool.NewContext().
+		WithContext(ctx).
 		WithArgs(execArgs).
 		WithLogger(a.log).
 		WithIO(tool.NewDefaultIOHandler()).
@@ -266,6 +313,9 @@ func (a *App) executeDirect() error {
 
 	result, err := t.Execute(*toolCtx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return fmt.Errorf("interrupted")
+		}
 		return fmt.Errorf("execute %q: %w", execTool, err)
 	}
 	if !result.Success {
@@ -287,10 +337,27 @@ func (a *App) startShell() error {
 	s.SetCategories(a.buildCategories())
 	s.SetVersion(Version)
 
-	a.log.Info("starting interactive shell")
+	a.log.Debug("starting interactive shell")
 	return s.Start()
 }
 
 func (a *App) close() {
-	// Future: close Neo4j driver session, flush analytics queue.
+	// Close the repository first so any in-flight driver connections are
+	// released before the analytics flush blocks on network I/O.
+	if a.repo != nil {
+		if err := a.repo.Close(); err != nil {
+			a.log.Error("failed to close repository",
+				logger.Field{Key: "error", Value: err.Error()},
+			)
+		}
+	}
+	// Flush pending analytics events so none are dropped on shutdown.
+	if a.analytic != nil {
+		a.analytic.Flush()
+	}
+	// Close the log file last so that all messages from the steps above
+	// are written before the file handle is released.
+	if a.logCloser != nil {
+		_ = a.logCloser.Close()
+	}
 }

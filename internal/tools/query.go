@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/cli/go-cli-tool/internal/service"
@@ -28,7 +27,7 @@ func (t *QueryTool) Execute(ctx tool.Context) (tool.Result, error) {
 		return tool.ErrorResult("usage: query <cypher>"), fmt.Errorf("no query provided")
 	}
 
-	output, err := t.svc.Execute(context.Background(), ctx.Args[0])
+	output, err := t.svc.Execute(ctx.Context, ctx.Args[0])
 	if err != nil {
 		return tool.Result{}, err
 	}

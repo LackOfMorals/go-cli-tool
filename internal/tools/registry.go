@@ -67,7 +67,9 @@ func (r *ToolRegistry) Register(t tool.Tool) error {
 	return nil
 }
 
-// RegisterWithConfig adds a tool and applies its configuration.
+// RegisterWithConfig adds a tool and applies its configuration. If Configure
+// fails the tool is unregistered so the registry is never left in a
+// partially-configured state.
 func (r *ToolRegistry) RegisterWithConfig(t tool.Tool, cfg config.ToolConfig) error {
 	if err := r.Register(t); err != nil {
 		return err
@@ -76,6 +78,8 @@ func (r *ToolRegistry) RegisterWithConfig(t tool.Tool, cfg config.ToolConfig) er
 		return nil
 	}
 	if err := t.Configure(cfg.Params); err != nil {
+		// Rollback: remove the tool so we never leave a misconfigured entry.
+		_ = r.Unregister(t.Name())
 		return fmt.Errorf("configure tool %q: %w", t.Name(), err)
 	}
 	return nil

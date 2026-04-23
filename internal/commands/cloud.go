@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -31,7 +30,7 @@ func buildInstancesCategory(svc service.InstancesService) *shell.Category {
 			Usage:       "list",
 			Description: "List all instances",
 			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
-				instances, err := svc.List(context.Background())
+				instances, err := svc.List(ctx.Context)
 				if err != nil {
 					return "", err
 				}
@@ -57,7 +56,7 @@ func buildInstancesCategory(svc service.InstancesService) *shell.Category {
 				if len(args) == 0 {
 					return "", fmt.Errorf("usage: cloud instances get <id>")
 				}
-				inst, err := svc.Get(context.Background(), args[0])
+				inst, err := svc.Get(ctx.Context, args[0])
 				if err != nil {
 					return "", err
 				}
@@ -73,7 +72,7 @@ func buildInstancesCategory(svc service.InstancesService) *shell.Category {
 				if len(args) == 0 {
 					return "", fmt.Errorf("usage: cloud instances pause <id>")
 				}
-				if err := svc.Pause(context.Background(), args[0]); err != nil {
+				if err := svc.Pause(ctx.Context, args[0]); err != nil {
 					return "", err
 				}
 				return fmt.Sprintf("Instance %s paused.", args[0]), nil
@@ -87,7 +86,7 @@ func buildInstancesCategory(svc service.InstancesService) *shell.Category {
 				if len(args) == 0 {
 					return "", fmt.Errorf("usage: cloud instances resume <id>")
 				}
-				if err := svc.Resume(context.Background(), args[0]); err != nil {
+				if err := svc.Resume(ctx.Context, args[0]); err != nil {
 					return "", err
 				}
 				return fmt.Sprintf("Instance %s resumed.", args[0]), nil
@@ -101,10 +100,19 @@ func buildInstancesCategory(svc service.InstancesService) *shell.Category {
 				if len(args) == 0 {
 					return "", fmt.Errorf("usage: cloud instances delete <id>")
 				}
-				if err := svc.Delete(context.Background(), args[0]); err != nil {
+				id := args[0]
+				ctx.IO.Write("Permanently delete instance %s? Type 'yes' to confirm: ", id)
+				confirm, err := ctx.IO.Read()
+				if err != nil {
+					return "", fmt.Errorf("read confirmation: %w", err)
+				}
+				if strings.TrimSpace(confirm) != "yes" {
+					return "Delete cancelled.", nil
+				}
+				if err := svc.Delete(ctx.Context, id); err != nil {
 					return "", err
 				}
-				return fmt.Sprintf("Instance %s deleted.", args[0]), nil
+				return fmt.Sprintf("Instance %s deleted.", id), nil
 			},
 		})
 }
@@ -116,7 +124,7 @@ func buildProjectsCategory(svc service.ProjectsService) *shell.Category {
 			Usage:       "list",
 			Description: "List all projects",
 			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
-				projects, err := svc.List(context.Background())
+				projects, err := svc.List(ctx.Context)
 				if err != nil {
 					return "", err
 				}
@@ -140,7 +148,7 @@ func buildProjectsCategory(svc service.ProjectsService) *shell.Category {
 				if len(args) == 0 {
 					return "", fmt.Errorf("usage: cloud projects get <id>")
 				}
-				proj, err := svc.Get(context.Background(), args[0])
+				proj, err := svc.Get(ctx.Context, args[0])
 				if err != nil {
 					return "", err
 				}

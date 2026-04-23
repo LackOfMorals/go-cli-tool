@@ -14,8 +14,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 	mixpanel "github.com/mixpanel/mixpanel-go"
@@ -44,25 +47,44 @@ type analyticsConfig struct {
 	distinctID  string
 	machineID   string
 	binaryPath  string
+	cliVersion  string
 	token       string
 	startupTime int64
 	isAura      bool
 	mp          *mixpanel.ApiClient
 }
 
+// eventBufferSize is the capacity of the internal event channel.
+// If the buffer fills up (e.g. extended network outage) EmitEvent drops
+// the event and logs a warning rather than blocking the caller.
+const eventBufferSize = 64
+
 type Analytics struct {
 	disabled bool
 	cfg      analyticsConfig
+	log      logger.Service
+
+	// eventCh carries events to the single background worker.
+	// Closed by Flush() to signal the worker to drain and exit.
+	eventCh chan TrackEvent
+
+	// closed is set to 1 by Flush() before closing eventCh.
+	// EmitEvent checks this to avoid a send-on-closed-channel panic.
+	closed atomic.Bool
+
+	// wg tracks the single worker goroutine so Flush() can wait for it.
+	wg sync.WaitGroup
 }
 
 // NewAnalytics creates an Analytics instance using the default http.Client.
-func NewAnalytics(mixPanelToken string, mixpanelEndpoint string, uri string) *Analytics {
-	return NewAnalyticsWithClient(mixPanelToken, mixpanelEndpoint, &http.Client{Timeout: 10 * time.Second}, uri)
+func NewAnalytics(mixPanelToken string, mixpanelEndpoint string, uri string, version string, log logger.Service) *Analytics {
+	return NewAnalyticsWithClient(mixPanelToken, mixpanelEndpoint, &http.Client{Timeout: 10 * time.Second}, uri, version, log)
 }
 
 // NewAnalyticsWithClient creates an Analytics instance with an injectable HTTPClient,
 // allowing tests to intercept outbound Mixpanel calls via a mock.
-func NewAnalyticsWithClient(mixPanelToken string, mixpanelEndpoint string, client HTTPClient, uri string) *Analytics {
+// log may be nil; in that case analytics logs nothing on the injected logger.
+func NewAnalyticsWithClient(mixPanelToken string, mixpanelEndpoint string, client HTTPClient, uri string, version string, log logger.Service) *Analytics {
 	endpoint := strings.TrimRight(mixpanelEndpoint, "/")
 
 	var mpClient *mixpanel.ApiClient
@@ -77,40 +99,93 @@ func NewAnalyticsWithClient(mixPanelToken string, mixpanelEndpoint string, clien
 		)
 	}
 
-	return &Analytics{
+	a := &Analytics{
+		log:     log,
+		eventCh: make(chan TrackEvent, eventBufferSize),
 		cfg: analyticsConfig{
-			distinctID:  GetDistinctID(),
+			// Use the stable, OS-derived machine ID as the distinct ID so that
+			// Mixpanel can correlate events across sessions for the same user.
+			distinctID:  GetMachineID(),
 			machineID:   GetMachineID(),
 			binaryPath:  GetBinaryPath(),
+			cliVersion:  version,
 			token:       mixPanelToken,
 			startupTime: time.Now().Unix(),
 			isAura:      isAura(uri),
 			mp:          mpClient,
 		},
 	}
+
+	// Start the single background worker that serialises all Mixpanel calls.
+	a.wg.Add(1)
+	go a.worker()
+
+	return a
 }
 
-// Returns true if the string contains a URI used by Aura
-// With multiDB, this could be either databases.neo4j.io or instances.neo4j.io
-func isAura(uri string) bool {
-	// Regex to detect our URI of interest
-	re := regexp.MustCompile(`(databases|instances)\.neo4j\.io\b`)
+// auraURIPattern matches the host patterns used by Neo4j Aura:
+// databases.neo4j.io (classic) and instances.neo4j.io (multi-DB).
+var auraURIPattern = regexp.MustCompile(`(databases|instances)\.neo4j\.io\b`)
 
-	if re.MatchString(uri) {
-		// contains a neo4j.io database or instance URL
-		return true
-	}
-
-	return false
+// IsAuraURI reports whether uri points at a Neo4j Aura-managed instance.
+// Exported so that tests and other packages can use it without duplicating
+// the pattern.
+func IsAuraURI(uri string) bool {
+	return auraURIPattern.MatchString(uri)
 }
 
+// isAura is the internal alias used during construction.
+func isAura(uri string) bool { return IsAuraURI(uri) }
+
+// EmitToolEvent records a tool invocation outcome with all standard
+// base properties. It is the preferred way to emit tool events from the
+// shell because it ensures the correct event name and property set.
+func (a *Analytics) EmitToolEvent(toolName string, success bool) {
+	a.EmitEvent(a.NewToolEvent(toolName, success))
+}
+
+// EmitEvent queues an analytics event for the background worker.
+// It never blocks: if the internal buffer is full the event is dropped
+// and a warning is logged. Safe to call after Flush() — it is a no-op.
 func (a *Analytics) EmitEvent(event TrackEvent) {
-	if a.disabled {
+	if a.disabled || a.closed.Load() {
 		return
 	}
-	slog.Info("Sending event to Mixpanel", "event", event.Event)
-	if err := a.sendTrackEvent([]TrackEvent{event}); err != nil {
-		slog.Error("Error while sending analytics events", "error", err.Error())
+	select {
+	case a.eventCh <- event:
+		a.logDebug("queued analytics event", logger.Field{Key: "event", Value: event.Event})
+	default:
+		a.logWarn("analytics buffer full — dropping event",
+			logger.Field{Key: "event", Value: event.Event},
+			logger.Field{Key: "buffer_size", Value: eventBufferSize},
+		)
+	}
+}
+
+// Flush closes the event channel and blocks until the worker has sent every
+// queued event. Call it once during application shutdown.
+// After Flush returns, EmitEvent is a safe no-op.
+func (a *Analytics) Flush() {
+	// Mark as closed before closing the channel so EmitEvent's guard fires
+	// first and we never race a send against a close.
+	if a.closed.CompareAndSwap(false, true) {
+		close(a.eventCh)
+	}
+	a.wg.Wait()
+}
+
+// worker is the single goroutine that drains eventCh and forwards events to
+// Mixpanel. It exits when the channel is closed and fully drained (i.e. after
+// Flush() is called).
+func (a *Analytics) worker() {
+	defer a.wg.Done()
+	for event := range a.eventCh {
+		if err := a.sendTrackEvent([]TrackEvent{event}); err != nil {
+			a.logError("error sending analytics event",
+				logger.Field{Key: "event", Value: event.Event},
+				logger.Field{Key: "error", Value: err.Error()},
+			)
+		}
 	}
 }
 
@@ -131,8 +206,37 @@ func (a *Analytics) sendTrackEvent(events []TrackEvent) error {
 	if err := a.cfg.mp.Track(context.Background(), sdkEvents); err != nil {
 		return fmt.Errorf("mixpanel track error: %w", err)
 	}
-	slog.Info("Sent event to Mixpanel", "event", sdkEvents[0].Name)
+	a.logDebug("sent event to Mixpanel", logger.Field{Key: "event", Value: sdkEvents[0].Name})
 	return nil
+}
+
+// logDebug logs at debug level if a logger has been injected.
+// Use for internal pipeline messages that are only relevant when diagnosing issues.
+func (a *Analytics) logDebug(msg string, fields ...logger.Field) {
+	if a.log != nil {
+		a.log.Debug(msg, fields...)
+	}
+}
+
+// logWarn logs at warn level if a logger has been injected.
+func (a *Analytics) logWarn(msg string, fields ...logger.Field) {
+	if a.log != nil {
+		a.log.Warn(msg, fields...)
+	}
+}
+
+// logInfo logs at info level if a logger has been injected.
+func (a *Analytics) logInfo(msg string, fields ...logger.Field) {
+	if a.log != nil {
+		a.log.Info(msg, fields...)
+	}
+}
+
+// logError logs at error level if a logger has been injected.
+func (a *Analytics) logError(msg string, fields ...logger.Field) {
+	if a.log != nil {
+		a.log.Error(msg, fields...)
+	}
 }
 
 // toPropertiesMap converts any properties struct to map[string]any via JSON

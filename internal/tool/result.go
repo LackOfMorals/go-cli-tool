@@ -1,9 +1,13 @@
 package tool
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 )
 
 // Result holds the output of a tool execution.
@@ -142,9 +146,12 @@ type DefaultIOHandler struct{}
 func NewDefaultIOHandler() *DefaultIOHandler { return &DefaultIOHandler{} }
 
 func (h *DefaultIOHandler) Read() (string, error) {
-	var input string
-	fmt.Scanln(&input)
-	return input, nil
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("read input: %w", err)
+	}
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 func (h *DefaultIOHandler) Write(format string, args ...interface{}) {

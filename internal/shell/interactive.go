@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +30,7 @@ type InteractiveShell struct {
 
 	categories map[string]*Category
 	handlers   map[string]CommandHandler
+	handlersMu sync.RWMutex // protects handlers; separate from mu to avoid deadlock
 
 	io          tool.IOHandler
 	prompt      string
@@ -114,16 +117,27 @@ func (s *InteractiveShell) Start() error {
 
 	// SIGTERM: close readline so Readline() unblocks and the loop exits.
 	// Do NOT intercept SIGINT here — readline owns it.
+	//
+	// ctx/cancel ensures the signal goroutine exits cleanly when Start()
+	// returns, preventing a goroutine leak across multiple Start() calls
+	// (common in tests).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 	go func() {
-		<-sigChan
-		// Grab the pointer under the lock in case Stop() has already cleared it.
-		s.mu.RLock()
-		rl := s.rl
-		s.mu.RUnlock()
-		if rl != nil {
-			_ = rl.Close()
+		select {
+		case <-sigChan:
+			// Grab the pointer under the lock in case Stop() has already cleared it.
+			s.mu.RLock()
+			rl := s.rl
+			s.mu.RUnlock()
+			if rl != nil {
+				_ = rl.Close()
+			}
+		case <-ctx.Done():
+			// Start() is returning; exit cleanly.
 		}
 	}()
 
@@ -154,17 +168,22 @@ func (s *InteractiveShell) IsRunning() bool {
 }
 
 func (s *InteractiveShell) RegisterCommand(name string, handler CommandHandler) {
+	s.handlersMu.Lock()
+	defer s.handlersMu.Unlock()
 	s.handlers[name] = handler
 }
 
-// Execute parses and dispatches a single command line.
-//
-// Routing order:
-//  1. Built-in commands (exit, help, config, …)
-//  2. Top-level categories — routing within is handled by Category.Dispatch
-//  3. Custom handlers registered via RegisterCommand
-//  4. Tool registry
+// Execute implements Shell. For callers outside the REPL (e.g. tests or
+// programmatic use) it runs the command with a background context —
+// cancellation is not available. The REPL loop uses executeWithContext
+// directly so that Ctrl+C can cancel in-flight service calls.
 func (s *InteractiveShell) Execute(cmd string) (string, error) {
+	return s.executeWithContext(context.Background(), cmd)
+}
+
+// executeWithContext is the internal dispatch entry-point. ctx should be the
+// per-command context created in runLoop so that Ctrl+C propagates.
+func (s *InteractiveShell) executeWithContext(ctx context.Context, cmd string) (string, error) {
 	args := parseCommand(cmd)
 	if len(args) == 0 {
 		return "", nil
@@ -178,16 +197,19 @@ func (s *InteractiveShell) Execute(cmd string) (string, error) {
 	}
 
 	if cat, ok := s.categories[name]; ok {
-		return cat.Dispatch(rest, s.makeContext())
+		return cat.Dispatch(rest, s.makeContext(ctx))
 	}
 
-	if handler, ok := s.handlers[name]; ok {
-		return handler(rest, s.makeContext())
+	s.handlersMu.RLock()
+	handler, hasHandler := s.handlers[name]
+	s.handlersMu.RUnlock()
+	if hasHandler {
+		return handler(rest, s.makeContext(ctx))
 	}
 
 	if s.registry != nil {
 		if t, err := s.registry.Get(name); err == nil {
-			return s.executeTool(t, rest)
+			return s.executeTool(ctx, t, rest)
 		}
 	}
 
@@ -201,8 +223,8 @@ func (s *InteractiveShell) runLoop(rl *readline.Instance) {
 		line, err := rl.Readline()
 
 		if err == readline.ErrInterrupt {
-			// Ctrl+C with a partial line: discard input and continue.
-			// Ctrl+C on an empty line: show a hint so the user knows how to exit.
+			// Ctrl+C at the prompt: discard any partial input.
+			// Ctrl+C on an empty line: show a hint.
 			if strings.TrimSpace(line) == "" {
 				fmt.Fprintln(os.Stderr, "(type 'exit' or press Ctrl+D to quit)")
 			}
@@ -220,12 +242,38 @@ func (s *InteractiveShell) runLoop(rl *readline.Instance) {
 			continue
 		}
 
-		output, execErr := s.Execute(cmd)
-		if execErr != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
-		}
-		if output != "" {
-			fmt.Println(output)
+		// Create a per-command context. While the command runs we register a
+		// SIGINT handler so that Ctrl+C cancels the in-flight context rather
+		// than killing the process. readline owns SIGINT at the prompt; we
+		// take it back for the duration of each command and restore it after.
+		cmdCtx, cmdCancel := context.WithCancel(context.Background())
+		interruptCh := make(chan os.Signal, 1)
+		signal.Notify(interruptCh, os.Interrupt)
+		go func() {
+			select {
+			case <-interruptCh:
+				fmt.Fprintln(os.Stderr, "^C")
+				cmdCancel()
+			case <-cmdCtx.Done():
+				// Command finished normally; exit the goroutine cleanly.
+			}
+		}()
+
+		output, execErr := s.executeWithContext(cmdCtx, cmd)
+
+		cmdCancel() // always release resources, even on normal return
+		signal.Stop(interruptCh)
+
+		if errors.Is(execErr, context.Canceled) {
+			// Suppress the generic "context canceled" message — the interrupt
+			// goroutine already printed "^C" to stderr.
+		} else {
+			if execErr != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
+			}
+			if output != "" {
+				fmt.Println(output)
+			}
 		}
 
 		// Break if Execute() triggered Stop() (e.g. 'exit' / 'quit' command).
@@ -283,12 +331,13 @@ func (s *InteractiveShell) buildCompleter() readline.AutoCompleter {
 
 // ---- Context ------------------------------------------------------------
 
-func (s *InteractiveShell) makeContext() ShellContext {
+func (s *InteractiveShell) makeContext(ctx context.Context) ShellContext {
 	cfg := config.Config{}
 	if s.cfg != nil {
 		cfg = *s.cfg
 	}
 	return ShellContext{
+		Context:   ctx,
 		Config:    cfg,
 		Logger:    s.log,
 		Telemetry: s.telemetry,
@@ -352,8 +401,78 @@ func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
 	if s.cfg == nil {
 		return "no configuration loaded", nil
 	}
-	return fmt.Sprintf("Log Level:    %s\nLog Format:   %s\nPrompt:       %s\nHistory File: %s",
-		s.cfg.LogLevel, s.cfg.LogFormat, s.cfg.Shell.Prompt, s.cfg.Shell.HistoryFile), nil
+
+	c := s.cfg
+	var b strings.Builder
+
+	// sec prints a section header preceded by a blank line (except at the top).
+	sec := func(name string) {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "%s\n%s\n", name, strings.Repeat("─", len(name)))
+	}
+	// row prints a two-column line indented by two spaces.
+	// Label column is 14 chars wide so all values align across sections.
+	row := func(label, value string) {
+		fmt.Fprintf(&b, "  %-14s  %s\n", label, value)
+	}
+	// secret returns "(set)" or "(not set)" — never the actual credential.
+	secret := func(v string) string {
+		if v == "" {
+			return "(not set)"
+		}
+		return "(set)"
+	}
+	// orNotSet returns the value itself, or "(not set)" when empty.
+	orNotSet := func(v string) string {
+		if v == "" {
+			return "(not set)"
+		}
+		return v
+	}
+
+	sec("Logging")
+	row("Level", c.LogLevel)
+	row("Format", c.LogFormat)
+	row("Output", func() string {
+		if c.LogOutput == "" {
+			return "stderr"
+		}
+		return c.LogOutput
+	}())
+	if c.LogOutput == "file" {
+		row("Log file", func() string {
+			if c.LogFile == "" {
+				return "(default: ~/.neo4j-cli/neo4j-cli.log)"
+			}
+			return c.LogFile
+		}())
+	}
+
+	sec("Shell")
+	row("Prompt", c.Shell.Prompt)
+	row("History file", c.Shell.HistoryFile)
+
+	sec("Neo4j")
+	row("URI", orNotSet(c.Neo4j.URI))
+	row("Username", orNotSet(c.Neo4j.Username))
+	row("Database", orNotSet(c.Neo4j.Database))
+	row("Password", secret(c.Neo4j.Password))
+
+	sec("Aura")
+	row("Client ID", orNotSet(c.Aura.ClientID))
+	row("Client secret", secret(c.Aura.ClientSecret))
+	row("Timeout", fmt.Sprintf("%ds", c.Aura.TimeoutSeconds))
+
+	sec("Telemetry")
+	metricsStatus := "enabled"
+	if !c.Telemetry.Metrics {
+		metricsStatus = "disabled"
+	}
+	row("Metrics", metricsStatus)
+
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 func (s *InteractiveShell) builtinSet(args []string) (string, error) {
@@ -409,18 +528,21 @@ func (s *InteractiveShell) builtinVersion(_ []string) (string, error) {
 
 // ---- Tool execution -----------------------------------------------------
 
-func (s *InteractiveShell) executeTool(t tool.Tool, args []string) (string, error) {
-	if s.telemetry != nil {
-		s.telemetry.EmitEvent(analytics.TrackEvent{Event: "tool_used"})
-	}
-
+func (s *InteractiveShell) executeTool(ctx context.Context, t tool.Tool, args []string) (string, error) {
 	toolCtx := tool.NewContext().
+		WithContext(ctx).
 		WithArgs(args).
 		WithLogger(s.log).
 		WithIO(s.io).
 		WithPresenter(s.presenter)
 
 	result, err := t.Execute(*toolCtx)
+
+	// Emit after execution so we can record the actual outcome.
+	if s.telemetry != nil {
+		s.telemetry.EmitToolEvent(t.Name(), err == nil && result.Success)
+	}
+
 	if err != nil {
 		return "", err
 	}

@@ -20,6 +20,8 @@ type Overrides struct {
 	ConfigFile  string // non-empty → load and overlay this file
 	LogLevel    string // non-empty → override
 	LogFormat   string // non-empty → override
+	LogOutput   string // non-empty → override (stderr | stdout | file)
+	LogFile     string // non-empty → override log file path
 	ShellEnabled   *bool // non-nil → override
 	MetricsEnabled *bool // non-nil → override
 
@@ -38,6 +40,8 @@ type Overrides struct {
 type Config struct {
 	LogLevel  string                `mapstructure:"log_level"  json:"log_level"`
 	LogFormat string                `mapstructure:"log_format" json:"log_format"`
+	LogOutput string                `mapstructure:"log_output" json:"log_output"`
+	LogFile   string                `mapstructure:"log_file"   json:"log_file"`
 	Shell     ShellConfig           `mapstructure:"shell"      json:"shell"`
 	Telemetry TelemetryConfig       `mapstructure:"telemetry"  json:"telemetry"`
 	Neo4j     Neo4jConfig           `mapstructure:"neo4j"      json:"neo4j"`
@@ -137,6 +141,12 @@ func (c *ConfigService) applyOverrides(cfg *Config) {
 	if o.LogFormat != "" {
 		cfg.LogFormat = o.LogFormat
 	}
+	if o.LogOutput != "" {
+		cfg.LogOutput = o.LogOutput
+	}
+	if o.LogFile != "" {
+		cfg.LogFile = o.LogFile
+	}
 	if o.MetricsEnabled != nil {
 		cfg.Telemetry.Metrics = *o.MetricsEnabled
 	}
@@ -180,6 +190,8 @@ func newViperConfigLoader() *viperConfigLoader {
 	// Defaults
 	v.SetDefault("log_level", "info")
 	v.SetDefault("log_format", "text")
+	v.SetDefault("log_output", "stderr")
+	v.SetDefault("log_file", "")
 	v.SetDefault("shell.enabled", false)
 	v.SetDefault("shell.prompt", "neo4j> ")
 	v.SetDefault("shell.history_file", ".neo4j_history")
@@ -226,6 +238,8 @@ func (l *viperConfigLoader) unmarshal() (Config, error) {
 func (l *viperConfigLoader) save(path string, cfg Config) error {
 	l.v.Set("log_level", cfg.LogLevel)
 	l.v.Set("log_format", cfg.LogFormat)
+	l.v.Set("log_output", cfg.LogOutput)
+	l.v.Set("log_file", cfg.LogFile)
 	l.v.Set("shell.enabled", cfg.Shell.Enabled)
 	l.v.Set("shell.prompt", cfg.Shell.Prompt)
 	l.v.Set("shell.history_file", cfg.Shell.HistoryFile)

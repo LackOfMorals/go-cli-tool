@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -20,7 +19,7 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 			Usage:       "show-users",
 			Description: "List all database users and their roles",
 			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
-				users, err := svc.ShowUsers(context.Background())
+				users, err := svc.ShowUsers(ctx.Context)
 				if err != nil {
 					return "", err
 				}
@@ -41,7 +40,7 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 			Usage:       "show-databases",
 			Description: "List all databases and their current status",
 			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
-				dbs, err := svc.ShowDatabases(context.Background())
+				dbs, err := svc.ShowDatabases(ctx.Context)
 				if err != nil {
 					return "", err
 				}

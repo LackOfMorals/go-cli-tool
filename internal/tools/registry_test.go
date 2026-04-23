@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
@@ -154,6 +156,45 @@ func TestToolRegistryDuplicateRegistration(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for duplicate registration")
 	}
+}
+
+func TestRegisterWithConfig_RollbackOnConfigureError(t *testing.T) {
+	// If Configure fails the tool must not remain in the registry.
+	registry := NewToolRegistry()
+
+	badTool := &configurableErrorTool{
+		BaseTool: tool.NewBaseTool("bad", "will fail", "1.0.0"),
+	}
+
+	cfg := config.ToolConfig{
+		Enabled: true,
+		Params:  map[string]interface{}{"trigger_error": true},
+	}
+
+	err := registry.RegisterWithConfig(badTool, cfg)
+	if err == nil {
+		t.Fatal("expected error from Configure")
+	}
+
+	// The tool must have been rolled back — registry should be empty.
+	if registry.Exists("bad") {
+		t.Error("tool should have been unregistered after Configure failure")
+	}
+	if registry.Count() != 0 {
+		t.Errorf("registry should be empty after rollback, got count %d", registry.Count())
+	}
+}
+
+// configurableErrorTool implements tool.Tool and returns an error from Configure.
+type configurableErrorTool struct {
+	*tool.BaseTool
+}
+
+func (t *configurableErrorTool) Configure(params map[string]interface{}) error {
+	if _, ok := params["trigger_error"]; ok {
+		return fmt.Errorf("configure: intentional test error")
+	}
+	return nil
 }
 
 func TestToolRegistryFilter(t *testing.T) {

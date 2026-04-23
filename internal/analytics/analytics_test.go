@@ -15,9 +15,14 @@ import (
 )
 
 // newTestAnalytics creates an Analytics instance wired to a mock HTTP client.
+// It registers t.Cleanup(a.Flush) so the background worker goroutine is
+// always stopped at the end of each test, regardless of whether the test
+// calls Flush explicitly.
 func newTestAnalytics(t *testing.T, client analytics.HTTPClient) *analytics.Analytics {
 	t.Helper()
-	return analytics.NewAnalyticsWithClient("test-token", "http://localhost", client, "bolt://localhost:7687")
+	a := analytics.NewAnalyticsWithClient("test-token", "http://localhost", client, "bolt://localhost:7687", "1.2.3", nil)
+	t.Cleanup(a.Flush)
+	return a
 }
 
 // decodeProperties marshals props through JSON and returns a flat map so tests
@@ -59,6 +64,9 @@ func assertBaseProperties(t *testing.T, props interface{}) map[string]interface{
 	if m["os_arch"] != runtime.GOARCH {
 		t.Errorf("os_arch: got %v, want %v", m["os_arch"], runtime.GOARCH)
 	}
+	if m["cli_version"] != "1.2.3" {
+		t.Errorf("cli_version: got %v, want 1.2.3", m["cli_version"])
+	}
 	return m
 }
 
@@ -87,6 +95,7 @@ func TestEmitEvent_Enabled(t *testing.T) {
 
 	svc := newTestAnalytics(t, mockClient)
 	svc.EmitEvent(analytics.TrackEvent{Event: "test_event"})
+	svc.Flush()
 }
 
 func TestEmitEvent_CorrectURL(t *testing.T) {
@@ -112,8 +121,10 @@ func TestEmitEvent_CorrectURL(t *testing.T) {
 					Body:       io.NopCloser(strings.NewReader("1")),
 				}, nil)
 
-			svc := analytics.NewAnalyticsWithClient("test-token", tc.endpoint, mockClient, "")
+			svc := analytics.NewAnalyticsWithClient("test-token", tc.endpoint, mockClient, "", "1.2.3", nil)
+			t.Cleanup(svc.Flush)
 			svc.EmitEvent(analytics.TrackEvent{Event: "url_test"})
+			svc.Flush()
 		})
 	}
 }
@@ -149,6 +160,7 @@ func TestEmitEvent_CorrectBody(t *testing.T) {
 
 	svc := newTestAnalytics(t, mockClient)
 	svc.EmitEvent(event)
+	svc.Flush()
 }
 
 // ---- Enable / Disable / IsEnabled ----------------------------------------
@@ -207,4 +219,84 @@ func TestNewToolEvent(t *testing.T) {
 			t.Errorf("success: got %v, want false", props["success"])
 		}
 	})
+}
+
+// TestEmitToolEvent_SendsFullyPopulatedEvent verifies that EmitToolEvent
+// produces an event with the correct name and tool properties — not a bare
+// TrackEvent{Event: "tool_used"} with no properties.
+func TestEmitToolEvent_SendsFullyPopulatedEvent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := amocks.NewMockHTTPClient(ctrl)
+
+	var capturedBody []byte
+	mockClient.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_, _ string, body io.Reader) (*http.Response, error) {
+			var err error
+			capturedBody, err = io.ReadAll(body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("1")),
+			}, nil
+		})
+
+	svc := newTestAnalytics(t, mockClient)
+	svc.EmitToolEvent("query", true)
+	svc.Flush()
+
+	// Decode the raw Mixpanel payload and verify event properties.
+	var events []analytics.TrackEvent
+	if err := json.Unmarshal(capturedBody, &events); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	event := events[0]
+	if !strings.HasSuffix(event.Event, "TOOL_USED") {
+		t.Errorf("event name should end with TOOL_USED, got %q", event.Event)
+	}
+
+	props := decodeProperties(t, event.Properties)
+	if props["tool_name"] != "query" {
+		t.Errorf("tool_name: got %v, want query", props["tool_name"])
+	}
+	if props["success"] != true {
+		t.Errorf("success: got %v, want true", props["success"])
+	}
+	// Verify base properties are present.
+	if _, ok := props["distinct_id"]; !ok {
+		t.Error("event should contain distinct_id")
+	}
+	if _, ok := props["$os"]; !ok {
+		t.Error("event should contain $os")
+	}
+}
+
+// TestIsAura verifies the Aura URI detection (exercises the package-level
+// compiled regex that replaced the per-call regexp.MustCompile).
+// isAura is unexported, so we test it via the exported IsAura helper.
+func TestIsAura(t *testing.T) {
+	tests := []struct {
+		uri    string
+		want   bool
+	}{
+		{"bolt+s://abc123.databases.neo4j.io", true},
+		{"neo4j+s://xyz.instances.neo4j.io", true},
+		{"bolt://mydb.databases.neo4j.io:7687", true},
+		{"bolt://localhost:7687", false},
+		{"bolt://192.168.1.1:7687", false},
+		{"bolt://myprivate.neo4j.com", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		got := analytics.IsAuraURI(tt.uri)
+		if got != tt.want {
+			t.Errorf("IsAuraURI(%q) = %v, want %v", tt.uri, got, tt.want)
+		}
+	}
 }

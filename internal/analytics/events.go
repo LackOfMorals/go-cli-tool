@@ -20,6 +20,7 @@ type baseProperties struct {
 	Uptime     int64  `json:"uptime"`
 	OS         string `json:"$os"`
 	OSArch     string `json:"os_arch"`
+	CLIVersion string `json:"cli_version,omitempty"`
 	MachineID  string `json:"machine_id,omitempty"`
 	BinaryPath string `json:"binary_path,omitempty"`
 }
@@ -68,6 +69,7 @@ func (a *Analytics) getBaseProperties() baseProperties {
 		Uptime:     uptime,
 		OS:         runtime.GOOS,
 		OSArch:     runtime.GOARCH,
+		CLIVersion: a.cfg.cliVersion,
 		MachineID:  a.cfg.machineID,
 		BinaryPath: a.cfg.binaryPath,
 	}
