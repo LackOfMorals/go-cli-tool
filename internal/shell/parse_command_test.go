@@ -80,7 +80,7 @@ func TestParseCommand(t *testing.T) {
 			input: `cypher MATCH (n:Person {name: "Alice"}) RETURN n`,
 			// shlex (and the old parser) treat "Alice"}) as a single token: the
 			// closing quote is consumed, then } and ) attach to the same token
-			// because there is no whitespace between them.
+			// because there is no whitespace between  them.
 			want: []string{"cypher", "MATCH", "(n:Person", "{name:", "Alice})", "RETURN", "n"},
 		},
 		{
