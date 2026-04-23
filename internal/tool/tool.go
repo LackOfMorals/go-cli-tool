@@ -1,6 +1,16 @@
 package tool
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrPrerequisite is a sentinel that prerequisite checks wrap so callers can
+// distinguish a missing-dependency error from an execution error.
+//
+//	// Test for it:
+//	if errors.Is(err, tool.ErrPrerequisite) { ... }
+var ErrPrerequisite = errors.New("prerequisite not met")
 
 // Tool defines the interface all CLI tools must implement.
 type Tool interface {

@@ -3,6 +3,7 @@ package shell_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -401,6 +402,68 @@ func TestExecute_ContextPropagatedToTool(t *testing.T) {
 	}
 	if ct.capturedCtx == nil {
 		t.Fatal("context was not propagated to tool")
+	}
+}
+
+// ---- Validate called before Execute ------------------------------------
+
+// validatingTool records whether Validate was called and can be configured
+// to fail validation so we can assert the flow stops before Execute.
+type validatingTool struct {
+	*tool.BaseTool
+	validateErr  error
+	validateCalled bool
+	executeCalled  bool
+}
+
+func newValidatingTool(name string, validateErr error) *validatingTool {
+	return &validatingTool{
+		BaseTool:    tool.NewBaseTool(name, name, "1.0.0"),
+		validateErr: validateErr,
+	}
+}
+
+func (v *validatingTool) Validate(_ tool.Context) error {
+	v.validateCalled = true
+	return v.validateErr
+}
+
+func (v *validatingTool) Execute(_ tool.Context) (tool.Result, error) {
+	v.executeCalled = true
+	return tool.SuccessResult("executed"), nil
+}
+
+func TestExecute_ValidateCalledBeforeExecute(t *testing.T) {
+	s := newShell(t)
+	vt := newValidatingTool("validator", nil)
+	s.SetRegistry(&stubRegistry{tools: map[string]tool.Tool{"validator": vt}})
+
+	_, err := s.Execute("validator")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !vt.validateCalled {
+		t.Error("Validate should be called before Execute")
+	}
+	if !vt.executeCalled {
+		t.Error("Execute should be called when Validate passes")
+	}
+}
+
+func TestExecute_ValidateFailurePreventsExecute(t *testing.T) {
+	s := newShell(t)
+	vt := newValidatingTool("blocker", fmt.Errorf("not ready"))
+	s.SetRegistry(&stubRegistry{tools: map[string]tool.Tool{"blocker": vt}})
+
+	_, err := s.Execute("blocker")
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "not ready") {
+		t.Errorf("expected validation message in error, got: %v", err)
+	}
+	if vt.executeCalled {
+		t.Error("Execute must not be called when Validate fails")
 	}
 }
 

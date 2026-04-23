@@ -279,9 +279,12 @@ func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log lo
 
 func (a *App) buildCategories() map[string]*shell.Category {
 	return map[string]*shell.Category{
-		"cypher": commands.BuildCypherCategory(a.cypherSvc),
-		"cloud":  commands.BuildCloudCategory(a.cloudSvc),
-		"admin":  commands.BuildAdminCategory(a.adminSvc),
+		"cypher": commands.BuildCypherCategory(a.cypherSvc).
+			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+		"cloud": commands.BuildCloudCategory(a.cloudSvc).
+			SetPrerequisite(commands.AuraPrerequisite(&a.cfg.Aura)),
+		"admin": commands.BuildAdminCategory(a.adminSvc).
+			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
 	}
 }
 

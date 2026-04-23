@@ -9,6 +9,7 @@ import (
 // Command is a leaf action within a category or sub-category.
 type Command struct {
 	Name        string
+	Aliases     []string // optional short-form names, e.g. ["ls"] for "list"
 	Description string
 	Usage       string // short usage hint shown in help, e.g. "pause <id>"
 	Handler     CommandHandler
@@ -28,17 +29,27 @@ type Command struct {
 //
 //	neo4j> cypher MATCH (n) RETURN n LIMIT 5
 //
+// # Prerequisites
+//
+// Categories that require an external dependency (a database connection,
+// API credentials, etc.) should declare it via SetPrerequisite. The check
+// runs on every non-empty dispatch so the user gets a clear, actionable
+// error message before the underlying service call fails. Invoking the
+// category with no arguments (to show help) always succeeds even when the
+// prerequisite would fail.
+//
 // # Thread safety
 //
-// The builder methods (AddCommand, AddSubcategory, SetDirectHandler) are NOT
-// safe for concurrent use. They are intended to be called once during
-// application startup before any goroutine calls Dispatch, Help, or Find.
-// Dispatch, Help, Find, SubcategoryNames, CommandNames, and Subcat are safe
-// to call concurrently once the category tree is fully built.
+// The builder methods (AddCommand, AddSubcategory, SetDirectHandler,
+// SetPrerequisite) are NOT safe for concurrent use. They are intended to be
+// called once during application startup before any goroutine calls Dispatch,
+// Help, or Find. Dispatch, Help, Find, SubcategoryNames, CommandNames, and
+// Subcat are safe to call concurrently once the category tree is fully built.
 type Category struct {
 	Name          string
 	Description   string
 	directHandler CommandHandler
+	prerequisite  func() error // optional; checked before every non-help dispatch
 	subcats       map[string]*Category
 	commands      map[string]*Command
 }
@@ -63,9 +74,28 @@ func (c *Category) SetDirectHandler(h CommandHandler) *Category {
 	return c
 }
 
+// SetPrerequisite installs a dependency check that runs before every
+// non-help dispatch on this category. If fn returns an error the command is
+// not executed and the error is returned to the user directly.
+//
+// Typical usage in app wiring:
+//
+//	cmds.BuildCypherCategory(svc).SetPrerequisite(cmds.Neo4jPrerequisite(&cfg.Neo4j))
+//
+// Returns the receiver for chaining.
+func (c *Category) SetPrerequisite(fn func() error) *Category {
+	c.prerequisite = fn
+	return c
+}
+
 // AddCommand registers a named command. Returns the receiver for chaining.
+// All aliases defined in cmd.Aliases are registered in the same map so that
+// Dispatch resolves them without any extra logic.
 func (c *Category) AddCommand(cmd *Command) *Category {
 	c.commands[cmd.Name] = cmd
+	for _, alias := range cmd.Aliases {
+		c.commands[alias] = cmd
+	}
 	return c
 }
 
@@ -88,8 +118,25 @@ func (c *Category) SubcategoryNames() []string {
 	return names
 }
 
-// CommandNames returns the names of all direct commands, sorted.
+// CommandNames returns the canonical name of every direct command, sorted.
+// Alias keys registered by AddCommand are excluded; use AllCommandNames for
+// tab-completion where aliases should also be offered.
 func (c *Category) CommandNames() []string {
+	seen := make(map[string]bool, len(c.commands))
+	var names []string
+	for k, cmd := range c.commands {
+		if k == cmd.Name && !seen[k] {
+			names = append(names, k)
+			seen[k] = true
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// AllCommandNames returns every registered key (canonical names + aliases),
+// sorted. Use this when building tab-completion so aliases are offered too.
+func (c *Category) AllCommandNames() []string {
 	names := make([]string, 0, len(c.commands))
 	for k := range c.commands {
 		names = append(names, k)
@@ -121,6 +168,15 @@ func (c *Category) Dispatch(args []string, ctx ShellContext) (string, error) {
 			return "", fmt.Errorf("usage: %s <query>", c.Name)
 		}
 		return c.Help(), nil
+	}
+
+	// Check dependency prerequisites before any real work. This is done after
+	// the no-args guard so that typing a bare category name (e.g. "cypher"
+	// or "admin") always shows help even when the dependency is unavailable.
+	if c.prerequisite != nil {
+		if err := c.prerequisite(); err != nil {
+			return "", err
+		}
 	}
 
 	name := args[0]
@@ -172,13 +228,16 @@ func (c *Category) Help() string {
 
 	if len(c.commands) > 0 {
 		fmt.Fprintln(&b, "\nCommands:")
-		for _, k := range sortedCmdKeys(c.commands) {
+		for _, k := range c.CommandNames() {
 			cmd := c.commands[k]
 			label := cmd.Name
 			if cmd.Usage != "" {
 				label = cmd.Usage
 			}
-			fmt.Fprintf(&b, "  %-18s %s\n", label, cmd.Description)
+			if len(cmd.Aliases) > 0 {
+				label += " (" + strings.Join(cmd.Aliases, ", ") + ")"
+			}
+			fmt.Fprintf(&b, "  %-24s %s\n", label, cmd.Description)
 		}
 	}
 
@@ -194,11 +253,4 @@ func sortedKeys(m map[string]*Category) []string {
 	return keys
 }
 
-func sortedCmdKeys(m map[string]*Command) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
+

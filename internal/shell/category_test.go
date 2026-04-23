@@ -2,10 +2,13 @@ package shell_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/cli/go-cli-tool/internal/shell"
+	"github.com/cli/go-cli-tool/internal/tool"
 )
 
 // ---- helpers ------------------------------------------------------------
@@ -236,7 +239,178 @@ func TestHelp_ListsSubcategories(t *testing.T) {
 	}
 }
 
-// ---- SubcategoryNames / CommandNames sorted -----------------------------
+// ---- Prerequisites -----------------------------------------------------
+
+func TestPrerequisite_BlocksDispatch(t *testing.T) {
+	c := newTestCategory("admin").
+		AddCommand(&shell.Command{
+			Name:    "show-users",
+			Handler: func(args []string, ctx shell.ShellContext) (string, error) { return "ok", nil },
+		}).
+		SetPrerequisite(func() error {
+			return fmt.Errorf("database not configured")
+		})
+
+	_, err := c.Dispatch([]string{"show-users"}, blankCtx())
+	if err == nil {
+		t.Fatal("expected prerequisite error")
+	}
+	if !strings.Contains(err.Error(), "database not configured") {
+		t.Errorf("expected prerequisite message in error, got: %v", err)
+	}
+}
+
+func TestPrerequisite_PassesWhenMet(t *testing.T) {
+	called := false
+	c := newTestCategory("admin").
+		AddCommand(&shell.Command{
+			Name:    "show-users",
+			Handler: func(args []string, ctx shell.ShellContext) (string, error) { called = true; return "ok", nil },
+		}).
+		SetPrerequisite(func() error { return nil })
+
+	_, err := c.Dispatch([]string{"show-users"}, blankCtx())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler should be called when prerequisite passes")
+	}
+}
+
+func TestPrerequisite_NoArgsAlwaysShowsHelp(t *testing.T) {
+	// Typing a bare category name (e.g. "admin") should show help even when
+	// the prerequisite would fail — the user may just want to see what commands
+	// are available before configuring the connection.
+	c := newTestCategory("admin").
+		SetPrerequisite(func() error {
+			return fmt.Errorf("no database")
+		})
+
+	out, err := c.Dispatch(nil, blankCtx())
+	if err != nil {
+		t.Fatalf("bare category name should show help, not error: %v", err)
+	}
+	if !strings.Contains(out, "admin") {
+		t.Errorf("expected help output, got: %s", out)
+	}
+}
+
+func TestPrerequisite_DirectHandlerNoArgsShowsUsage(t *testing.T) {
+	// Direct-handler categories (like cypher) return a usage error on no args,
+	// not the help text — but they still should NOT run the prerequisite.
+	prereqCalled := false
+	c := newTestCategory("cypher").
+		SetDirectHandler(func(args []string, ctx shell.ShellContext) (string, error) {
+			return "ok", nil
+		}).
+		SetPrerequisite(func() error {
+			prereqCalled = true
+			return fmt.Errorf("no database")
+		})
+
+	_, err := c.Dispatch(nil, blankCtx())
+	if err == nil {
+		t.Fatal("expected usage error from direct handler")
+	}
+	if prereqCalled {
+		t.Error("prerequisite should not be called when no args are provided")
+	}
+}
+
+func TestPrerequisite_WrapsErrPrerequisite(t *testing.T) {
+	// Verify that the error returned by a prerequisite survives the dispatch
+	// chain intact so callers can use errors.Is(err, tool.ErrPrerequisite).
+	c := newTestCategory("test").
+		AddCommand(&shell.Command{
+			Name:    "cmd",
+			Handler: func(args []string, ctx shell.ShellContext) (string, error) { return "", nil },
+		}).
+		SetPrerequisite(func() error {
+			return fmt.Errorf("%w: something missing", tool.ErrPrerequisite)
+		})
+
+	_, err := c.Dispatch([]string{"cmd"}, blankCtx())
+	if !errors.Is(err, tool.ErrPrerequisite) {
+		t.Errorf("expected tool.ErrPrerequisite in error chain, got: %v", err)
+	}
+}
+
+// ---- Aliases -----------------------------------------------------------
+
+func TestDispatch_Alias(t *testing.T) {
+	called := false
+	c := newTestCategory("admin").
+		AddCommand(&shell.Command{
+			Name:    "show-users",
+			Aliases: []string{"su", "users"},
+			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+				called = true
+				return "users", nil
+			},
+		})
+
+	for _, input := range []string{"show-users", "su", "users"} {
+		called = false
+		_, err := c.Dispatch([]string{input}, blankCtx())
+		if err != nil {
+			t.Fatalf("Dispatch(%q): unexpected error: %v", input, err)
+		}
+		if !called {
+			t.Errorf("Dispatch(%q): handler not called", input)
+		}
+	}
+}
+
+func TestCommandNames_ExcludesAliases(t *testing.T) {
+	c := newTestCategory("root").
+		AddCommand(&shell.Command{Name: "list", Aliases: []string{"ls"}}).
+		AddCommand(&shell.Command{Name: "delete", Aliases: []string{"rm", "del"}})
+
+	names := c.CommandNames()
+	want := []string{"delete", "list"}
+	if len(names) != len(want) {
+		t.Fatalf("CommandNames() = %v, want %v", names, want)
+	}
+	for i, n := range names {
+		if n != want[i] {
+			t.Errorf("names[%d] = %q, want %q", i, n, want[i])
+		}
+	}
+}
+
+func TestAllCommandNames_IncludesAliases(t *testing.T) {
+	c := newTestCategory("root").
+		AddCommand(&shell.Command{Name: "list", Aliases: []string{"ls"}}).
+		AddCommand(&shell.Command{Name: "delete", Aliases: []string{"rm"}})
+
+	names := c.AllCommandNames()
+	want := []string{"delete", "list", "ls", "rm"}
+	if len(names) != len(want) {
+		t.Fatalf("AllCommandNames() = %v, want %v", names, want)
+	}
+	for i, n := range names {
+		if n != want[i] {
+			t.Errorf("names[%d] = %q, want %q", i, n, want[i])
+		}
+	}
+}
+
+func TestHelp_ShowsAliases(t *testing.T) {
+	c := newTestCategory("admin").
+		AddCommand(&shell.Command{
+			Name:        "show-users",
+			Aliases:     []string{"su"},
+			Description: "List all users",
+		})
+
+	help := c.Help()
+	if !strings.Contains(help, "su") {
+		t.Errorf("help should show alias 'su', got:\n%s", help)
+	}
+}
+
+// ---- CommandNames / SubcategoryNames sorted ----------------------------
 
 func TestSubcategoryNames_Sorted(t *testing.T) {
 	c := newTestCategory("root").

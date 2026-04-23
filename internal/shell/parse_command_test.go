@@ -66,14 +66,14 @@ func TestParseCommand(t *testing.T) {
 			want:  []string{"set", "prompt", "neo4j> "},
 		},
 		{
-			name:  "quoted empty string",
+			name:  "quoted empty string produces empty token",
 			input: `cmd ""`,
-			want:  []string{"cmd"},
+			want:  []string{"cmd", ""},
 		},
 		{
-			name:  "unclosed quote — contents treated as one token",
+			name:  "unclosed quote falls back to whitespace split",
 			input: `cypher "MATCH (n`,
-			want:  []string{"cypher", "MATCH (n"},
+			want:  []string{"cypher", `"MATCH`, "(n"},
 		},
 		{
 			name:  "cypher with colon and braces",

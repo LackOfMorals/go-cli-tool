@@ -142,9 +142,22 @@ neo4j> cypher MATCH (n:Person {name: "Alice"})-[:KNOWS]->(m) RETURN m
 neo4j> cypher CREATE (n:Person {name: "Bob"}) RETURN n
 ```
 
+For longer queries, end a line with `\` to continue on the next line. The shell collects all continuation lines before executing:
+
+```
+neo4j> cypher MATCH (n:Person) \
+...>         WHERE n.age > 30 \
+...>         RETURN n.name, n.age \
+...>         ORDER BY n.age DESC LIMIT 10
+```
+
+> **Requires a Neo4j connection.** If `neo4j.uri` or `neo4j.username` are not configured, the shell returns a clear error before attempting the query. Typing `cypher` alone always shows usage regardless of connection state.
+
 #### cloud
 
-Manages Neo4j Aura cloud resources. Requires `CLI_AURA_CLIENT_ID` and `CLI_AURA_CLIENT_SECRET` to be set.
+Manages Neo4j Aura cloud resources.
+
+> **Requires Aura credentials.** If `aura.client_id` or `aura.client_secret` are not configured, the shell returns a clear error before making any API call. Typing `cloud` alone always shows usage regardless of credential state.
 
 ```
 neo4j> cloud instances list
@@ -160,6 +173,8 @@ neo4j> cloud projects get <id>
 #### admin
 
 Runs administrative commands against the connected database.
+
+> **Requires a Neo4j connection.** Same prerequisite as `cypher` — `neo4j.uri` and `neo4j.username` must be configured.
 
 ```
 neo4j> admin show-users
@@ -208,8 +223,9 @@ internal/
         cypher.go
         cloud.go
         admin.go
+        prerequisites.go   Neo4jPrerequisite and AuraPrerequisite factories
     shell/
-        category.go     Category type, Command type, routing (Dispatch/Find)
+        category.go     Category type, Command type, routing (Dispatch/Find/SetPrerequisite)
         shell.go        Shell interface, ShellContext, built-in command names
         interactive.go  InteractiveShell — the REPL implementation
     tool/               Tool interface, BaseTool, Context, Result
@@ -271,14 +287,17 @@ You must implement all four methods. `BaseTool` provides no-op defaults for `Val
 // Execute is the only method you must override.
 func (t *MyTool) Execute(ctx tool.Context) (tool.Result, error) {
     if len(ctx.Args) == 0 {
-        return tool.ErrorResult("usage: mytool <text>", fmt.Errorf("no input")), nil
+        return tool.ErrorResult("usage: mytool <text>"), fmt.Errorf("no input")
     }
 
     output := fmt.Sprintf("%s %s", t.prefix, ctx.Args[0])
     return tool.SuccessResult(output), nil
 }
 
-// Validate runs before Execute. Return an error to abort.
+// Validate runs automatically before Execute — the shell calls it and
+// will not proceed to Execute if it returns an error. Use it to check
+// prerequisites (required config, service availability) rather than
+// duplicating those checks inside Execute.
 func (t *MyTool) Validate(ctx tool.Context) error {
     if len(ctx.Args) == 0 {
         return fmt.Errorf("at least one argument is required")
@@ -366,6 +385,7 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
         }).
         AddCommand(&shell.Command{
             Name:        "show-indexes",
+            Aliases:     []string{"idx"},          // optional: short-form names
             Usage:       "show-indexes",
             Description: "List all indexes in the current database",
             Handler: func(args []string, ctx shell.ShellContext) (string, error) {
@@ -376,7 +396,12 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 }
 ```
 
-If the command needs data from a service that `AdminService` doesn't yet expose, add the method to the interface in `internal/service/interfaces.go` first, then implement it in `internal/service/admin_service.go`.
+Aliases are registered automatically in dispatch and tab completion, and appear in parentheses in `help` output:
+
+```
+neo4j> admin show-indexes
+neo4j> admin idx            # same command
+```
 
 **Example: adding a command to a sub-category**
 
@@ -498,7 +523,7 @@ func BuildGDSCategory(svc service.GDSService) *shell.Category {
 
 **Step 4 — Wire it into App**
 
-In `cmd/neo4-cli/app.go`, add the service field, construct it in `newApp`, and register the category:
+In `cmd/neo4-cli/app.go`, add the service field, construct it in `newApp`, and register the category. If the category requires a database or API connection, attach a prerequisite so users get a clear error message instead of a raw driver error:
 
 ```go
 // In the App struct:
@@ -510,13 +535,19 @@ gdsSvc := service.NewGDSService(repo)
 // In buildCategories():
 func (a *App) buildCategories() map[string]*shell.Category {
     return map[string]*shell.Category{
-        "cypher": commands.BuildCypherCategory(a.cypherSvc),
-        "cloud":  commands.BuildCloudCategory(a.cloudSvc),
-        "admin":  commands.BuildAdminCategory(a.adminSvc),
-        "gds":    commands.BuildGDSCategory(a.gdsSvc),   // ← add here
+        "cypher": commands.BuildCypherCategory(a.cypherSvc).
+            SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+        "cloud":  commands.BuildCloudCategory(a.cloudSvc).
+            SetPrerequisite(commands.AuraPrerequisite(&a.cfg.Aura)),
+        "admin":  commands.BuildAdminCategory(a.adminSvc).
+            SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+        "gds":    commands.BuildGDSCategory(a.gdsSvc).        // ← add here
+            SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
     }
 }
 ```
+
+Add the prerequisite factory to `internal/commands/prerequisites.go` if you need a check that doesn't fit the existing `Neo4jPrerequisite` or `AuraPrerequisite` patterns.
 
 The category is now live in the shell:
 
@@ -533,6 +564,12 @@ neo4j> help gds
 **Service pattern** — business logic lives in `internal/service`. Command handlers in `internal/commands` call services; they contain no logic of their own beyond argument validation and output formatting.
 
 **Interfaces before implementations** — new behaviour starts with an interface in `internal/service/interfaces.go`. This keeps the command layer and the shell decoupled from concrete implementations and makes testing straightforward.
+
+**Prerequisite checks belong in `prerequisites.go`** — if a category requires an external dependency (database connection, API credentials), declare it with `SetPrerequisite` in `app.go`. Write the factory function in `internal/commands/prerequisites.go` so it is independently testable. The check runs before every real dispatch, but bare category invocations (e.g. `cypher` alone) always show help regardless. Use `fmt.Errorf("%w: ...", tool.ErrPrerequisite)` so callers can identify prerequisite errors with `errors.Is`.
+
+**Tool `Validate` runs before `Execute`** — the shell calls `Validate` automatically before every `Execute`. Use `Validate` for tool-level readiness checks (required arguments, service availability) rather than repeating the check inside `Execute`. `BaseTool.Validate` is a no-op, so only override it when needed.
+
+**Command aliases are first-class** — add short-form names via the `Aliases []string` field on `Command`. Aliases are resolved in dispatch and tab completion, and shown in `help` output. Register canonical names as the `Name` field; aliases are supplementary.
 
 **Secrets stay out of flags** — passwords and API secrets must not be CLI flags. Accept them only via environment variables or the config file.
 

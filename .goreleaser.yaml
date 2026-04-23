@@ -1,0 +1,57 @@
+version: 2
+
+project_name: neo4j-mcp-canary
+
+before:
+  hooks:
+    - go mod tidy
+    - go test -count=1 ./...
+
+builds:
+  - id: neo4j-cli
+    main: ./cmd/neo4j-cli
+    binary: neo4j-cli
+    env:
+      - CGO_ENABLED=0        # pure Go, no C deps — enables clean cross-compilation
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Exclude combos you don't want (e.g. Windows ARM)
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -X "main.Version={{.Tag}}"
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    # .zip for Windows, .tar.gz for everything else
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE.txt
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch

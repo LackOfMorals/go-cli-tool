@@ -42,3 +42,4 @@ CLAUDE.md
 gemini.md
 *.pem
 .DS_Store
+.neo4j_history

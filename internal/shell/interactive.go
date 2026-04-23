@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/chzyer/readline"
+	"github.com/google/shlex"
 	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/logger"
@@ -237,7 +238,19 @@ func (s *InteractiveShell) runLoop(rl *readline.Instance) {
 			break
 		}
 
-		cmd := strings.TrimSpace(line)
+		// Collect continuation lines when the input ends with \.
+		collected, contErr := s.collectInput(rl, line)
+		if contErr == readline.ErrInterrupt {
+			// Ctrl+C mid-continuation: discard accumulated input.
+			continue
+		}
+		if contErr != nil {
+			// EOF or readline closed during continuation.
+			fmt.Println()
+			break
+		}
+
+		cmd := strings.TrimSpace(collected)
 		if cmd == "" {
 			continue
 		}
@@ -312,7 +325,7 @@ func (s *InteractiveShell) buildCompleter() readline.AutoCompleter {
 			catChildren = append(catChildren, readline.PcItem(subName, cmdItems...))
 		}
 
-		for _, cmdName := range cat.CommandNames() {
+		for _, cmdName := range cat.AllCommandNames() {
 			catChildren = append(catChildren, readline.PcItem(cmdName))
 		}
 
@@ -536,6 +549,13 @@ func (s *InteractiveShell) executeTool(ctx context.Context, t tool.Tool, args []
 		WithIO(s.io).
 		WithPresenter(s.presenter)
 
+	// Validate before Execute so that tool-level prerequisite checks
+	// (e.g. required config, service availability) produce a clear error
+	// before any real work begins. BaseTool.Validate is a no-op by default.
+	if err := t.Validate(*toolCtx); err != nil {
+		return "", err
+	}
+
 	result, err := t.Execute(*toolCtx)
 
 	// Emit after execution so we can record the actual outcome.
@@ -552,36 +572,60 @@ func (s *InteractiveShell) executeTool(ctx context.Context, t tool.Tool, args []
 	return result.Output, nil
 }
 
-// ---- Input parsing ------------------------------------------------------
+// ---- Input collection --------------------------------------------------
 
-// parseCommand splits a raw input line into tokens, honouring single and
-// double quotes so arguments with spaces can be passed. Both spaces and tabs
-// are treated as whitespace.
-func parseCommand(cmd string) []string {
-	var args []string
-	var current strings.Builder
-	inQuote := false
-	quoteChar := rune(0)
+// collectInput reads continuation lines when the first line ends with a
+// trailing backslash. Each continuation is prompted with "...> " and
+// appended (without the backslash) until a line with no trailing backslash
+// is received or an error occurs.
+//
+// This lets users spread long Cypher queries across multiple lines:
+//
+//	neo4j> cypher MATCH (n:Person) \
+//	...>         WHERE n.age > 30 \
+//	...>         RETURN n LIMIT 10
+func (s *InteractiveShell) collectInput(rl *readline.Instance, firstLine string) (string, error) {
+	const contPrompt = "...> "
 
-	for _, ch := range cmd {
-		switch {
-		case (ch == '"' || ch == '\'') && !inQuote:
-			inQuote = true
-			quoteChar = ch
-		case ch == quoteChar && inQuote:
-			inQuote = false
-			quoteChar = 0
-		case (ch == ' ' || ch == '\t') && !inQuote:
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
-		default:
-			current.WriteRune(ch)
+	line := strings.TrimRight(firstLine, " \t")
+	if !strings.HasSuffix(line, `\`) {
+		return line, nil
+	}
+
+	// Switch to continuation prompt and restore on exit.
+	rl.SetPrompt(contPrompt)
+	defer rl.SetPrompt(s.prompt)
+
+	var buf strings.Builder
+	for {
+		buf.WriteString(strings.TrimSuffix(line, `\`))
+		buf.WriteByte(' ')
+
+		next, err := rl.Readline()
+		if err != nil {
+			return strings.TrimSpace(buf.String()), err
+		}
+
+		line = strings.TrimRight(next, " \t")
+		if !strings.HasSuffix(line, `\`) {
+			buf.WriteString(line)
+			return buf.String(), nil
 		}
 	}
-	if current.Len() > 0 {
-		args = append(args, current.String())
+}
+
+// ---- Input parsing ------------------------------------------------------
+
+// parseCommand splits a raw input line into POSIX shell tokens using
+// github.com/google/shlex. It handles single/double quotes and backslash
+// escapes correctly. On a parse error (e.g. unclosed quote) it falls back
+// to simple whitespace splitting so the shell never silently swallows input.
+func parseCommand(cmd string) []string {
+	args, err := shlex.Split(cmd)
+	if err != nil {
+		// Best-effort fallback: whitespace split preserves the tokens even
+		// if quoting is malformed (e.g. an unclosed quote in a Cypher query).
+		return strings.Fields(cmd)
 	}
 	return args
 }
