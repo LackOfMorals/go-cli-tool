@@ -78,7 +78,10 @@ func TestParseCommand(t *testing.T) {
 		{
 			name:  "cypher with colon and braces",
 			input: `cypher MATCH (n:Person {name: "Alice"}) RETURN n`,
-			want:  []string{"cypher", "MATCH", "(n:Person", "{name:", "Alice}", ")", "RETURN", "n"},
+			// shlex (and the old parser) treat "Alice"}) as a single token: the
+			// closing quote is consumed, then } and ) attach to the same token
+			// because there is no whitespace between them.
+			want: []string{"cypher", "MATCH", "(n:Person", "{name:", "Alice})", "RETURN", "n"},
 		},
 		{
 			name:  "quoted cypher preserves internal spaces",
