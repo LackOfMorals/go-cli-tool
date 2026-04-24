@@ -234,7 +234,9 @@ func TestCloudCategory_InstancesCreate_Success(t *testing.T) {
 	svc := &mockCloudService{
 		instances: &mockInstancesService{createResult: created},
 	}
+	io := &mockIO{}
 	ctx := cloudCtx(t)
+	ctx.IO = io
 	ctx.Config.Aura.InstanceDefaults = config.AuraInstanceDefaults{
 		TenantID: "tenant-abc", CloudProvider: "gcp",
 		Region: "europe-west1", Type: "enterprise-db", Version: "5", Memory: "8GB",
@@ -245,10 +247,21 @@ func TestCloudCategory_InstancesCreate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"new-id", "my-db", "s3cr3t!", "NOT be shown again"} {
+
+	// Password and core fields must appear in the formatted output.
+	for _, want := range []string{"new-id", "my-db", "s3cr3t!"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output should contain %q:\n%s", want, out)
 		}
+	}
+
+	// The save-now warning must be written to IO (stderr), not embedded in output.
+	ioOut := strings.Join(io.written, "")
+	if !strings.Contains(ioOut, "NOT be shown again") {
+		t.Errorf("expected save warning in IO output, got: %q", ioOut)
+	}
+	if strings.Contains(out, "NOT be shown again") {
+		t.Errorf("save warning should not appear in formatted output, got: %q", out)
 	}
 }
 

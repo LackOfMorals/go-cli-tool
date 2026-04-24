@@ -144,26 +144,14 @@ func instanceCreateCmd(svc service.CloudService) *shell.Command {
 				{Label: "Tenant ID", Value: orDash(created.TenantID)},
 				{Label: "Connection URL", Value: orDash(created.ConnectionURL)},
 				{Label: "Username", Value: orDash(created.Username)},
+				{Label: "Password", Value: orDash(created.Password)},
 			})
 
-			out, err := ctx.Presenter.Format(detail)
-			if err != nil {
-				return "", err
+			if created.Password != "" {
+				ctx.IO.Write("⚠  Save this password now — it will NOT be shown again.\n")
 			}
 
-			if created.Password != "" {
-				pwLine := "Password: " + created.Password
-				warnLine := "⚠  Save this now — it will NOT be shown again."
-				innerW := len(pwLine)
-				if len(warnLine) > innerW {
-					innerW = len(warnLine)
-				}
-				innerW += 2
-				hBar := strings.Repeat("─", innerW)
-				out += fmt.Sprintf("\n\n  ┌%s┐\n  │ %-*s │\n  │ %-*s │\n  └%s┘",
-					hBar, innerW-2, pwLine, innerW-2, warnLine, hBar)
-			}
-			return out, nil
+			return ctx.Presenter.Format(detail)
 		},
 	}
 }
