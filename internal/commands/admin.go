@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/cli/go-cli-tool/internal/presentation"
@@ -59,22 +58,3 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 		})
 }
 
-// formatInstance is a shared helper for building instance detail output.
-// Used by instanceGetCmd and instanceCreateCmd.
-func formatInstance(inst *service.Instance) string {
-	var b strings.Builder
-	row := func(label, value string) {
-		fmt.Fprintf(&b, "  %-16s  %s\n", label+":", value)
-	}
-	fmt.Fprintln(&b, strings.Repeat("─", 48))
-	row("ID", inst.ID)
-	row("Name", inst.Name)
-	row("Status", orDash(inst.Status))
-	row("Type", orDash(inst.Tier))
-	row("Memory", orDash(inst.Memory))
-	row("Region", orDash(inst.Region))
-	row("Cloud", orDash(inst.CloudProvider))
-	row("Tenant ID", orDash(inst.TenantID))
-	row("Connection URL", orDash(inst.ConnectionURL))
-	return strings.TrimRight(b.String(), "\n")
-}

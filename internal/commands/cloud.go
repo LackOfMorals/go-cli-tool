@@ -192,7 +192,7 @@ func instanceUpdateCmd(svc service.CloudService) *shell.Command {
 			if err != nil {
 				return "", err
 			}
-			return ctx.Presenter.Format(presentation.NewDetailData("Updated", []presentation.DetailField{
+			return ctx.Presenter.Format(presentation.NewDetailData("Instance updated", []presentation.DetailField{
 				{Label: "ID", Value: updated.ID},
 				{Label: "Name", Value: updated.Name},
 				{Label: "Status", Value: orDash(updated.Status)},
@@ -214,7 +214,7 @@ func instancePauseCmd(svc service.CloudService) *shell.Command {
 			if err := svc.Instances().Pause(ctx.Context, args[0]); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("Instance %s is pausing.", args[0]), nil
+			return fmt.Sprintf("✓ Instance %s is pausing.", args[0]), nil
 		},
 	}
 }
@@ -231,7 +231,7 @@ func instanceResumeCmd(svc service.CloudService) *shell.Command {
 			if err := svc.Instances().Resume(ctx.Context, args[0]); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("Instance %s is resuming.", args[0]), nil
+			return fmt.Sprintf("✓ Instance %s is resuming.", args[0]), nil
 		},
 	}
 }

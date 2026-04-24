@@ -374,8 +374,6 @@ func (s *InteractiveShell) executeBuiltin(command string, args []string) (string
 		return "Goodbye!", nil
 	case "help":
 		return s.builtinHelp(args)
-	case "config":
-		return s.builtinConfig(args)
 	case "set":
 		return s.builtinSet(args)
 	case "log-level":
@@ -408,101 +406,6 @@ func (s *InteractiveShell) builtinHelp(args []string) (string, error) {
 	}
 
 	return cat.Help(), nil
-}
-
-func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
-	if s.cfg == nil {
-		return "no configuration loaded", nil
-	}
-
-	c := s.cfg
-	var b strings.Builder
-
-	// sec prints a section header preceded by a blank line (except at the top).
-	sec := func(name string) {
-		if b.Len() > 0 {
-			b.WriteByte('\n')
-		}
-		fmt.Fprintf(&b, "%s\n%s\n", name, strings.Repeat("─", len(name)))
-	}
-	// row prints a two-column line indented by two spaces.
-	// Label column is 14 chars wide so all values align across sections.
-	row := func(label, value string) {
-		fmt.Fprintf(&b, "  %-14s  %s\n", label, value)
-	}
-	// secret returns "(set)" or "(not set)" — never the actual credential.
-	secret := func(v string) string {
-		if v == "" {
-			return "(not set)"
-		}
-		return "(set)"
-	}
-	// orNotSet returns the value itself, or "(not set)" when empty.
-	orNotSet := func(v string) string {
-		if v == "" {
-			return "(not set)"
-		}
-		return v
-	}
-
-	sec("Logging")
-	row("Level", c.LogLevel)
-	row("Format", c.LogFormat)
-	row("Output", func() string {
-		if c.LogOutput == "" {
-			return "stderr"
-		}
-		return c.LogOutput
-	}())
-	if c.LogOutput == "file" {
-		row("Log file", func() string {
-			if c.LogFile == "" {
-				return "(default: ~/.neo4j-cli/neo4j-cli.log)"
-			}
-			return c.LogFile
-		}())
-	}
-
-	sec("Shell")
-	row("Prompt", c.Shell.Prompt)
-	row("History file", c.Shell.HistoryFile)
-
-	sec("Neo4j")
-	row("URI", orNotSet(c.Neo4j.URI))
-	row("Username", orNotSet(c.Neo4j.Username))
-	row("Database", orNotSet(c.Neo4j.Database))
-	row("Password", secret(c.Neo4j.Password))
-
-	sec("Aura")
-	row("Client ID", orNotSet(c.Aura.ClientID))
-	row("Client secret", secret(c.Aura.ClientSecret))
-	row("Timeout", fmt.Sprintf("%ds", c.Aura.TimeoutSeconds))
-
-	sec("Cypher")
-	cypherFmt := c.Cypher.OutputFormat
-	if cypherFmt == "" {
-		cypherFmt = "table"
-	}
-	row("Output format", cypherFmt)
-	shellLim := c.Cypher.ShellLimit
-	if shellLim == 0 {
-		shellLim = 25
-	}
-	execLim := c.Cypher.ExecLimit
-	if execLim == 0 {
-		execLim = 100
-	}
-	row("Shell limit", fmt.Sprintf("%d rows", shellLim))
-	row("Exec limit", fmt.Sprintf("%d rows", execLim))
-
-	sec("Telemetry")
-	metricsStatus := "enabled"
-	if !c.Telemetry.Metrics {
-		metricsStatus = "disabled"
-	}
-	row("Metrics", metricsStatus)
-
-	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 func (s *InteractiveShell) builtinSet(args []string) (string, error) {
@@ -630,44 +533,102 @@ func (s *InteractiveShell) executeTool(ctx context.Context, t tool.Tool, args []
 
 // ---- Input collection --------------------------------------------------
 
-// collectInput reads continuation lines when the first line ends with a
-// trailing backslash. Each continuation is prompted with "...> " and
-// appended (without the backslash) until a line with no trailing backslash
-// is received or an error occurs.
+// collectInput handles multi-line input for the shell REPL.
 //
-// This lets users spread long Cypher queries across multiple lines:
+// Three modes are supported:
 //
-//	neo4j> cypher MATCH (n:Person) \
-//	...>         WHERE n.age > 30 \
-//	...>         RETURN n LIMIT 10
+//  1. Single-line with trailing semicolon — the semicolon is stripped and the
+//     line is executed immediately. This works for all commands:
+//
+//	   neo4j> cloud instances list;
+//
+//  2. Backslash continuation — a trailing \ starts multi-line mode for any
+//     command. Input is accumulated until a line without a trailing \ is
+//     received, or a trailing ; terminates early:
+//
+//	   neo4j> cloud instances \
+//	   ...>   list
+//
+//  3. Cypher mode — when the first token is "cypher", the shell automatically
+//     enters multi-line mode and waits for a ; terminator. This lets Cypher
+//     queries span as many lines as needed:
+//
+//	   neo4j> cypher MATCH (n:Person)
+//	   ...>   WHERE n.age > 30
+//	   ...>   RETURN n.name, n.age;
 func (s *InteractiveShell) collectInput(rl *readline.Instance, firstLine string) (string, error) {
 	const contPrompt = "...> "
 
 	line := strings.TrimRight(firstLine, " \t")
-	if !strings.HasSuffix(line, `\`) {
-		return line, nil
+
+	// A trailing semicolon on the first line: strip it and execute immediately.
+	// This applies to all commands, not just cypher.
+	if strings.HasSuffix(line, ";") {
+		return strings.TrimRight(strings.TrimSuffix(line, ";"), " \t"), nil
 	}
 
-	// Switch to continuation prompt and restore on exit.
-	rl.SetPrompt(contPrompt)
-	defer rl.SetPrompt(s.prompt)
+	// Backslash continuation: collect lines until a line has no trailing \
+	// or a trailing ; terminates the input early.
+	if strings.HasSuffix(line, `\`) {
+		rl.SetPrompt(contPrompt)
+		defer rl.SetPrompt(s.prompt)
 
-	var buf strings.Builder
-	for {
-		buf.WriteString(strings.TrimSuffix(line, `\`))
-		buf.WriteByte(' ')
+		var buf strings.Builder
+		for {
+			buf.WriteString(strings.TrimSuffix(line, `\`))
+			buf.WriteByte(' ')
 
-		next, err := rl.Readline()
-		if err != nil {
-			return strings.TrimSpace(buf.String()), err
+			next, err := rl.Readline()
+			if err != nil {
+				return strings.TrimSpace(buf.String()), err
+			}
+
+			line = strings.TrimRight(next, " \t")
+			if strings.HasSuffix(line, ";") {
+				buf.WriteString(strings.TrimSuffix(line, ";"))
+				return strings.TrimSpace(buf.String()), nil
+			}
+			if !strings.HasSuffix(line, `\`) {
+				buf.WriteString(line)
+				return buf.String(), nil
+			}
 		}
+	}
 
-		line = strings.TrimRight(next, " \t")
-		if !strings.HasSuffix(line, `\`) {
+	// Cypher mode: wait for a ; terminator before executing.
+	// The prompt switches to ...> so the user knows more input is expected.
+	if isCypherCommand(line) {
+		rl.SetPrompt(contPrompt)
+		defer rl.SetPrompt(s.prompt)
+
+		var buf strings.Builder
+		buf.WriteString(line)
+
+		for {
+			buf.WriteByte(' ')
+
+			next, err := rl.Readline()
+			if err != nil {
+				return strings.TrimSpace(buf.String()), err
+			}
+
+			line = strings.TrimRight(next, " \t")
+			if strings.HasSuffix(line, ";") {
+				buf.WriteString(strings.TrimSuffix(line, ";"))
+				return strings.TrimSpace(buf.String()), nil
+			}
 			buf.WriteString(line)
-			return buf.String(), nil
 		}
 	}
+
+	return line, nil
+}
+
+// isCypherCommand reports whether a shell input line begins with the cypher
+// command keyword. Used by collectInput to enable automatic ; termination.
+func isCypherCommand(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	return lower == "cypher" || strings.HasPrefix(lower, "cypher ")
 }
 
 // ---- Input parsing ------------------------------------------------------

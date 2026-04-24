@@ -59,7 +59,7 @@ type ShellContext struct {
 
 // builtins is a set for O(1) membership testing.
 var builtins = map[string]struct{}{
-	"exit": {}, "quit": {}, "help": {}, "config": {},
+	"exit": {}, "quit": {}, "help": {},
 	"set": {}, "log-level": {}, "clear": {}, "version": {},
 }
 
@@ -91,11 +91,12 @@ func CategoryHelpOverview(categories map[string]*Category) string {
 	fmt.Fprintln(&b, "Built-in commands:")
 	fmt.Fprintln(&b, "  exit / quit        Exit the shell")
 	fmt.Fprintln(&b, "  help [cat [sub]]   Show this help or help for a category")
-	fmt.Fprintln(&b, "  config             Show full configuration (connection, telemetry, shell)")
-	fmt.Fprintln(&b, "  set <key> <val>    Set a config value (prompt, log-level, cypher-format, cypher-limit)")
+	fmt.Fprintln(&b, "  set <key> <val>    Session-only override (prompt, log-level, cypher-format, cypher-limit)")
 	fmt.Fprintln(&b, "  log-level [level]  Get or set the log level")
 	fmt.Fprintln(&b, "  clear              Clear the screen")
 	fmt.Fprintln(&b, "  version            Show version")
+	fmt.Fprintln(&b, "")
+	fmt.Fprintln(&b, "Tip: use 'config list' to see all settings, 'config set <key> <val>' to persist them.")
 
 	return strings.TrimRight(b.String(), "\n")
 }

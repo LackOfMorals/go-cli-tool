@@ -118,19 +118,42 @@ func toInterfaceRows(r service.QueryResult) [][]interface{} {
 
 // ---- Interactive prompt ------------------------------------------------
 
-// promptForCypher asks the user to enter a Cypher statement and optional
-// parameters when neither was provided on the command line.
+// promptForCypher asks the user to enter a Cypher statement when neither
+// a query nor parameters were provided on the command line. Input is
+// accumulated line by line until a semicolon terminates the statement,
+// matching the behaviour of the interactive shell.
 func promptForCypher(ctx shell.ShellContext) (query string, params map[string]interface{}, err error) {
 	if ctx.IO == nil {
 		return "", nil, fmt.Errorf("no IO handler available for interactive prompt")
 	}
 
-	ctx.IO.Write("Cypher: ")
-	stmt, readErr := ctx.IO.Read()
-	if readErr != nil {
-		return "", nil, fmt.Errorf("read cypher statement: %w", readErr)
+	ctx.IO.Write("Cypher (end with ;):\n")
+
+	var lines []string
+	for {
+		ctx.IO.Write("...> ")
+		line, readErr := ctx.IO.Read()
+		if readErr != nil {
+			// Treat EOF as the end of input if we have something accumulated.
+			if len(lines) > 0 {
+				break
+			}
+			return "", nil, fmt.Errorf("read cypher statement: %w", readErr)
+		}
+		line = strings.TrimSpace(line)
+		if strings.HasSuffix(line, ";") {
+			line = strings.TrimRight(strings.TrimSuffix(line, ";"), " \t")
+			if line != "" {
+				lines = append(lines, line)
+			}
+			break
+		}
+		if line != "" {
+			lines = append(lines, line)
+		}
 	}
-	stmt = strings.TrimSpace(stmt)
+
+	stmt := strings.Join(lines, " ")
 	if stmt == "" {
 		return "", nil, fmt.Errorf("cypher statement is required")
 	}
