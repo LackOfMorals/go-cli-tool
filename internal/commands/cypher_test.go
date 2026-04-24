@@ -8,6 +8,8 @@ import (
 
 	"github.com/cli/go-cli-tool/internal/commands"
 	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/logger"
+	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/shell"
 )
@@ -33,6 +35,11 @@ func (m *mockCypherService) Execute(ctx context.Context, query string, params ma
 
 func cypherCtx(t *testing.T) shell.ShellContext {
 	t.Helper()
+	log := logger.NewLoggerService(logger.FormatText, logger.LevelError)
+	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
+	if err != nil {
+		t.Fatalf("NewPresentationService: %v", err)
+	}
 	return shell.ShellContext{
 		Context: context.Background(),
 		Config: config.Config{
@@ -41,7 +48,8 @@ func cypherCtx(t *testing.T) shell.ShellContext {
 				OutputFormat: "table",
 			},
 		},
-		IO: &mockIO{}, // needed for interactive prompts (Read returns "" when no lines queued)
+		IO:        &mockIO{},
+		Presenter: pres,
 	}
 }
 
@@ -96,7 +104,7 @@ func TestCypherCategory_NoArgs_PromptsForStatementAndParams(t *testing.T) {
 
 	ctx := cypherCtx(t)
 	ctx.IO = &mockIO{readLines: []string{
-		"MATCH (n:Person {name:$name}) RETURN n",
+		"MATCH (n:Person {name:$name}) RETURN n;",
 		"name=Alice age=30",
 	}}
 

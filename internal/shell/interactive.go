@@ -374,6 +374,15 @@ func (s *InteractiveShell) executeBuiltin(command string, args []string) (string
 		return "Goodbye!", nil
 	case "help":
 		return s.builtinHelp(args)
+	case "config":
+		// With subcommand args, delegate to the config category if registered.
+		// Without args, show the built-in configuration summary.
+		if len(args) > 0 {
+			if cat, ok := s.categories["config"]; ok {
+				return cat.Dispatch(args, s.makeContext(context.Background()))
+			}
+		}
+		return s.builtinConfig(args)
 	case "set":
 		return s.builtinSet(args)
 	case "log-level":
@@ -406,6 +415,96 @@ func (s *InteractiveShell) builtinHelp(args []string) (string, error) {
 	}
 
 	return cat.Help(), nil
+}
+
+func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
+	if s.cfg == nil {
+		return "no configuration loaded", nil
+	}
+
+	c := s.cfg
+	var b strings.Builder
+
+	sec := func(name string) {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "%s\n%s\n", name, strings.Repeat("─", len(name)))
+	}
+	row := func(label, value string) {
+		fmt.Fprintf(&b, "  %-14s  %s\n", label, value)
+	}
+	secret := func(v string) string {
+		if v == "" {
+			return "(not set)"
+		}
+		return "(set)"
+	}
+	orNotSet := func(v string) string {
+		if v == "" {
+			return "(not set)"
+		}
+		return v
+	}
+
+	sec("Logging")
+	row("Level", c.LogLevel)
+	row("Format", c.LogFormat)
+	row("Output", func() string {
+		if c.LogOutput == "" {
+			return "stderr"
+		}
+		return c.LogOutput
+	}())
+	if c.LogOutput == "file" {
+		row("Log file", func() string {
+			if c.LogFile == "" {
+				return "(default: ~/.neo4j-cli/neo4j-cli.log)"
+			}
+			return c.LogFile
+		}())
+	}
+
+	sec("Shell")
+	row("Prompt", c.Shell.Prompt)
+	row("History file", c.Shell.HistoryFile)
+
+	sec("Neo4j")
+	row("URI", orNotSet(c.Neo4j.URI))
+	row("Username", orNotSet(c.Neo4j.Username))
+	row("Database", orNotSet(c.Neo4j.Database))
+	row("Password", secret(c.Neo4j.Password))
+
+	sec("Aura")
+	row("Client ID", orNotSet(c.Aura.ClientID))
+	row("Client secret", secret(c.Aura.ClientSecret))
+	row("Timeout", fmt.Sprintf("%ds", c.Aura.TimeoutSeconds))
+
+	sec("Cypher")
+	cypherFmt := c.Cypher.OutputFormat
+	if cypherFmt == "" {
+		cypherFmt = "table"
+	}
+	row("Output format", cypherFmt)
+	shellLim := c.Cypher.ShellLimit
+	if shellLim == 0 {
+		shellLim = 25
+	}
+	execLim := c.Cypher.ExecLimit
+	if execLim == 0 {
+		execLim = 100
+	}
+	row("Shell limit", fmt.Sprintf("%d rows", shellLim))
+	row("Exec limit", fmt.Sprintf("%d rows", execLim))
+
+	sec("Telemetry")
+	metricsStatus := "enabled"
+	if !c.Telemetry.Metrics {
+		metricsStatus = "disabled"
+	}
+	row("Metrics", metricsStatus)
+
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 func (s *InteractiveShell) builtinSet(args []string) (string, error) {

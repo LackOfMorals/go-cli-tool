@@ -81,8 +81,12 @@ func BuildCypherCategory(svc service.CypherService) *shell.Category {
 			data := queryResultToTableData(result)
 
 			if ctx.Presenter == nil {
-				// Fallback: plain text when no presenter is wired (e.g. tests).
-				return presentation.NewTableData(result.Columns, toInterfaceRows(result)).Columns()[0], nil
+				// Fallback for tests that don't wire a presenter.
+				cols := presentation.NewTableData(result.Columns, toInterfaceRows(result)).Columns()
+				if len(cols) == 0 {
+					return "", nil
+				}
+				return cols[0], nil
 			}
 
 			return ctx.Presenter.FormatAs(data, format)
@@ -132,15 +136,21 @@ func promptForCypher(ctx shell.ShellContext) (query string, params map[string]in
 	var lines []string
 	for {
 		ctx.IO.Write("...> ")
-		line, readErr := ctx.IO.Read()
-		if readErr != nil {
-			// Treat EOF as the end of input if we have something accumulated.
+		rawLine, readErr := ctx.IO.Read()
+		line := strings.TrimSpace(rawLine)
+
+		// A read error or a blank line both signal end-of-input.
+		// If lines have been accumulated, execute them; otherwise error.
+		if readErr != nil || line == "" {
 			if len(lines) > 0 {
 				break
 			}
-			return "", nil, fmt.Errorf("read cypher statement: %w", readErr)
+			if readErr != nil {
+				return "", nil, fmt.Errorf("read cypher statement: %w", readErr)
+			}
+			return "", nil, fmt.Errorf("cypher statement is required")
 		}
-		line = strings.TrimSpace(line)
+
 		if strings.HasSuffix(line, ";") {
 			line = strings.TrimRight(strings.TrimSuffix(line, ";"), " \t")
 			if line != "" {
@@ -148,9 +158,7 @@ func promptForCypher(ctx shell.ShellContext) (query string, params map[string]in
 			}
 			break
 		}
-		if line != "" {
-			lines = append(lines, line)
-		}
+		lines = append(lines, line)
 	}
 
 	stmt := strings.Join(lines, " ")

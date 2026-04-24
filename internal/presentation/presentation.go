@@ -186,6 +186,7 @@ func (f *TableFormatter) renderTabular(t Tabular) string {
 	tw := table.NewWriter()
 	tw.SetStyle(table.StyleRounded)
 	tw.Style().Options.SeparateRows = false
+	tw.Style().Format.Header = text.FormatDefault // preserve column name casing as supplied
 
 	// Header
 	header := make(table.Row, len(t.Columns()))
