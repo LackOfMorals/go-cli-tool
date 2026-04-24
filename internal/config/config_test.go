@@ -13,6 +13,9 @@ import (
 
 func loadDefaults(t *testing.T) config.Config {
 	t.Helper()
+	// Point HOME at a temp dir so LoadConfiguration does not pick up
+	// a real ~/.neo4j-cli/config.json that might be present on this machine.
+	t.Setenv("HOME", t.TempDir())
 	cfg, err := config.NewConfigService(config.Overrides{}).LoadConfiguration()
 	if err != nil {
 		t.Fatalf("LoadConfiguration: %v", err)

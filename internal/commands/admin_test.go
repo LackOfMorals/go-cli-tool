@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/cli/go-cli-tool/internal/commands"
+	"github.com/cli/go-cli-tool/internal/logger"
+	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/shell"
 )
@@ -32,7 +34,15 @@ func (m *mockAdminService) ShowDatabases(ctx context.Context) ([]service.Databas
 
 func adminCtx(t *testing.T) shell.ShellContext {
 	t.Helper()
-	return shell.ShellContext{Context: context.Background()}
+	log := logger.NewLoggerService(logger.FormatText, logger.LevelError)
+	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
+	if err != nil {
+		t.Fatalf("NewPresentationService: %v", err)
+	}
+	return shell.ShellContext{
+		Context:   context.Background(),
+		Presenter: pres,
+	}
 }
 
 // ---- show-users ---------------------------------------------------------
@@ -165,7 +175,8 @@ func TestAdminCategory_NoArgs_ReturnsHelp(t *testing.T) {
 func TestAdminCategory_ShowUsers_ContextPropagated(t *testing.T) {
 	type key struct{}
 	ctx := context.WithValue(context.Background(), key{}, "sentinel")
-	sc := shell.ShellContext{Context: ctx}
+	sc := adminCtx(t)
+	sc.Context = ctx
 
 	var gotCtx context.Context
 	svc := &mockAdminService{

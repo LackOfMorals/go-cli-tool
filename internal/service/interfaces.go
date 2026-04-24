@@ -4,11 +4,20 @@ import "context"
 
 // ---- Cypher -------------------------------------------------------------
 
+// QueryRow is a single result row: column name → value.
+type QueryRow = map[string]interface{}
+
+// QueryResult holds the structured output of a Cypher query.
+type QueryResult struct {
+	Columns []string
+	Rows    []QueryRow
+}
+
 // CypherService executes Cypher queries against a Neo4j database.
 type CypherService interface {
-	// Execute runs an arbitrary Cypher query and returns the result as a
-	// formatted string. Read-only enforcement is the caller's responsibility.
-	Execute(ctx context.Context, query string) (string, error)
+	// Execute runs query with optional parameters and returns a structured
+	// result. Callers are responsible for formatting the result for display.
+	Execute(ctx context.Context, query string, params map[string]interface{}) (QueryResult, error)
 }
 
 // ---- Cloud --------------------------------------------------------------
@@ -22,17 +31,52 @@ type CloudService interface {
 
 // Instance represents a Neo4j Aura DB instance.
 type Instance struct {
-	ID     string
-	Name   string
-	Status string
-	Region string
-	Tier   string
+	ID            string
+	Name          string
+	Status        string
+	Region        string
+	Tier          string // instance type (e.g. "enterprise-db")
+	CloudProvider string
+	TenantID      string
+	ConnectionURL string
+	Username      string
+	Memory        string
+}
+
+// CreatedInstance wraps Instance to carry the one-time password returned at
+// creation. The Password field is only populated by Create and is never
+// returned again by the API — callers must record it immediately.
+type CreatedInstance struct {
+	Instance
+	Password string
+}
+
+// CreateInstanceParams holds the fields required to create a new Aura instance.
+// Values not explicitly provided by the caller should be pre-filled from
+// config.AuraInstanceDefaults before passing to the service.
+type CreateInstanceParams struct {
+	Name          string
+	TenantID      string
+	CloudProvider string
+	Region        string
+	Type          string // instance type, e.g. "enterprise-db"
+	Version       string // Neo4j version, e.g. "5"
+	Memory        string // e.g. "8GB"
+}
+
+// UpdateInstanceParams holds the mutable fields that can be changed on an
+// existing Aura instance. Empty strings are ignored by the service layer.
+type UpdateInstanceParams struct {
+	Name   string // rename the instance
+	Memory string // resize memory, e.g. "16GB"
 }
 
 // InstancesService manages Aura DB instances.
 type InstancesService interface {
 	List(ctx context.Context) ([]Instance, error)
 	Get(ctx context.Context, id string) (*Instance, error)
+	Create(ctx context.Context, params *CreateInstanceParams) (*CreatedInstance, error)
+	Update(ctx context.Context, id string, params *UpdateInstanceParams) (*Instance, error)
 	Pause(ctx context.Context, id string) error
 	Resume(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error

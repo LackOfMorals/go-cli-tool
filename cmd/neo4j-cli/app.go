@@ -48,6 +48,7 @@ var (
 	neo4jDatabase      string
 	auraClientID       string
 	auraTimeoutSeconds int
+	outputFormat       string
 )
 
 // ---- App ----------------------------------------------------------------
@@ -75,12 +76,9 @@ func run() int {
 
 func buildRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "neo4j-cli",
-		Short: "A CLI for Neo4j",
-		Long: `neo4j-cli is a CLI for Neo4j.
-
-Runs as an interactive shell by default. Supply --exec to run a single
-named tool and exit immediately.`,
+		Use:           "neo4j-cli",
+		Short:         "A CLI for Neo4j",
+		Long:          `neo4j-cli is a CLI for Neo4j and can be used with commands, or if no commands are given, as a shell.  `,
 		RunE:          runCLI,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -99,11 +97,172 @@ named tool and exit immediately.`,
 	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
 	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
+	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
 
-	rootCmd.Flags().StringVar(&execTool, "exec", "", "Execute a named tool directly and exit")
-	rootCmd.Flags().StringSliceVar(&execArgs, "args", []string{}, "Arguments passed to the --exec tool")
+	rootCmd.AddCommand(buildCloudCommand())
+	rootCmd.AddCommand(buildCypherCommand())
+	rootCmd.AddCommand(buildAdminCommand())
+	rootCmd.AddCommand(buildConfigCommand())
 
 	return rootCmd
+}
+
+// runCategory returns a cobra RunE that creates the app, finds the named
+// shell category, and dispatches the remaining CLI args through it directly —
+// no interactive shell required.
+func runCategory(name string) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		app, err := newApp(cmd, args)
+		if err != nil {
+			return fmt.Errorf("startup: %w", err)
+		}
+		defer app.close()
+		return app.dispatchCategory(name, args)
+	}
+}
+
+// dispatchCategory routes args through the named shell category and prints
+// the result. With no args it prints the category's help text. Credential
+// prerequisites (Aura, Neo4j) are triggered automatically by Dispatch.
+func (a *App) dispatchCategory(name string, args []string) error {
+	cats := a.buildCategories()
+	cat, ok := cats[name]
+	if !ok {
+		return fmt.Errorf("unknown category %q", name)
+	}
+
+	if len(args) == 0 {
+		fmt.Println(cat.Help())
+		return nil
+	}
+
+	if outputFormat != "" {
+		f := presentation.OutputFormat(outputFormat)
+		if !f.IsValid() {
+			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph", outputFormat)
+		}
+		if err := a.presentation.SetFormat(f); err != nil {
+			return fmt.Errorf("set format: %w", err)
+		}
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	shellCtx := shell.ShellContext{
+		Context:   ctx,
+		Config:    *a.cfg,
+		Logger:    a.log,
+		Telemetry: a.analytic,
+		Presenter: a.presentation,
+		Registry:  a.registry,
+		IO:        tool.NewDefaultIOHandler(),
+	}
+
+	result, err := cat.Dispatch(args, shellCtx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return fmt.Errorf("interrupted")
+		}
+		return err
+	}
+	if result != "" {
+		fmt.Println(result)
+	}
+	return nil
+}
+
+func buildCloudCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "cloud",
+		Short: "Manage Neo4j Aura cloud resources",
+		Long: `Manage Neo4j Aura cloud resources.
+
+Available sub-commands:
+  instances   Create, list, get, update, pause, resume, and delete Aura DB instances
+  projects    List and inspect Aura projects (tenants)
+
+Use --format to control output (table, json, pretty-json, graph).`,
+		Example: `  neo4j-cli cloud instances list
+  neo4j-cli cloud instances list --format json
+  neo4j-cli cloud instances get <id>
+  neo4j-cli cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
+  neo4j-cli cloud instances pause <id>
+  neo4j-cli cloud projects list`,
+		RunE:          runCategory("cloud"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+func buildCypherCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "cypher [query]",
+		Short: "Execute a Cypher query against a Neo4j database",
+		Long: `Execute a Cypher query against the connected Neo4j database.
+
+Supply the query directly on the command line. Without a query, an
+interactive prompt is shown.
+
+Query flags (parsed inline, not by the shell):
+  --param key=value    Add a query parameter (repeatable; auto-typed)
+  --format table|json|pretty-json|graph
+                       Override output format for this query
+  --limit N            Override the auto-injected row limit (default 25)`,
+		Example: `  neo4j-cli cypher "MATCH (n:Person) RETURN n.name, n.age;"
+  neo4j-cli cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n;"
+  neo4j-cli cypher --format json "MATCH (n) RETURN n;"`,
+		RunE:               runCategory("cypher"),
+		DisableFlagParsing: true, // let parseCypherFlags handle --param/--format/--limit
+		SilenceUsage:       true,
+		SilenceErrors:      true,
+	}
+}
+
+func buildAdminCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "admin",
+		Short: "Administrative operations against a Neo4j database",
+		Long: `Perform administrative operations against the connected Neo4j database.
+
+Available commands:
+  show-users       List all database users and their roles
+  show-databases   List all databases and their status
+
+Use --format to control output (table, json, pretty-json, graph).`,
+		Example: `  neo4j-cli admin show-users
+  neo4j-cli admin show-users --format json
+  neo4j-cli admin show-databases`,
+		RunE:          runCategory("admin"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+func buildConfigCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "config",
+		Short: "Manage CLI configuration",
+		Long: `Manage CLI configuration. Changes made with 'set' and 'delete' are
+persisted to the config file immediately.
+
+Available commands:
+  list             Show all keys, their current values, and descriptions
+  set <key> <val>  Set a configuration value
+  delete <key>     Reset a key to its default
+  reset            Wipe the config file and restore all defaults
+
+Use --format to control output for 'config list'.`,
+		Example: `  neo4j-cli config list
+  neo4j-cli config list --format json
+  neo4j-cli config set neo4j.uri bolt://myhost:7687
+  neo4j-cli config set cypher.output_format json
+  neo4j-cli config delete neo4j.password
+  neo4j-cli config reset`,
+		RunE:          runCategory("config"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
 }
 
 // overridesFromCmd extracts only the flags the user explicitly set, so a
@@ -199,27 +358,22 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		an.Disable()
 	}
 
-	// 4. Presentation service
-	format := presentation.OutputFormat(cfg.LogFormat)
-	if !format.IsValid() {
-		format = presentation.OutputFormatText
-	}
-	pres, err := presentation.NewPresentationService(format, log)
+	// 4. Presentation service — always start in table mode for a CLI.
+	// Commands use FormatAs for per-query overrides; the session default
+	// can be changed with `set cypher-format <format>`.
+	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
 	if err != nil {
 		return nil, fmt.Errorf("init presentation: %w", err)
 	}
 
 	// 5. Graph repository — shared by cypher and admin services.
-	repo := repository.NewNeo4jRepository(
-		cfg.Neo4j.URI,
-		cfg.Neo4j.Username,
-		cfg.Neo4j.Password,
-		cfg.Neo4j.Database,
-	)
+	// Receives a pointer to cfg.Neo4j so that credentials provided
+	// interactively by InteractiveNeo4jPrerequisite are visible on first use.
+	repo := repository.NewNeo4jRepository(&cfg.Neo4j)
 
 	// 6. Domain services
 	cypherSvc := service.NewCypherService(repo)
-	cloudSvc := service.NewCloudService(cfg.Aura)
+	cloudSvc := service.NewCloudService(&cfg.Aura) // pointer so interactive prerequisite can populate credentials
 	adminSvc := service.NewAdminService(repo)
 
 	// 7. Tool registry — QueryTool reuses cypherSvc so there is one query path.
@@ -279,12 +433,15 @@ func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log lo
 
 func (a *App) buildCategories() map[string]*shell.Category {
 	return map[string]*shell.Category{
+		// InteractiveNeo4jPrerequisite prompts for URI/username/password on
+		// first use and saves them so subsequent sessions skip the prompt.
 		"cypher": commands.BuildCypherCategory(a.cypherSvc).
-			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
 		"cloud": commands.BuildCloudCategory(a.cloudSvc).
-			SetPrerequisite(commands.AuraPrerequisite(&a.cfg.Aura)),
+			SetPrerequisite(commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, configPath)),
 		"admin": commands.BuildAdminCategory(a.adminSvc).
-			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
+			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
+		"config": commands.BuildConfigCategory(a.cfg, configPath),
 	}
 }
 

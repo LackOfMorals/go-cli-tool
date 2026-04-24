@@ -7,6 +7,7 @@ import (
 
 	"github.com/cli/go-cli-tool/internal/commands"
 	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
@@ -99,7 +100,7 @@ func TestAuraPrerequisite_FailsWhenSecretMissing(t *testing.T) {
 // ---- Integration: prerequisite wired into category ----------------------
 
 func TestCypherCategory_WithPrerequisite_BlocksDispatch(t *testing.T) {
-	svc := &mockCypherService{result: "ok"}
+	svc := &mockCypherService{result: service.QueryResult{}}
 	cat := commands.BuildCypherCategory(svc).
 		SetPrerequisite(commands.Neo4jPrerequisite(&config.Neo4jConfig{})) // empty = not configured
 
@@ -112,17 +113,18 @@ func TestCypherCategory_WithPrerequisite_BlocksDispatch(t *testing.T) {
 	}
 }
 
-func TestCypherCategory_WithPrerequisite_AllowsHelpWithoutConnection(t *testing.T) {
-	// Typing "cypher" alone should not trigger the prerequisite — it returns
-	// a usage hint which requires no database connection.
-	svc := &mockCypherService{}
+func TestCypherCategory_WithPrerequisite_FiresOnEmptyInput(t *testing.T) {
+	// With AllowEmptyDirectHandler, bare "cypher" fires the prerequisite.
+	// An empty Neo4jConfig means Neo4jPrerequisite returns ErrPrerequisite.
+	svc := &mockCypherService{result: service.QueryResult{}}
 	cat := commands.BuildCypherCategory(svc).
-		SetPrerequisite(commands.Neo4jPrerequisite(&config.Neo4jConfig{}))
+		SetPrerequisite(commands.Neo4jPrerequisite(&config.Neo4jConfig{})) // empty = not configured
 
 	_, err := cat.Dispatch(nil, cypherCtx(t))
-	// Direct-handler categories return a usage *error* on no args, which is
-	// expected — but it must NOT be an ErrPrerequisite.
-	if errors.Is(err, tool.ErrPrerequisite) {
-		t.Error("prerequisite should not fire on bare category invocation")
+	if err == nil {
+		t.Fatal("expected prerequisite error on bare cypher invocation")
+	}
+	if !errors.Is(err, tool.ErrPrerequisite) {
+		t.Errorf("expected tool.ErrPrerequisite, got: %v", err)
 	}
 }

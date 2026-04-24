@@ -48,7 +48,8 @@ type Command struct {
 type Category struct {
 	Name          string
 	Description   string
-	directHandler CommandHandler
+	directHandler          CommandHandler
+	directHandlerEmptyOK   bool         // if true, directHandler is called even with no args
 	prerequisite  func() error // optional; checked before every non-help dispatch
 	subcats       map[string]*Category
 	commands      map[string]*Command
@@ -71,6 +72,15 @@ func NewCategory(name, description string) *Category {
 // chaining.
 func (c *Category) SetDirectHandler(h CommandHandler) *Category {
 	c.directHandler = h
+	return c
+}
+
+// AllowEmptyDirectHandler permits the direct handler to be invoked with no
+// arguments. The prerequisite (if any) is still fired first. Use this for
+// interactive categories where the handler can prompt for input when nothing
+// is provided on the command line (e.g. the cypher category).
+func (c *Category) AllowEmptyDirectHandler() *Category {
+	c.directHandlerEmptyOK = true
 	return c
 }
 
@@ -164,15 +174,26 @@ func (c *Category) Subcat(name string) *Category {
 //  5. Nothing matches → return a descriptive error
 func (c *Category) Dispatch(args []string, ctx ShellContext) (string, error) {
 	if len(args) == 0 {
-		if c.directHandler != nil {
+		switch {
+		case c.directHandler != nil && c.directHandlerEmptyOK:
+			// Interactive direct-handler: fire the prerequisite first so that
+			// credential prompts run before the handler asks for input.
+			if c.prerequisite != nil {
+				if err := c.prerequisite(); err != nil {
+					return "", err
+				}
+			}
+			return c.directHandler(args, ctx)
+		case c.directHandler != nil:
 			return "", fmt.Errorf("usage: %s <query>", c.Name)
+		default:
+			return c.Help(), nil
 		}
-		return c.Help(), nil
 	}
 
 	// Check dependency prerequisites before any real work. This is done after
-	// the no-args guard so that typing a bare category name (e.g. "cypher"
-	// or "admin") always shows help even when the dependency is unavailable.
+	// the no-args guard so that typing a bare category name (e.g. "admin")
+	// always shows help even when the dependency is unavailable.
 	if c.prerequisite != nil {
 		if err := c.prerequisite(); err != nil {
 			return "", err

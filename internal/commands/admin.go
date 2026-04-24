@@ -1,9 +1,9 @@
 package commands
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
 	"github.com/cli/go-cli-tool/internal/shell"
 )
@@ -26,13 +26,13 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 				if len(users) == 0 {
 					return "No users found.", nil
 				}
-				var b strings.Builder
-				fmt.Fprintf(&b, "%-20s  %s\n", "Username", "Roles")
-				fmt.Fprintln(&b, strings.Repeat("-", 50))
-				for _, u := range users {
-					fmt.Fprintf(&b, "%-20s  %s\n", u.Username, strings.Join(u.Roles, ", "))
+				rows := make([][]interface{}, len(users))
+				for i, u := range users {
+					rows[i] = []interface{}{u.Username, strings.Join(u.Roles, ", ")}
 				}
-				return strings.TrimRight(b.String(), "\n"), nil
+				return ctx.Presenter.Format(presentation.NewTableData(
+					[]string{"Username", "Roles"}, rows,
+				))
 			},
 		}).
 		AddCommand(&shell.Command{
@@ -47,13 +47,14 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 				if len(dbs) == 0 {
 					return "No databases found.", nil
 				}
-				var b strings.Builder
-				fmt.Fprintf(&b, "%-20s  %s\n", "Name", "Status")
-				fmt.Fprintln(&b, strings.Repeat("-", 32))
-				for _, db := range dbs {
-					fmt.Fprintf(&b, "%-20s  %s\n", db.Name, db.Status)
+				rows := make([][]interface{}, len(dbs))
+				for i, db := range dbs {
+					rows[i] = []interface{}{db.Name, db.Status}
 				}
-				return strings.TrimRight(b.String(), "\n"), nil
+				return ctx.Presenter.Format(presentation.NewTableData(
+					[]string{"Name", "Status"}, rows,
+				))
 			},
 		})
 }
+
