@@ -54,13 +54,13 @@ func instanceListCmd(svc service.CloudService) *shell.Command {
 				return "No instances found.", nil
 			}
 
-			cols := []string{"ID", "Name", "Status", "Type", "Memory", "Cloud", "Region"}
-			rows := make([][]interface{}, len(instances))
+			cols := []string{"ID", "Name", "Project", "Cloud"}
+			rows := make([][]any, len(instances))
 			for i, inst := range instances {
-				rows[i] = []interface{}{
+				rows[i] = []any{
 					inst.ID, inst.Name,
-					orDash(inst.Status), orDash(inst.Tier),
-					orDash(inst.Memory), orDash(inst.CloudProvider), orDash(inst.Region),
+					orDash(inst.TenantID),
+					orDash(inst.CloudProvider),
 				}
 			}
 			return ctx.Presenter.Format(presentation.NewTableData(cols, rows))

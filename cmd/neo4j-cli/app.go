@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
+	"strings"
 
 	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/commands"
@@ -68,7 +70,21 @@ type App struct {
 }
 
 func run() int {
-	if err := buildRootCommand().Execute(); err != nil {
+	cmd := buildRootCommand()
+	if err := cmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+
+		// List valid subcommands dynamically so this stays accurate as
+		// new commands are added without needing to update this code.
+		var names []string
+		for _, sub := range cmd.Commands() {
+			if !sub.Hidden {
+				names = append(names, sub.Name())
+			}
+		}
+		sort.Strings(names)
+		fmt.Fprintf(os.Stderr, "Valid commands: %s\n", strings.Join(names, ", "))
+		fmt.Fprintf(os.Stderr, "Run 'neo4j-cli --help' for usage.\n")
 		return 1
 	}
 	return 0

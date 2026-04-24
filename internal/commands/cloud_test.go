@@ -133,7 +133,7 @@ func TestCloudCategory_InstancesList_FormatsTable(t *testing.T) {
 	svc := &mockCloudService{
 		instances: &mockInstancesService{
 			listResult: []service.Instance{
-				{ID: "abc-123", Name: "my-db", Status: "running", Tier: "enterprise-db", Memory: "8GB", Region: "europe-west1"},
+				{ID: "abc-123", Name: "my-db", TenantID: "my-project", CloudProvider: "GCP"},
 			},
 		},
 	}
@@ -143,7 +143,7 @@ func TestCloudCategory_InstancesList_FormatsTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"abc-123", "my-db", "running", "enterprise-db", "8GB", "europe-west1"} {
+	for _, want := range []string{"abc-123", "my-db", "my-project", "GCP"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output should contain %q:\n%s", want, out)
 		}
