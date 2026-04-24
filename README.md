@@ -15,7 +15,7 @@ A CLI for Neo4j with an interactive shell. Connect to a Neo4j database and the N
   - [Adding a shell command](#adding-a-shell-command)
   - [Adding a shell category](#adding-a-shell-category)
   - [Code conventions](#code-conventions)
-
+- [CI & Releases](#ci--releases)
 ---
 
 ## Getting started
@@ -576,3 +576,44 @@ neo4j> help gds
 **Errors are the caller's responsibility** — return `fmt.Errorf("context: %w", err)` and let the shell print it. Don't call `os.Exit` or `log.Fatal` from inside a service or command handler.
 
 **No imports up the stack** — `shell` does not import `commands` or `service`. `commands` does not import `tools`. Keep the dependency graph acyclic and flowing in one direction toward `cmd`.
+
+## CI & Releases
+
+There is one GitHub Action workflows manage CI and the release process.
+
+### Workflows
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| **Release** | Push of a `vX.Y.Z` tag | Gates on tests, verifies the tag matches `AuraAPIClientVersion`, extracts the changelog section, creates a GitHub Release |
+
+### Making a release
+
+Releases follow a four-step process. changie collects the unreleased fragment files and determines the correct semver bump automatically from the change kinds (`Added` → minor, `Fixed`/`Security` → patch, `Changed`/`Removed` → major).
+
+**1. Batch and merge the changelog**
+
+```bash
+changie batch   # collects .changes/unreleased/*.yaml → .changes/vX.Y.Z.md
+changie merge   # folds that file into CHANGELOG.md
+```
+
+**2. Commit and tag**
+
+```bash
+git add CHANGELOG.md .changes/ client_types.go
+git commit -m "chore: release v1.9.0"
+git tag v1.9.0
+git push origin main --tags
+```
+
+### Adding a changelog entry
+
+Every PR that changes Go source files needs a changie fragment. Run:
+
+```bash
+changie new
+```
+Choose a kind and write a one-line summary, then commit the generated `.yaml` file alongside your code changes. 
+
+---
