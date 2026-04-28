@@ -12,6 +12,54 @@ import (
 //	if errors.Is(err, tool.ErrPrerequisite) { ... }
 var ErrPrerequisite = errors.New("prerequisite not met")
 
+// MutationMode declares whether a tool modifies state in the connected
+// database or cloud platform. The dispatcher uses this to enforce the
+// agent-mode read-only contract: ModeWrite is blocked without --rw;
+// ModeConditional triggers an EXPLAIN pre-check.
+type MutationMode int
+
+const (
+	// ModeRead means the tool never modifies state. This is the safe default;
+	// BaseTool.MutationMode() returns ModeRead so existing tools are unaffected.
+	ModeRead MutationMode = iota
+
+	// ModeWrite means the tool always modifies state. In agent mode the
+	// dispatcher blocks the call and returns ErrReadOnly before Execute() is
+	// ever called, unless --rw / NEO4J_CLI_RW is also set.
+	ModeWrite
+
+	// ModeConditional means whether the tool mutates state depends on its
+	// input at runtime (e.g. a Cypher query). The dispatcher triggers an
+	// EXPLAIN pre-check in agent mode without --rw rather than statically
+	// blocking or blindly allowing.
+	ModeConditional
+)
+
+// ErrReadOnly is returned by the dispatcher when a ModeWrite or
+// ModeConditional tool is blocked in agent mode because --rw is not set.
+var ErrReadOnly = errors.New("read only")
+
+// AgentError is a structured error that carries a machine-readable code and
+// is rendered as a JSON error envelope when the CLI runs in --agent mode.
+type AgentError struct {
+	Code    string // e.g. "READ_ONLY", "TIMEOUT", "MISSING_CREDENTIALS"
+	Message string
+	Err     error  // optional wrapped cause
+}
+
+func (e *AgentError) Error() string { return e.Message }
+func (e *AgentError) Unwrap() error { return e.Err }
+
+// NewAgentError constructs an AgentError with the given code and message.
+func NewAgentError(code, message string) *AgentError {
+	return &AgentError{Code: code, Message: message}
+}
+
+// NewAgentErrorf constructs an AgentError wrapping an existing error.
+func NewAgentErrorf(code string, err error, format string, args ...interface{}) *AgentError {
+	return &AgentError{Code: code, Message: fmt.Sprintf(format, args...), Err: err}
+}
+
 // Tool defines the interface all CLI tools must implement.
 type Tool interface {
 	Name() string
@@ -23,6 +71,10 @@ type Tool interface {
 
 	Configure(params map[string]interface{}) error
 	DefaultParams() map[string]interface{}
+
+	// MutationMode declares whether this tool reads or writes state.
+	// BaseTool returns ModeRead by default; override in write tools.
+	MutationMode() MutationMode
 }
 
 // BaseTool provides common implementations for the Tool interface.
@@ -76,6 +128,9 @@ func (t *BaseTool) Validate(_ Context) error { return nil }
 func (t *BaseTool) Execute(_ Context) (Result, error) {
 	return Result{Success: false, Output: "not implemented"}, nil
 }
+
+// MutationMode returns ModeRead. Override in tools that modify state.
+func (t *BaseTool) MutationMode() MutationMode { return ModeRead }
 
 // ---- Typed param helpers ------------------------------------------------
 

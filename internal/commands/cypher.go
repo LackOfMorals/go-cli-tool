@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/dispatch"
+	"github.com/cli/go-cli-tool/internal/tool"
 )
 
 // limitPattern detects a LIMIT clause already present in a Cypher query.
@@ -32,6 +33,12 @@ var limitPattern = regexp.MustCompile(`(?i)\bLIMIT\s+\d+`)
 //	                             Override the output format for this query.
 //	                             Defaults to cypher.output_format in config.
 //	--limit N                    Override the auto-injected row limit.
+//
+// Agent-mode read protection:
+// When --agent is active without --rw the category runs EXPLAIN on the query
+// first. If Neo4j classifies the statement as a write ("w", "rw", or "s")
+// the command is blocked and an error is returned. With --rw the EXPLAIN
+// pre-check is skipped and the query runs directly.
 func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 	return dispatch.NewCategory("cypher", "Execute a Cypher query against the connected Neo4j database").
 		AllowEmptyDirectHandler().
@@ -39,7 +46,13 @@ func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 			opts := parseCypherFlags(args)
 
 			// No query on the command line — prompt interactively.
+			// In agent mode this path returns an error immediately rather than
+			// blocking on stdin.
 			if opts.query == "" {
+				if ctx.AgentMode {
+					return "", tool.NewAgentError("MISSING_QUERY",
+						"cypher query is required in agent mode; pass the query as an argument")
+				}
 				stmt, promptedParams, err := promptForCypher(ctx)
 				if err != nil {
 					return "", err
@@ -51,6 +64,24 @@ func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 					}
 					if _, exists := opts.params[k]; !exists {
 						opts.params[k] = v
+					}
+				}
+			}
+
+			// Agent-mode write protection: EXPLAIN pre-check unless --rw is set.
+			// Queries that already start with EXPLAIN or PROFILE are run as-is;
+			// the user is explicitly asking for the query plan.
+			if ctx.AgentMode && !ctx.AllowWrites {
+				upper := strings.TrimSpace(strings.ToUpper(opts.query))
+				if !strings.HasPrefix(upper, "EXPLAIN") && !strings.HasPrefix(upper, "PROFILE") {
+					qt, err := svc.Explain(ctx.Context, opts.query)
+					if err != nil {
+						return "", fmt.Errorf("explain check: %w", err)
+					}
+					switch qt {
+					case "rw", "w", "s":
+						return "", tool.NewAgentError("WRITE_BLOCKED",
+							fmt.Sprintf("query contains write operations (type=%s); re-run with --rw to permit mutations", qt))
 					}
 				}
 			}

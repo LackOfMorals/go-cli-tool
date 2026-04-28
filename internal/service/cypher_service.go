@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cli/go-cli-tool/internal/repository"
 )
@@ -36,6 +37,32 @@ func (s *CypherServiceImpl) Execute(ctx context.Context, query string, params ma
 	return wrapRawResult(raw), nil
 }
 
+// Explain prepends EXPLAIN to query (unless already present), executes it
+// against the database, and returns the Neo4j planner classification:
+//
+//	"r"  – read only
+//	"rw" – read/write
+//	"w"  – write only
+//	"s"  – schema write
+//
+// If the repo returns a non-RecordSet (e.g. a test stub), the method returns
+// "r" as a safe default rather than blocking execution.
+func (s *CypherServiceImpl) Explain(ctx context.Context, query string) (string, error) {
+	upper := strings.TrimSpace(strings.ToUpper(query))
+	explainQuery := query
+	if !strings.HasPrefix(upper, "EXPLAIN") && !strings.HasPrefix(upper, "PROFILE") {
+		explainQuery = "EXPLAIN " + query
+	}
+	raw, err := s.repo.ExecuteQuery(ctx, explainQuery, nil)
+	if err != nil {
+		return "", fmt.Errorf("explain query: %w", err)
+	}
+	if rs, ok := raw.(*repository.RecordSet); ok {
+		return rs.QueryType, nil
+	}
+	return "r", nil // safe default for test stubs
+}
+
 // wrapRawResult converts the value returned by the repository into a
 // QueryResult.
 //
@@ -52,9 +79,9 @@ func wrapRawResult(v interface{}) QueryResult {
 
 	if rs, ok := v.(*repository.RecordSet); ok {
 		if rs == nil || len(rs.Rows) == 0 {
-			return QueryResult{Columns: rs.Columns, Rows: []QueryRow{}}
+			return QueryResult{Columns: rs.Columns, Rows: []QueryRow{}, QueryType: rs.QueryType}
 		}
-		return QueryResult{Columns: rs.Columns, Rows: rs.Rows}
+		return QueryResult{Columns: rs.Columns, Rows: rs.Rows, QueryType: rs.QueryType}
 	}
 
 	if qr, ok := v.(QueryResult); ok {

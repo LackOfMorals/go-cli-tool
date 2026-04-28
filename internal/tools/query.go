@@ -23,6 +23,11 @@ func NewQueryTool(svc service.CypherService) *QueryTool {
 	}
 }
 
+// MutationMode returns ModeConditional because whether a Cypher statement
+// modifies state depends on the query content. The dispatcher will run an
+// EXPLAIN pre-check in agent mode without --rw rather than blocking blindly.
+func (t *QueryTool) MutationMode() tool.MutationMode { return tool.ModeConditional }
+
 func (t *QueryTool) Execute(ctx tool.Context) (tool.Result, error) {
 	if len(ctx.Args) == 0 {
 		return tool.ErrorResult("usage: query <cypher>"), fmt.Errorf("no query provided")

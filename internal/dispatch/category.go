@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/cli/go-cli-tool/internal/tool"
 )
 
 // Command is a leaf action within a category or sub-category.
@@ -13,6 +15,12 @@ type Command struct {
 	Description string
 	Usage       string // short usage hint shown in help, e.g. "pause <id>"
 	Handler     CommandHandler
+
+	// MutationMode declares whether this command modifies remote state.
+	// ModeRead (default) executes unconditionally.
+	// ModeWrite is blocked in agent mode without --rw before Handler is called.
+	// ModeConditional requires a runtime check (e.g. EXPLAIN for Cypher).
+	MutationMode tool.MutationMode
 }
 
 // Category groups related commands under a top-level keyword.
@@ -202,6 +210,13 @@ func (c *Category) Dispatch(args []string, ctx Context) (string, error) {
 	}
 
 	if cmd, ok := c.commands[name]; ok {
+		// Agent-mode read-only enforcement: block ModeWrite commands before the
+		// handler is ever called. ModeConditional enforcement (EXPLAIN check)
+		// is delegated to the handler itself (e.g. the cypher direct handler).
+		if ctx.AgentMode && !ctx.AllowWrites && cmd.MutationMode == tool.ModeWrite {
+			return "", tool.NewAgentError("READ_ONLY",
+				fmt.Sprintf("%q is a write operation; re-run with --rw to permit mutations", cmd.Name))
+		}
 		return cmd.Handler(rest, ctx)
 	}
 

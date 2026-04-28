@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,18 +10,21 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/spf13/cobra"
 
 	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/commands"
 	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/repository"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
-	"github.com/spf13/cobra"
 )
 
 // Version is injected at build time:
@@ -48,6 +52,12 @@ var (
 	auraClientID       string
 	auraTimeoutSeconds int
 	outputFormat       string
+
+	// Agent-mode flags
+	agentMode   bool   // --agent / NEO4J_CLI_AGENT=true
+	allowWrites bool   // --rw / NEO4J_CLI_RW=true
+	requestID   string // --request-id / NEO4J_CLI_REQUEST_ID
+	timeoutStr  string // --timeout (e.g. "30s")
 )
 
 // ---- App ----------------------------------------------------------------
@@ -67,24 +77,71 @@ type App struct {
 }
 
 func run() int {
+	// Honour NEO4J_CLI_AGENT / NEO4J_CLI_RW env vars before flag parsing so
+	// they are available as defaults even when no flags are passed.
+	if os.Getenv("NEO4J_CLI_AGENT") == "true" {
+		agentMode = true
+	}
+	if os.Getenv("NEO4J_CLI_RW") == "true" {
+		allowWrites = true
+	}
+	if v := os.Getenv("NEO4J_CLI_REQUEST_ID"); v != "" {
+		requestID = v
+	}
+
 	cmd := buildRootCommand()
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
-
-		// List valid subcommands dynamically so this stays accurate as
-		// new commands are added without needing to update this code.
-		var names []string
-		for _, sub := range cmd.Commands() {
-			if !sub.Hidden {
-				names = append(names, sub.Name())
+		if agentMode {
+			printAgentError(err, currentRequestID())
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+			var names []string
+			for _, sub := range cmd.Commands() {
+				if !sub.Hidden {
+					names = append(names, sub.Name())
+				}
 			}
+			sort.Strings(names)
+			fmt.Fprintf(os.Stderr, "Valid commands: %s\n", strings.Join(names, ", "))
+			fmt.Fprintf(os.Stderr, "Run 'neo4j-cli --help' for usage.\n")
 		}
-		sort.Strings(names)
-		fmt.Fprintf(os.Stderr, "Valid commands: %s\n", strings.Join(names, ", "))
-		fmt.Fprintf(os.Stderr, "Run 'neo4j-cli --help' for usage.\n")
 		return 1
 	}
 	return 0
+}
+
+// currentRequestID returns the active request ID, generating one if the user
+// did not supply --request-id or NEO4J_CLI_REQUEST_ID.
+func currentRequestID() string {
+	if requestID != "" {
+		return requestID
+	}
+	return uuid.New().String()
+}
+
+// printAgentError writes a structured JSON error envelope to stdout so agents
+// reading stdout (not stderr) get machine-readable failure information.
+func printAgentError(err error, reqID string) {
+	code := "EXECUTION_ERROR"
+	message := err.Error()
+
+	var ae *tool.AgentError
+	if errors.As(err, &ae) {
+		code = ae.Code
+		message = ae.Message
+	}
+
+	envelope := map[string]interface{}{
+		"status": "error",
+		"error": map[string]string{
+			"code":    code,
+			"message": message,
+		},
+		"request_id":     reqID,
+		"schema_version": "1",
+	}
+	b, _ := json.Marshal(envelope)
+	fmt.Println(string(b))
 }
 
 func buildRootCommand() *cobra.Command {
@@ -112,6 +169,12 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
 	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
 	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
+
+	// Agent-mode flags
+	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NEO4J_CLI_AGENT=true)")
+	pf.BoolVar(&allowWrites, "rw", false, "Permit write/mutating operations in agent mode (env: NEO4J_CLI_RW=true)")
+	pf.StringVar(&requestID, "request-id", "", "Correlation ID included in every agent-mode JSON response (env: NEO4J_CLI_REQUEST_ID)")
+	pf.StringVar(&timeoutStr, "timeout", "", "Maximum time for a command to run, e.g. 30s or 2m (exit code 124 on timeout)")
 
 	rootCmd.AddCommand(buildCloudCommand())
 	rootCmd.AddCommand(buildCypherCommand())
@@ -157,25 +220,56 @@ func (a *App) dispatchCategory(name string, args []string) error {
 		if err := a.presentation.SetFormat(f); err != nil {
 			return fmt.Errorf("set format: %w", err)
 		}
+	} else if agentMode {
+		// Agent mode defaults to JSON output when no explicit format is set.
+		if err := a.presentation.SetFormat(presentation.OutputFormatJSON); err != nil {
+			return fmt.Errorf("set agent format: %w", err)
+		}
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Build the command context with optional timeout.
+	baseCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	var ctx context.Context
+	if timeoutStr != "" {
+		d, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			return fmt.Errorf("invalid --timeout %q: %w", timeoutStr, err)
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(baseCtx, d)
+		defer cancel()
+	} else {
+		ctx = baseCtx
+	}
+
+	reqID := currentRequestID()
+
 	shellCtx := dispatch.Context{
-		Context:   ctx,
-		Config:    *a.cfg,
-		Logger:    a.log,
-		Telemetry: a.analytic,
-		Presenter: a.presentation,
-		Registry:  a.registry,
-		IO:        tool.NewDefaultIOHandler(),
+		Context:     ctx,
+		Config:      *a.cfg,
+		Logger:      a.log,
+		Telemetry:   a.analytic,
+		Presenter:   a.presentation,
+		Registry:    a.registry,
+		IO:          tool.NewDefaultIOHandler(),
+		AgentMode:   agentMode,
+		AllowWrites: allowWrites,
+		RequestID:   reqID,
 	}
 
 	result, err := cat.Dispatch(args, shellCtx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return fmt.Errorf("interrupted")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			if agentMode {
+				return tool.NewAgentError("TIMEOUT",
+					fmt.Sprintf("command timed out after %s", timeoutStr))
+			}
+			return fmt.Errorf("command timed out after %s", timeoutStr)
 		}
 		return err
 	}
@@ -430,15 +524,24 @@ func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log lo
 }
 
 func (a *App) buildCategories() map[string]*dispatch.Category {
+	// In agent mode use non-interactive prerequisites so missing credentials
+	// return a structured error immediately rather than blocking on stdin.
+	var neo4jPrereq, auraPrereq func() error
+	if agentMode {
+		neo4jPrereq = commands.Neo4jPrerequisite(&a.cfg.Neo4j)
+		auraPrereq = commands.AuraPrerequisite(&a.cfg.Aura)
+	} else {
+		neo4jPrereq = commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)
+		auraPrereq = commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, configPath)
+	}
+
 	return map[string]*dispatch.Category{
-		// InteractiveNeo4jPrerequisite prompts for URI/username/password on
-		// first use and saves them so subsequent sessions skip the prompt.
 		"cypher": commands.BuildCypherCategory(a.cypherSvc).
-			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
+			SetPrerequisite(neo4jPrereq),
 		"cloud": commands.BuildCloudCategory(a.cloudSvc).
-			SetPrerequisite(commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, configPath)),
+			SetPrerequisite(auraPrereq),
 		"admin": commands.BuildAdminCategory(a.adminSvc).
-			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
+			SetPrerequisite(neo4jPrereq),
 		"config": commands.BuildConfigCategory(a.cfg, configPath),
 	}
 }

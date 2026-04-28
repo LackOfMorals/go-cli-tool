@@ -145,3 +145,85 @@ func TestCypherService_WrapsScalarResult(t *testing.T) {
 		t.Errorf("result rows: %v — expected to find \"42\"", result.Rows)
 	}
 }
+
+// ---- Explain tests ------------------------------------------------------
+
+func TestCypherService_Explain_PrependsMissingKeyword(t *testing.T) {
+	var gotQuery string
+	repo := &mockGraphRepository{
+		executeFunc: func(_ context.Context, q string, _ map[string]interface{}) (interface{}, error) {
+			gotQuery = q
+			return nil, nil
+		},
+	}
+	svc := service.NewCypherService(repo)
+	_, _ = svc.Explain(context.Background(), "MATCH (n) RETURN n")
+	if gotQuery != "EXPLAIN MATCH (n) RETURN n" {
+		t.Errorf("expected EXPLAIN prepended; got: %q", gotQuery)
+	}
+}
+
+func TestCypherService_Explain_DoesNotDuplicate_WhenAlreadyPresent(t *testing.T) {
+	var gotQuery string
+	repo := &mockGraphRepository{
+		executeFunc: func(_ context.Context, q string, _ map[string]interface{}) (interface{}, error) {
+			gotQuery = q
+			return nil, nil
+		},
+	}
+	svc := service.NewCypherService(repo)
+	_, _ = svc.Explain(context.Background(), "EXPLAIN MATCH (n) RETURN n")
+	if gotQuery != "EXPLAIN MATCH (n) RETURN n" {
+		t.Errorf("EXPLAIN should not be duplicated; got: %q", gotQuery)
+	}
+}
+
+func TestCypherService_Explain_DoesNotPrepend_WhenProfilePresent(t *testing.T) {
+	var gotQuery string
+	repo := &mockGraphRepository{
+		executeFunc: func(_ context.Context, q string, _ map[string]interface{}) (interface{}, error) {
+			gotQuery = q
+			return nil, nil
+		},
+	}
+	svc := service.NewCypherService(repo)
+	_, _ = svc.Explain(context.Background(), "PROFILE MATCH (n) RETURN n")
+	if gotQuery != "PROFILE MATCH (n) RETURN n" {
+		t.Errorf("PROFILE query should not be modified; got: %q", gotQuery)
+	}
+}
+
+func TestCypherService_Explain_RepoError_Propagated(t *testing.T) {
+	repoErr := errors.New("explain failed")
+	repo := &mockGraphRepository{
+		executeFunc: func(_ context.Context, _ string, _ map[string]interface{}) (interface{}, error) {
+			return nil, repoErr
+		},
+	}
+	svc := service.NewCypherService(repo)
+	_, err := svc.Explain(context.Background(), "MATCH (n) RETURN n")
+	if err == nil {
+		t.Fatal("expected error from repo")
+	}
+	if !errors.Is(err, repoErr) {
+		t.Errorf("expected repo error in chain; got: %v", err)
+	}
+}
+
+func TestCypherService_Explain_DefaultsToRead_ForNonRecordSet(t *testing.T) {
+	// When the repo returns a plain string (test stub), Explain should
+	// default to "r" rather than blocking execution.
+	repo := &mockGraphRepository{
+		executeFunc: func(_ context.Context, _ string, _ map[string]interface{}) (interface{}, error) {
+			return "stub", nil // not a *repository.RecordSet
+		},
+	}
+	svc := service.NewCypherService(repo)
+	qt, err := svc.Explain(context.Background(), "MATCH (n) RETURN n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if qt != "r" {
+		t.Errorf("expected default query type \"r\"; got: %q", qt)
+	}
+}

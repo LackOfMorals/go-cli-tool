@@ -114,7 +114,11 @@ func toRecordSet(r *neo4j.EagerResult) *RecordSet {
 		}
 		rows = append(rows, row)
 	}
-	return &RecordSet{Columns: r.Keys, Rows: rows}
+	qt := ""
+	if r.Summary != nil {
+		qt = fmt.Sprintf("%s", r.Summary.QueryType())
+	}
+	return &RecordSet{Columns: r.Keys, Rows: rows, QueryType: qt}
 }
 
 // convertValue recursively translates neo4j driver types into plain Go values.
