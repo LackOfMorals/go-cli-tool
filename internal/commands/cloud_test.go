@@ -12,7 +12,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/shell"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
@@ -76,14 +76,14 @@ func (m *mockProjectsService) Get(_ context.Context, _ string) (*service.Project
 
 // ---- helpers ------------------------------------------------------------
 
-func cloudCtx(t *testing.T) shell.ShellContext {
+func cloudCtx(t *testing.T) dispatch.Context {
 	t.Helper()
 	log := logger.NewLoggerService(logger.FormatText, logger.LevelError)
 	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
 	if err != nil {
 		t.Fatalf("NewPresentationService: %v", err)
 	}
-	return shell.ShellContext{
+	return dispatch.Context{
 		Context:   context.Background(),
 		Config:    config.Config{},
 		IO:        &mockIO{},

@@ -8,7 +8,7 @@ import (
 
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/shell"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 )
 
 // limitPattern detects a LIMIT clause already present in a Cypher query.
@@ -32,10 +32,10 @@ var limitPattern = regexp.MustCompile(`(?i)\bLIMIT\s+\d+`)
 //	                             Override the output format for this query.
 //	                             Defaults to cypher.output_format in config.
 //	--limit N                    Override the auto-injected row limit.
-func BuildCypherCategory(svc service.CypherService) *shell.Category {
-	return shell.NewCategory("cypher", "Execute a Cypher query against the connected Neo4j database").
+func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
+	return dispatch.NewCategory("cypher", "Execute a Cypher query against the connected Neo4j database").
 		AllowEmptyDirectHandler().
-		SetDirectHandler(func(args []string, ctx shell.ShellContext) (string, error) {
+		SetDirectHandler(func(args []string, ctx dispatch.Context) (string, error) {
 			opts := parseCypherFlags(args)
 
 			// No query on the command line — prompt interactively.
@@ -126,7 +126,7 @@ func toInterfaceRows(r service.QueryResult) [][]interface{} {
 // a query nor parameters were provided on the command line. Input is
 // accumulated line by line until a semicolon terminates the statement,
 // matching the behaviour of the interactive shell.
-func promptForCypher(ctx shell.ShellContext) (query string, params map[string]interface{}, err error) {
+func promptForCypher(ctx dispatch.Context) (query string, params map[string]interface{}, err error) {
 	if ctx.IO == nil {
 		return "", nil, fmt.Errorf("no IO handler available for interactive prompt")
 	}

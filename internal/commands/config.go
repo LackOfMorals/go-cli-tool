@@ -7,29 +7,23 @@ import (
 	"strings"
 
 	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/presentation"
-	"github.com/cli/go-cli-tool/internal/shell"
 )
 
 // ---- Config item registry -----------------------------------------------
 
 // configItemDef describes one user-facing configuration key.
-//
-// The registry is the single source of truth for config list, config set,
-// config delete, and error messages. Adding a new setting means adding one
-// entry here — nothing else needs to change.
 type configItemDef struct {
-	Key         string // dot-notation key shown to the user, e.g. "neo4j.uri"
-	Section     string // group label (used when displaying config)
-	Description string // one-line explanation shown in config list
-	Secret      bool   // display as "(set)"/"(not set)" rather than the actual value
-	Default     string // canonical default; used by config delete to reset the field
+	Key         string
+	Section     string
+	Description string
+	Secret      bool
+	Default     string
 	Get         func(cfg config.Config) string
 	Set         func(cfg *config.Config, val string) error // nil means read-only
 }
 
-// configRegistry is the authoritative, ordered list of all settable keys.
-// It drives config list, config set, config delete, and tab completion.
 var configRegistry = []configItemDef{
 
 	// ---- Logging ---------------------------------------------------------
@@ -265,7 +259,6 @@ var configRegistry = []configItemDef{
 
 // ---- Lookup helpers -----------------------------------------------------
 
-// findConfigItem returns the registry entry for the given key, or (nil, false).
 func findConfigItem(key string) (*configItemDef, bool) {
 	for i := range configRegistry {
 		if configRegistry[i].Key == key {
@@ -275,7 +268,6 @@ func findConfigItem(key string) (*configItemDef, bool) {
 	return nil, false
 }
 
-// configKeyHint returns a compact list of all keys for use in error messages.
 func configKeyHint() string {
 	var b strings.Builder
 	for _, item := range configRegistry {
@@ -284,7 +276,6 @@ func configKeyHint() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// displayValue returns a safe display string: secrets are shown as (set)/(not set).
 func displayValue(item *configItemDef, cfg config.Config) string {
 	v := item.Get(cfg)
 	if item.Secret {
@@ -299,7 +290,6 @@ func displayValue(item *configItemDef, cfg config.Config) string {
 	return v
 }
 
-// saveConfig persists cfg to cfgPath (falling back to the default path).
 func saveConfig(cfg *config.Config, cfgPath string) error {
 	path := cfgPath
 	if path == "" {
@@ -312,17 +302,8 @@ func saveConfig(cfg *config.Config, cfgPath string) error {
 // ---- Category builder ---------------------------------------------------
 
 // BuildConfigCategory returns the config top-level category.
-//
-//	neo4j> config list
-//	neo4j> config set neo4j.uri bolt://myhost:7687
-//	neo4j> config delete neo4j.password
-//	neo4j> config reset
-//
-// cfg is a pointer to the live config so that set/delete/reset take effect
-// immediately in the current session as well as being persisted to disk.
-// cfgPath is the file to write; if empty, DefaultConfigFilePath() is used.
-func BuildConfigCategory(cfg *config.Config, cfgPath string) *shell.Category {
-	return shell.NewCategory("config", "Manage CLI configuration").
+func BuildConfigCategory(cfg *config.Config, cfgPath string) *dispatch.Category {
+	return dispatch.NewCategory("config", "Manage CLI configuration").
 		AddCommand(configListCmd(cfg)).
 		AddCommand(configSetCmd(cfg, cfgPath)).
 		AddCommand(configDeleteCmd(cfg, cfgPath)).
@@ -331,13 +312,13 @@ func BuildConfigCategory(cfg *config.Config, cfgPath string) *shell.Category {
 
 // ---- config list --------------------------------------------------------
 
-func configListCmd(cfg *config.Config) *shell.Command {
-	return &shell.Command{
+func configListCmd(cfg *config.Config) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "list",
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "Show all configuration keys, their current values, and descriptions",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			cols := []string{"Key", "Value", "Description"}
 			rows := make([][]interface{}, 0, len(configRegistry))
 			for i := range configRegistry {
@@ -355,12 +336,12 @@ func configListCmd(cfg *config.Config) *shell.Command {
 
 // ---- config set ---------------------------------------------------------
 
-func configSetCmd(cfg *config.Config, cfgPath string) *shell.Command {
-	return &shell.Command{
+func configSetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "set",
 		Usage:       "set <key> <value>",
 		Description: "Set a configuration value and persist it to the config file",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) < 2 {
 				return "", fmt.Errorf(
 					"usage: config set <key> <value>\n\nAvailable keys (run 'config list' for descriptions):\n%s",
@@ -399,13 +380,13 @@ func configSetCmd(cfg *config.Config, cfgPath string) *shell.Command {
 
 // ---- config delete ------------------------------------------------------
 
-func configDeleteCmd(cfg *config.Config, cfgPath string) *shell.Command {
-	return &shell.Command{
+func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "delete",
 		Aliases:     []string{"del", "rm"},
 		Usage:       "delete <key>",
 		Description: "Reset a configuration key to its default value (requires confirmation)",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf(
 					"usage: config delete <key>\n\nAvailable keys (run 'config list' for descriptions):\n%s",
@@ -425,7 +406,6 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *shell.Command {
 				return "", fmt.Errorf("key %q is read-only", key)
 			}
 
-			// Show the current value and the default before asking for confirmation.
 			current := displayValue(item, *cfg)
 			defaultDisplay := item.Default
 			if item.Default == "" {
@@ -458,12 +438,12 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *shell.Command {
 
 // ---- config reset -------------------------------------------------------
 
-func configResetCmd(cfg *config.Config, cfgPath string) *shell.Command {
-	return &shell.Command{
+func configResetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "reset",
 		Usage:       "reset",
 		Description: "Delete the config file and restore all defaults (requires confirmation)",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			path := cfgPath
 			if path == "" {
 				path = config.DefaultConfigFilePath()
@@ -481,13 +461,10 @@ func configResetCmd(cfg *config.Config, cfgPath string) *shell.Command {
 				return "Reset cancelled.", nil
 			}
 
-			// Remove the file so viper defaults apply cleanly on next load.
 			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
 				return "", fmt.Errorf("delete config file: %w", removeErr)
 			}
 
-			// Reset the live in-memory config to defaults so the current
-			// session reflects the change immediately without a restart.
 			newCfg, loadErr := config.NewConfigService(config.Overrides{}).LoadConfiguration()
 			if loadErr != nil {
 				return "", fmt.Errorf("reload defaults: %w", loadErr)

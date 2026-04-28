@@ -10,7 +10,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/shell"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 )
 
 // ---- mockAdminService ---------------------------------------------------
@@ -32,14 +32,14 @@ func (m *mockAdminService) ShowDatabases(ctx context.Context) ([]service.Databas
 
 // ---- helpers ------------------------------------------------------------
 
-func adminCtx(t *testing.T) shell.ShellContext {
+func adminCtx(t *testing.T) dispatch.Context {
 	t.Helper()
 	log := logger.NewLoggerService(logger.FormatText, logger.LevelError)
 	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
 	if err != nil {
 		t.Fatalf("NewPresentationService: %v", err)
 	}
-	return shell.ShellContext{
+	return dispatch.Context{
 		Context:   context.Background(),
 		Presenter: pres,
 	}

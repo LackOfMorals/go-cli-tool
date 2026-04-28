@@ -3,22 +3,19 @@ package commands
 import (
 	"strings"
 
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/shell"
 )
 
 // BuildAdminCategory returns the admin top-level category.
-//
-//	neo4j> admin show-users
-//	neo4j> admin show-databases
-func BuildAdminCategory(svc service.AdminService) *shell.Category {
-	return shell.NewCategory("admin", "Administrative operations against the connected Neo4j database").
-		AddCommand(&shell.Command{
+func BuildAdminCategory(svc service.AdminService) *dispatch.Category {
+	return dispatch.NewCategory("admin", "Administrative operations against the connected Neo4j database").
+		AddCommand(&dispatch.Command{
 			Name:        "show-users",
 			Usage:       "show-users",
 			Description: "List all database users and their roles",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				users, err := svc.ShowUsers(ctx.Context)
 				if err != nil {
 					return "", err
@@ -35,11 +32,11 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 				))
 			},
 		}).
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:        "show-databases",
 			Usage:       "show-databases",
 			Description: "List all databases and their current status",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				dbs, err := svc.ShowDatabases(ctx.Context)
 				if err != nil {
 					return "", err
@@ -57,4 +54,3 @@ func BuildAdminCategory(svc service.AdminService) *shell.Category {
 			},
 		})
 }
-

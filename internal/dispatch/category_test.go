@@ -1,4 +1,4 @@
-package shell_test
+package dispatch_test
 
 import (
 	"context"
@@ -7,24 +7,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cli/go-cli-tool/internal/shell"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
 // ---- helpers ------------------------------------------------------------
 
-func newTestCategory(name string) *shell.Category {
-	return shell.NewCategory(name, name+" description")
+func newTestCategory(name string) *dispatch.Category {
+	return dispatch.NewCategory(name, name+" description")
 }
 
-func blankCtx() shell.ShellContext {
-	return shell.ShellContext{Context: context.Background()}
+func blankCtx() dispatch.Context {
+	return dispatch.Context{Context: context.Background()}
 }
 
 // ---- NewCategory --------------------------------------------------------
 
 func TestNewCategory(t *testing.T) {
-	c := shell.NewCategory("test", "a description")
+	c := dispatch.NewCategory("test", "a description")
 	if c.Name != "test" {
 		t.Errorf("Name: got %q, want %q", c.Name, "test")
 	}
@@ -48,7 +48,7 @@ func TestDispatch_NoArgs_NoDirectHandler_ReturnsHelp(t *testing.T) {
 
 func TestDispatch_NoArgs_WithDirectHandler_ReturnsUsageError(t *testing.T) {
 	c := newTestCategory("cypher").
-		SetDirectHandler(func(args []string, ctx shell.ShellContext) (string, error) {
+		SetDirectHandler(func(args []string, ctx dispatch.Context) (string, error) {
 			return "direct", nil
 		})
 	_, err := c.Dispatch(nil, blankCtx())
@@ -65,9 +65,9 @@ func TestDispatch_NoArgs_WithDirectHandler_ReturnsUsageError(t *testing.T) {
 func TestDispatch_NamedCommand(t *testing.T) {
 	called := false
 	c := newTestCategory("admin").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:    "show-users",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) { called = true; return "users", nil },
+			Handler: func(args []string, ctx dispatch.Context) (string, error) { called = true; return "users", nil },
 		})
 
 	out, err := c.Dispatch([]string{"show-users"}, blankCtx())
@@ -85,9 +85,9 @@ func TestDispatch_NamedCommand(t *testing.T) {
 func TestDispatch_NamedCommand_PassesRestArgs(t *testing.T) {
 	var gotArgs []string
 	c := newTestCategory("root").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name: "get",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				gotArgs = args
 				return "", nil
 			},
@@ -104,7 +104,7 @@ func TestDispatch_NamedCommand_PassesRestArgs(t *testing.T) {
 func TestDispatch_DirectHandler_CalledWhenNoCommandMatches(t *testing.T) {
 	var gotArgs []string
 	c := newTestCategory("cypher").
-		SetDirectHandler(func(args []string, ctx shell.ShellContext) (string, error) {
+		SetDirectHandler(func(args []string, ctx dispatch.Context) (string, error) {
 			gotArgs = args
 			return "ok", nil
 		})
@@ -126,9 +126,9 @@ func TestDispatch_DirectHandler_CalledWhenNoCommandMatches(t *testing.T) {
 func TestDispatch_Subcategory(t *testing.T) {
 	called := false
 	sub := newTestCategory("instances").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:    "list",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) { called = true; return "list", nil },
+			Handler: func(args []string, ctx dispatch.Context) (string, error) { called = true; return "list", nil },
 		})
 
 	c := newTestCategory("cloud").AddSubcategory(sub)
@@ -146,7 +146,7 @@ func TestDispatch_Subcategory(t *testing.T) {
 }
 
 func TestDispatch_Subcategory_NoArgs_ReturnsSubHelp(t *testing.T) {
-	sub := shell.NewCategory("instances", "Manage instances")
+	sub := dispatch.NewCategory("instances", "Manage instances")
 	c := newTestCategory("cloud").AddSubcategory(sub)
 
 	out, err := c.Dispatch([]string{"instances"}, blankCtx())
@@ -205,7 +205,7 @@ func TestFind_Nonexistent(t *testing.T) {
 // ---- Help ---------------------------------------------------------------
 
 func TestHelp_ContainsNameAndDescription(t *testing.T) {
-	c := shell.NewCategory("admin", "Admin operations")
+	c := dispatch.NewCategory("admin", "Admin operations")
 	help := c.Help()
 	if !strings.Contains(help, "admin") {
 		t.Errorf("help should contain category name, got: %s", help)
@@ -217,8 +217,8 @@ func TestHelp_ContainsNameAndDescription(t *testing.T) {
 
 func TestHelp_ListsCommands(t *testing.T) {
 	c := newTestCategory("admin").
-		AddCommand(&shell.Command{Name: "show-users", Usage: "show-users", Description: "List users"}).
-		AddCommand(&shell.Command{Name: "show-databases", Usage: "show-databases", Description: "List databases"})
+		AddCommand(&dispatch.Command{Name: "show-users", Usage: "show-users", Description: "List users"}).
+		AddCommand(&dispatch.Command{Name: "show-databases", Usage: "show-databases", Description: "List databases"})
 
 	help := c.Help()
 	if !strings.Contains(help, "show-users") {
@@ -230,7 +230,7 @@ func TestHelp_ListsCommands(t *testing.T) {
 }
 
 func TestHelp_ListsSubcategories(t *testing.T) {
-	sub := shell.NewCategory("instances", "Manage instances")
+	sub := dispatch.NewCategory("instances", "Manage instances")
 	c := newTestCategory("cloud").AddSubcategory(sub)
 
 	help := c.Help()
@@ -243,9 +243,9 @@ func TestHelp_ListsSubcategories(t *testing.T) {
 
 func TestPrerequisite_BlocksDispatch(t *testing.T) {
 	c := newTestCategory("admin").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:    "show-users",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) { return "ok", nil },
+			Handler: func(args []string, ctx dispatch.Context) (string, error) { return "ok", nil },
 		}).
 		SetPrerequisite(func() error {
 			return fmt.Errorf("database not configured")
@@ -263,9 +263,9 @@ func TestPrerequisite_BlocksDispatch(t *testing.T) {
 func TestPrerequisite_PassesWhenMet(t *testing.T) {
 	called := false
 	c := newTestCategory("admin").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:    "show-users",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) { called = true; return "ok", nil },
+			Handler: func(args []string, ctx dispatch.Context) (string, error) { called = true; return "ok", nil },
 		}).
 		SetPrerequisite(func() error { return nil })
 
@@ -279,9 +279,6 @@ func TestPrerequisite_PassesWhenMet(t *testing.T) {
 }
 
 func TestPrerequisite_NoArgsAlwaysShowsHelp(t *testing.T) {
-	// Typing a bare category name (e.g. "admin") should show help even when
-	// the prerequisite would fail — the user may just want to see what commands
-	// are available before configuring the connection.
 	c := newTestCategory("admin").
 		SetPrerequisite(func() error {
 			return fmt.Errorf("no database")
@@ -297,11 +294,9 @@ func TestPrerequisite_NoArgsAlwaysShowsHelp(t *testing.T) {
 }
 
 func TestPrerequisite_DirectHandlerNoArgsShowsUsage(t *testing.T) {
-	// Direct-handler categories (like cypher) return a usage error on no args,
-	// not the help text — but they still should NOT run the prerequisite.
 	prereqCalled := false
 	c := newTestCategory("cypher").
-		SetDirectHandler(func(args []string, ctx shell.ShellContext) (string, error) {
+		SetDirectHandler(func(args []string, ctx dispatch.Context) (string, error) {
 			return "ok", nil
 		}).
 		SetPrerequisite(func() error {
@@ -319,12 +314,10 @@ func TestPrerequisite_DirectHandlerNoArgsShowsUsage(t *testing.T) {
 }
 
 func TestPrerequisite_WrapsErrPrerequisite(t *testing.T) {
-	// Verify that the error returned by a prerequisite survives the dispatch
-	// chain intact so callers can use errors.Is(err, tool.ErrPrerequisite).
 	c := newTestCategory("test").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:    "cmd",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) { return "", nil },
+			Handler: func(args []string, ctx dispatch.Context) (string, error) { return "", nil },
 		}).
 		SetPrerequisite(func() error {
 			return fmt.Errorf("%w: something missing", tool.ErrPrerequisite)
@@ -341,10 +334,10 @@ func TestPrerequisite_WrapsErrPrerequisite(t *testing.T) {
 func TestDispatch_Alias(t *testing.T) {
 	called := false
 	c := newTestCategory("admin").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:    "show-users",
 			Aliases: []string{"su", "users"},
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				called = true
 				return "users", nil
 			},
@@ -364,8 +357,8 @@ func TestDispatch_Alias(t *testing.T) {
 
 func TestCommandNames_ExcludesAliases(t *testing.T) {
 	c := newTestCategory("root").
-		AddCommand(&shell.Command{Name: "list", Aliases: []string{"ls"}}).
-		AddCommand(&shell.Command{Name: "delete", Aliases: []string{"rm", "del"}})
+		AddCommand(&dispatch.Command{Name: "list", Aliases: []string{"ls"}}).
+		AddCommand(&dispatch.Command{Name: "delete", Aliases: []string{"rm", "del"}})
 
 	names := c.CommandNames()
 	want := []string{"delete", "list"}
@@ -381,8 +374,8 @@ func TestCommandNames_ExcludesAliases(t *testing.T) {
 
 func TestAllCommandNames_IncludesAliases(t *testing.T) {
 	c := newTestCategory("root").
-		AddCommand(&shell.Command{Name: "list", Aliases: []string{"ls"}}).
-		AddCommand(&shell.Command{Name: "delete", Aliases: []string{"rm"}})
+		AddCommand(&dispatch.Command{Name: "list", Aliases: []string{"ls"}}).
+		AddCommand(&dispatch.Command{Name: "delete", Aliases: []string{"rm"}})
 
 	names := c.AllCommandNames()
 	want := []string{"delete", "list", "ls", "rm"}
@@ -398,7 +391,7 @@ func TestAllCommandNames_IncludesAliases(t *testing.T) {
 
 func TestHelp_ShowsAliases(t *testing.T) {
 	c := newTestCategory("admin").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:        "show-users",
 			Aliases:     []string{"su"},
 			Description: "List all users",
@@ -429,9 +422,9 @@ func TestSubcategoryNames_Sorted(t *testing.T) {
 
 func TestCommandNames_Sorted(t *testing.T) {
 	c := newTestCategory("root").
-		AddCommand(&shell.Command{Name: "zzz"}).
-		AddCommand(&shell.Command{Name: "aaa"}).
-		AddCommand(&shell.Command{Name: "mmm"})
+		AddCommand(&dispatch.Command{Name: "zzz"}).
+		AddCommand(&dispatch.Command{Name: "aaa"}).
+		AddCommand(&dispatch.Command{Name: "mmm"})
 
 	names := c.CommandNames()
 	want := []string{"aaa", "mmm", "zzz"}
@@ -447,19 +440,19 @@ func TestCommandNames_Sorted(t *testing.T) {
 func TestDispatch_ContextPropagated(t *testing.T) {
 	type key struct{}
 	ctx := context.WithValue(context.Background(), key{}, "sentinel")
-	sc := shell.ShellContext{Context: ctx}
+	dc := dispatch.Context{Context: ctx}
 
 	var gotCtx context.Context
 	c := newTestCategory("root").
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name: "check",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				gotCtx = ctx.Context
 				return "", nil
 			},
 		})
 
-	_, _ = c.Dispatch([]string{"check"}, sc)
+	_, _ = c.Dispatch([]string{"check"}, dc)
 	if gotCtx == nil {
 		t.Fatal("context not received by handler")
 	}
