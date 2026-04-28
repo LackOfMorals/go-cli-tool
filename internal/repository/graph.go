@@ -12,7 +12,17 @@ type GraphRepository interface {
 // All driver-specific types (neo4j.Node, neo4j.Relationship, etc.) are
 // converted to plain Go values before being placed here, so upstream layers
 // (service, commands) never need to import the Neo4j driver directly.
+//
+// QueryType carries the Neo4j planner classification for the statement:
+//   - "r"  read only
+//   - "rw" read/write
+//   - "w"  write only
+//   - "s"  schema write
+//
+// It is populated from the result summary and is used by the cypher service
+// to enforce agent-mode read-only protection via EXPLAIN pre-checks.
 type RecordSet struct {
-	Columns []string
-	Rows    []map[string]interface{}
+	Columns   []string
+	Rows      []map[string]interface{}
+	QueryType string // Neo4j query classification: "r", "rw", "w", "s"
 }

@@ -14,16 +14,24 @@ import (
 // ---- mockCypherService --------------------------------------------------
 
 type mockCypherService struct {
-	result  service.QueryResult
-	err     error
-	lastCtx context.Context
-	lastQry string
+	result      service.QueryResult
+	err         error
+	explainType string
+	lastCtx     context.Context
+	lastQry     string
 }
 
 func (m *mockCypherService) Execute(ctx context.Context, query string, _ map[string]interface{}) (service.QueryResult, error) {
 	m.lastCtx = ctx
 	m.lastQry = query
 	return m.result, m.err
+}
+
+func (m *mockCypherService) Explain(_ context.Context, _ string) (string, error) {
+	if m.explainType != "" {
+		return m.explainType, nil
+	}
+	return "r", nil
 }
 
 // singleCol builds a one-column QueryResult for simple test fixtures.
@@ -115,5 +123,12 @@ func TestQueryTool_Name(t *testing.T) {
 	qt := tools.NewQueryTool(&mockCypherService{})
 	if qt.Name() != "query" {
 		t.Errorf("Name: got %q, want %q", qt.Name(), "query")
+	}
+}
+
+func TestQueryTool_MutationMode_IsConditional(t *testing.T) {
+	qt := tools.NewQueryTool(&mockCypherService{})
+	if qt.MutationMode() != tool.ModeConditional {
+		t.Errorf("MutationMode: got %v, want ModeConditional", qt.MutationMode())
 	}
 }

@@ -25,12 +25,30 @@ type CommandHandler func(args []string, ctx Context) (string, error)
 //
 // Context.Context is the per-command context. Handlers should pass it to
 // every service call instead of using context.Background().
+//
+// AgentMode and AllowWrites together implement the agent-mode permission
+// model. The dispatcher enforces ModeWrite/ModeConditional commands before
+// the handler is called; handlers can also inspect AgentMode directly to
+// suppress interactive prompts.
 type Context struct {
-	Context   context.Context
-	Config    config.Config
-	Logger    logger.Service
-	Telemetry analytics.Service
-	Presenter *presentation.PresentationService
-	Registry  Registry
-	IO        tool.IOHandler
+	Context    context.Context
+	Config     config.Config
+	Logger     logger.Service
+	Telemetry  analytics.Service
+	Presenter  *presentation.PresentationService
+	Registry   Registry
+	IO         tool.IOHandler
+
+	// AgentMode is true when --agent / NEO4J_CLI_AGENT=true is set. It
+	// activates non-interactive behaviour, JSON output, and read-only defaults.
+	AgentMode  bool
+
+	// AllowWrites is true when --rw / NEO4J_CLI_RW=true is set. It grants
+	// permission to execute write operations in agent mode. Has no effect
+	// outside agent mode.
+	AllowWrites bool
+
+	// RequestID is included in every agent-mode JSON response envelope to
+	// allow orchestrators to correlate invocations.
+	RequestID  string
 }

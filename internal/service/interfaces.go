@@ -9,8 +9,12 @@ type QueryRow = map[string]interface{}
 
 // QueryResult holds the structured output of a Cypher query.
 type QueryResult struct {
-	Columns []string
-	Rows    []QueryRow
+	Columns   []string
+	Rows      []QueryRow
+	// QueryType is the Neo4j planner classification populated when the query
+	// was preceded by EXPLAIN: "r" (read), "rw" (read/write), "w" (write
+	// only), "s" (schema write). Empty string when not determined.
+	QueryType string
 }
 
 // CypherService executes Cypher queries against a Neo4j database.
@@ -18,6 +22,12 @@ type CypherService interface {
 	// Execute runs query with optional parameters and returns a structured
 	// result. Callers are responsible for formatting the result for display.
 	Execute(ctx context.Context, query string, params map[string]interface{}) (QueryResult, error)
+
+	// Explain prepends EXPLAIN to query (unless already present), executes it,
+	// and returns the Neo4j query-type string: "r", "rw", "w", or "s".
+	// Use this in agent mode to determine whether a statement is safe to run
+	// without --rw before sending it for real execution.
+	Explain(ctx context.Context, query string) (string, error)
 }
 
 // ---- Cloud --------------------------------------------------------------

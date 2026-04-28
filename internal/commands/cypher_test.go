@@ -17,11 +17,13 @@ import (
 // ---- mockCypherService --------------------------------------------------
 
 type mockCypherService struct {
-	result     service.QueryResult
-	err        error
-	lastCtx    context.Context
-	lastQuery  string
-	lastParams map[string]interface{}
+	result      service.QueryResult
+	err         error
+	explainType string // returned by Explain; defaults to "r"
+	explainErr  error
+	lastCtx     context.Context
+	lastQuery   string
+	lastParams  map[string]interface{}
 }
 
 func (m *mockCypherService) Execute(ctx context.Context, query string, params map[string]interface{}) (service.QueryResult, error) {
@@ -29,6 +31,16 @@ func (m *mockCypherService) Execute(ctx context.Context, query string, params ma
 	m.lastQuery = query
 	m.lastParams = params
 	return m.result, m.err
+}
+
+func (m *mockCypherService) Explain(_ context.Context, _ string) (string, error) {
+	if m.explainErr != nil {
+		return "", m.explainErr
+	}
+	if m.explainType != "" {
+		return m.explainType, nil
+	}
+	return "r", nil // safe default
 }
 
 // ---- helpers ------------------------------------------------------------
@@ -341,5 +353,85 @@ func TestCypherCategory_MultiWordQuery_Joined(t *testing.T) {
 
 	if !strings.Contains(svc.lastQuery, "MATCH (n:Person) RETURN n LIMIT 5") {
 		t.Errorf("query not joined correctly; got: %q", svc.lastQuery)
+	}
+}
+
+// ---- Agent mode ---------------------------------------------------------
+
+func agentCtx(t *testing.T, allowWrites bool) dispatch.Context {
+	t.Helper()
+	ctx := cypherCtx(t)
+	ctx.AgentMode = true
+	ctx.AllowWrites = allowWrites
+	return ctx
+}
+
+func TestCypherCategory_AgentMode_NoQuery_ReturnsError(t *testing.T) {
+	svc := &mockCypherService{}
+	cat := commands.BuildCypherCategory(svc)
+
+	_, err := cat.Dispatch(nil, agentCtx(t, false))
+	if err == nil {
+		t.Fatal("expected error when no query in agent mode")
+	}
+	if !strings.Contains(err.Error(), "agent mode") {
+		t.Errorf("error should mention agent mode; got: %v", err)
+	}
+}
+
+func TestCypherCategory_AgentMode_ReadQuery_Executes(t *testing.T) {
+	svc := &mockCypherService{
+		result:      singleRowResult("n", "Alice"),
+		explainType: "r", // EXPLAIN reports read-only
+	}
+	cat := commands.BuildCypherCategory(svc)
+
+	_, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n"}, agentCtx(t, false))
+	if err != nil {
+		t.Fatalf("read query should succeed in agent mode without --rw: %v", err)
+	}
+}
+
+func TestCypherCategory_AgentMode_WriteQuery_Blocked(t *testing.T) {
+	svc := &mockCypherService{
+		explainType: "rw", // EXPLAIN reports read/write
+	}
+	cat := commands.BuildCypherCategory(svc)
+
+	_, err := cat.Dispatch([]string{"CREATE", "(n:Person)", "RETURN", "n"}, agentCtx(t, false))
+	if err == nil {
+		t.Fatal("expected WRITE_BLOCKED error in agent mode without --rw")
+	}
+	if !strings.Contains(err.Error(), "rw") && !strings.Contains(err.Error(), "write") {
+		t.Errorf("error should mention write blocked; got: %v", err)
+	}
+}
+
+func TestCypherCategory_AgentMode_WriteQuery_AllowedWith_RW(t *testing.T) {
+	svc := &mockCypherService{
+		result:      service.QueryResult{},
+		explainType: "rw",
+	}
+	cat := commands.BuildCypherCategory(svc)
+
+	// With --rw the EXPLAIN check is skipped and Execute is called directly.
+	_, err := cat.Dispatch([]string{"CREATE", "(n:Person)", "RETURN", "n"}, agentCtx(t, true))
+	if err != nil {
+		t.Fatalf("write query should succeed in agent mode with --rw: %v", err)
+	}
+}
+
+func TestCypherCategory_AgentMode_ExplainQuery_RunsDirectly(t *testing.T) {
+	// Queries that already start with EXPLAIN should run without a pre-check.
+	svc := &mockCypherService{result: singleRowResult("plan", "ok")}
+	cat := commands.BuildCypherCategory(svc)
+
+	_, err := cat.Dispatch([]string{"EXPLAIN", "MATCH", "(n)", "RETURN", "n"}, agentCtx(t, false))
+	if err != nil {
+		t.Fatalf("EXPLAIN query should run directly in agent mode: %v", err)
+	}
+	// Verify Execute was called with the EXPLAIN prefix intact.
+	if !strings.HasPrefix(svc.lastQuery, "EXPLAIN") {
+		t.Errorf("expected EXPLAIN query to be forwarded as-is; got: %q", svc.lastQuery)
 	}
 }

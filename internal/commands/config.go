@@ -9,6 +9,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/presentation"
+	"github.com/cli/go-cli-tool/internal/tool"
 )
 
 // ---- Config item registry -----------------------------------------------
@@ -382,10 +383,11 @@ func configSetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 
 func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 	return &dispatch.Command{
-		Name:        "delete",
-		Aliases:     []string{"del", "rm"},
-		Usage:       "delete <key>",
-		Description: "Reset a configuration key to its default value (requires confirmation)",
+		Name:         "delete",
+		Aliases:      []string{"del", "rm"},
+		MutationMode: tool.ModeWrite,
+		Usage:        "delete <key>",
+		Description:  "Reset a configuration key to its default value (prompts for confirmation outside agent mode)",
 		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf(
@@ -406,22 +408,25 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 				return "", fmt.Errorf("key %q is read-only", key)
 			}
 
-			current := displayValue(item, *cfg)
 			defaultDisplay := item.Default
 			if item.Default == "" {
 				defaultDisplay = "(not set)"
 			}
 
-			ctx.IO.Write(
-				"Reset %q from %s to default %q? Type 'yes' to confirm: ",
-				key, current, defaultDisplay,
-			)
-			confirm, err := ctx.IO.Read()
-			if err != nil {
-				return "", fmt.Errorf("read confirmation: %w", err)
-			}
-			if strings.TrimSpace(confirm) != "yes" {
-				return "Reset cancelled.", nil
+			// In agent mode the dispatcher has already enforced --rw; skip prompt.
+			if !ctx.AgentMode {
+				current := displayValue(item, *cfg)
+				ctx.IO.Write(
+					"Reset %q from %s to default %q? Type 'yes' to confirm: ",
+					key, current, defaultDisplay,
+				)
+				confirm, err := ctx.IO.Read()
+				if err != nil {
+					return "", fmt.Errorf("read confirmation: %w", err)
+				}
+				if strings.TrimSpace(confirm) != "yes" {
+					return "Reset cancelled.", nil
+				}
 			}
 
 			if err := item.Set(cfg, item.Default); err != nil {
@@ -440,25 +445,29 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 
 func configResetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 	return &dispatch.Command{
-		Name:        "reset",
-		Usage:       "reset",
-		Description: "Delete the config file and restore all defaults (requires confirmation)",
+		Name:         "reset",
+		MutationMode: tool.ModeWrite,
+		Usage:        "reset",
+		Description:  "Delete the config file and restore all defaults (prompts for confirmation outside agent mode)",
 		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			path := cfgPath
 			if path == "" {
 				path = config.DefaultConfigFilePath()
 			}
 
-			ctx.IO.Write(
-				"This will delete %s and restore all defaults.\nType 'yes' to confirm: ",
-				path,
-			)
-			confirm, err := ctx.IO.Read()
-			if err != nil {
-				return "", fmt.Errorf("read confirmation: %w", err)
-			}
-			if strings.TrimSpace(confirm) != "yes" {
-				return "Reset cancelled.", nil
+			// In agent mode the dispatcher has already enforced --rw; skip prompt.
+			if !ctx.AgentMode {
+				ctx.IO.Write(
+					"This will delete %s and restore all defaults.\nType 'yes' to confirm: ",
+					path,
+				)
+				confirm, err := ctx.IO.Read()
+				if err != nil {
+					return "", fmt.Errorf("read confirmation: %w", err)
+				}
+				if strings.TrimSpace(confirm) != "yes" {
+					return "Reset cancelled.", nil
+				}
 			}
 
 			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {

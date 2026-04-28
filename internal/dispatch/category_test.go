@@ -435,6 +435,131 @@ func TestCommandNames_Sorted(t *testing.T) {
 	}
 }
 
+// ---- MutationMode enforcement ------------------------------------------
+
+func agentDispatchCtx(agentMode, allowWrites bool) dispatch.Context {
+	return dispatch.Context{
+		Context:     context.Background(),
+		AgentMode:   agentMode,
+		AllowWrites: allowWrites,
+	}
+}
+
+func TestDispatch_ModeWrite_BlockedInAgentMode(t *testing.T) {
+	called := false
+	c := newTestCategory("cloud").
+		AddCommand(&dispatch.Command{
+			Name:         "delete",
+			MutationMode: tool.ModeWrite,
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+				called = true
+				return "deleted", nil
+			},
+		})
+
+	_, err := c.Dispatch([]string{"delete"}, agentDispatchCtx(true, false))
+	if err == nil {
+		t.Fatal("expected READ_ONLY error in agent mode without --rw")
+	}
+	if called {
+		t.Error("handler must not be called when blocked")
+	}
+	var ae *tool.AgentError
+	if !errors.As(err, &ae) {
+		t.Errorf("expected AgentError; got: %T %v", err, err)
+	}
+	if ae != nil && ae.Code != "READ_ONLY" {
+		t.Errorf("expected code READ_ONLY; got: %q", ae.Code)
+	}
+}
+
+func TestDispatch_ModeWrite_AllowedWith_RW(t *testing.T) {
+	called := false
+	c := newTestCategory("cloud").
+		AddCommand(&dispatch.Command{
+			Name:         "delete",
+			MutationMode: tool.ModeWrite,
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+				called = true
+				return "deleted", nil
+			},
+		})
+
+	_, err := c.Dispatch([]string{"delete"}, agentDispatchCtx(true, true))
+	if err != nil {
+		t.Fatalf("unexpected error with --rw: %v", err)
+	}
+	if !called {
+		t.Error("handler should be called when --rw is set")
+	}
+}
+
+func TestDispatch_ModeWrite_AllowedOutsideAgentMode(t *testing.T) {
+	// MutationMode enforcement only applies in agent mode.
+	called := false
+	c := newTestCategory("cloud").
+		AddCommand(&dispatch.Command{
+			Name:         "delete",
+			MutationMode: tool.ModeWrite,
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+				called = true
+				return "deleted", nil
+			},
+		})
+
+	_, err := c.Dispatch([]string{"delete"}, blankCtx()) // agentMode=false
+	if err != nil {
+		t.Fatalf("unexpected error outside agent mode: %v", err)
+	}
+	if !called {
+		t.Error("handler should be called outside agent mode regardless of MutationMode")
+	}
+}
+
+func TestDispatch_ModeRead_NeverBlocked(t *testing.T) {
+	called := false
+	c := newTestCategory("cloud").
+		AddCommand(&dispatch.Command{
+			Name:         "list",
+			MutationMode: tool.ModeRead,
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+				called = true
+				return "list", nil
+			},
+		})
+
+	_, err := c.Dispatch([]string{"list"}, agentDispatchCtx(true, false))
+	if err != nil {
+		t.Fatalf("read command should never be blocked; got: %v", err)
+	}
+	if !called {
+		t.Error("read command handler should always be called")
+	}
+}
+
+func TestDispatch_ModeConditional_NotBlockedByDispatcher(t *testing.T) {
+	// ModeConditional enforcement is handled by the handler itself (e.g. via
+	// EXPLAIN), not by the dispatcher. The dispatcher must call through.
+	called := false
+	c := newTestCategory("cypher").
+		AddCommand(&dispatch.Command{
+			Name:         "query",
+			MutationMode: tool.ModeConditional,
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+				called = true
+				return "result", nil
+			},
+		})
+
+	_, err := c.Dispatch([]string{"query"}, agentDispatchCtx(true, false))
+	if err != nil {
+		t.Fatalf("dispatcher should not block ModeConditional; got: %v", err)
+	}
+	if !called {
+		t.Error("ModeConditional handler must be called by dispatcher")
+	}
+}
+
 // ---- Context propagation ------------------------------------------------
 
 func TestDispatch_ContextPropagated(t *testing.T) {

@@ -9,10 +9,10 @@ import (
 
 	"github.com/cli/go-cli-tool/internal/commands"
 	"github.com/cli/go-cli-tool/internal/config"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/tool"
 )
 
@@ -336,6 +336,48 @@ func TestCloudCategory_InstancesDelete_Cancelled(t *testing.T) {
 	}
 	if !strings.Contains(out, "cancelled") {
 		t.Errorf("expected cancellation message, got: %q", out)
+	}
+}
+
+func TestCloudCategory_InstancesDelete_AgentMode_NoPrompt(t *testing.T) {
+	// In agent mode with --rw the delete handler should not prompt at all.
+	svc := &mockCloudService{instances: &mockInstancesService{}}
+	cat := commands.BuildCloudCategory(svc)
+
+	io := &mockIO{} // no readLines queued — a prompt would return "", causing cancellation
+	ctx := cloudCtx(t)
+	ctx.IO = io
+	ctx.AgentMode = true
+	ctx.AllowWrites = true
+
+	out, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error in agent+rw mode: %v", err)
+	}
+	if !strings.Contains(out, "deleted") {
+		t.Errorf("expected deleted message without prompt, got: %q", out)
+	}
+	if len(io.written) > 0 {
+		t.Errorf("no output should be written in agent mode; got: %v", io.written)
+	}
+}
+
+func TestCloudCategory_InstancesDelete_AgentMode_BlockedWithoutRW(t *testing.T) {
+	// In agent mode without --rw, the dispatcher must block before the handler.
+	svc := &mockCloudService{instances: &mockInstancesService{}}
+	cat := commands.BuildCloudCategory(svc)
+
+	ctx := cloudCtx(t)
+	ctx.AgentMode = true
+	ctx.AllowWrites = false
+
+	_, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
+	if err == nil {
+		t.Fatal("expected READ_ONLY error in agent mode without --rw")
+	}
+	var ae *tool.AgentError
+	if !errors.As(err, &ae) {
+		t.Errorf("expected AgentError; got: %T %v", err, err)
 	}
 }
 

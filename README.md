@@ -9,6 +9,7 @@ A command-line tool for Neo4j, optimised for use by AI agents and scripts. Conne
 - [Getting started](#getting-started)
 - [Commands](#commands)
 - [Configuration](#configuration)
+- [Agent mode](#agent-mode)
 - [Contributing](#contributing)
   - [Project structure](#project-structure)
   - [Adding a tool](#adding-a-tool)
@@ -238,11 +239,128 @@ All variables use the `CLI_` prefix. Nested keys use underscores.
 --log-file string         Log file path (when --log-output=file)
 --format string           Output format: table, json, pretty-json, graph
 --no-metrics              Disable anonymous usage metrics
+
+--agent                   Enable agent mode (see Agent mode section)
+--rw                      Permit write/mutating operations in agent mode
+--request-id string       Correlation ID for agent-mode JSON responses
+--timeout duration        Maximum command execution time (e.g. 30s)
 ```
 
 ### Interactive credential prompts
 
 When Neo4j or Aura credentials are missing, the CLI prompts for them interactively on first use and saves them to the config file. To skip prompts in automated or agent contexts, pre-populate credentials via environment variables or the config file.
+
+---
+
+## Agent mode
+
+The CLI is designed to be driven by AI agents, CI pipelines, and orchestration tools. Use `--agent` (or `NEO4J_CLI_AGENT=true`) to activate a safe, machine-readable operating mode.
+
+### Activating agent mode
+
+```bash
+# Via flag
+neo4j-cli --agent cloud instances list
+
+# Via environment variable (recommended for pipelines — all invocations inherit it)
+export NEO4J_CLI_AGENT=true
+neo4j-cli cloud instances list
+```
+
+### What --agent does
+
+| Behaviour | Human mode (default) | Agent mode |
+|---|---|---|
+| Output format | `table` | `json` |
+| Missing credentials | Interactive prompt | Structured JSON error on stdout, exit non-zero |
+| Errors | Written to stderr | JSON envelope on stdout |
+| Write operations | Allowed with confirmation prompt | **Blocked** unless `--rw` is also passed |
+
+### The --rw flag
+
+In agent mode, all operations that modify state are blocked by default. Pass `--rw` (or `NEO4J_CLI_RW=true`) to explicitly permit mutations:
+
+```bash
+# Blocked — returns READ_ONLY error
+neo4j-cli --agent cloud instances delete <id>
+
+# Allowed — no prompt, executes immediately
+neo4j-cli --agent --rw cloud instances delete <id>
+```
+
+`--rw` governs **all** mutation categories uniformly:
+
+| Category | Read operations | Write operations (require `--rw`) |
+|---|---|---|
+| `cypher` | Any read-only query | Queries classified as write by Neo4j EXPLAIN |
+| `cloud instances` | `list`, `get` | `create`, `update`, `pause`, `resume`, `delete` |
+| `cloud projects` | `list`, `get` | _(none currently)_ |
+| `admin` | `show-users`, `show-databases` | _(none currently)_ |
+| `config` | `list` | `set`, `delete`, `reset` |
+
+### Cypher write detection
+
+For `cypher` commands in agent mode without `--rw`, the CLI automatically runs `EXPLAIN` on the query before execution. If Neo4j classifies the statement as a write (`rw`, `w`, or `s`), it is blocked:
+
+```bash
+# EXPLAIN detects a write — blocked
+neo4j-cli --agent cypher "CREATE (n:Person {name:'Alice'}) RETURN n"
+# → {"status":"error","error":{"code":"WRITE_BLOCKED","message":"..."},...}
+
+# Read query — EXPLAIN confirms safe, executes
+neo4j-cli --agent cypher "MATCH (n:Person) RETURN n.name LIMIT 10"
+
+# EXPLAIN or PROFILE queries run as-is — no pre-check
+neo4j-cli --agent cypher "EXPLAIN MATCH (n) RETURN n"
+```
+
+With `--rw`, the EXPLAIN pre-check is skipped and queries execute directly.
+
+### Error envelope
+
+All errors in agent mode are written to **stdout** as a JSON envelope so agents reading stdout get machine-readable failures:
+
+```json
+{"status":"error","error":{"code":"READ_ONLY","message":"\"delete\" is a write operation; re-run with --rw to permit mutations"},"request_id":"a1b2c3","schema_version":"1"}
+```
+
+Error codes:
+
+| Code | Meaning |
+|---|---|
+| `READ_ONLY` | Write operation attempted without `--rw` |
+| `WRITE_BLOCKED` | Cypher write detected by EXPLAIN without `--rw` |
+| `MISSING_QUERY` | No cypher statement provided in agent mode |
+| `MISSING_CREDENTIALS` | Required credentials absent (no prompt in agent mode) |
+| `TIMEOUT` | Command exceeded `--timeout` duration |
+| `EXECUTION_ERROR` | Any other failure |
+
+### Additional agent flags
+
+```
+--request-id string   Correlation ID included in JSON responses.
+                      Auto-generated (UUID) if not supplied.
+                      Env: NEO4J_CLI_REQUEST_ID
+
+--timeout duration    Maximum time for a command to run (e.g. 30s, 2m).
+                      Exit code 1 + TIMEOUT error on expiry.
+```
+
+### Recommended orchestrator setup
+
+```bash
+export NEO4J_CLI_AGENT=true
+export NEO4J_CLI_REQUEST_ID="pipeline-run-${RUN_ID}"  # inject your trace ID
+export CLI_NEO4J_URI="bolt+s://your-instance.databases.neo4j.io"
+export CLI_NEO4J_USERNAME="neo4j"
+export CLI_NEO4J_PASSWORD="${NEO4J_PASSWORD}"
+
+# Read operations work with no further flags
+neo4j-cli cypher "MATCH (n:Person) RETURN count(n)"
+
+# Write operations require explicit --rw
+neo4j-cli --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
+```
 
 ---
 
@@ -572,6 +690,8 @@ neo4j-cli gds --help
 **Errors are the caller's responsibility** — return `fmt.Errorf("context: %w", err)` and let the caller handle it. Don't call `os.Exit` or `log.Fatal` from inside a service or command handler.
 
 **No imports up the stack** — `dispatch` does not import `commands` or `service`. `commands` does not import `tools`. Keep the dependency graph acyclic and flowing in one direction toward `cmd`.
+
+**Declare MutationMode on every command and tool** — every `dispatch.Command` and `tool.Tool` must declare its `MutationMode`. Use `ModeRead` (default) for read-only operations, `ModeWrite` for operations that always modify state, and `ModeConditional` for operations where mutability depends on runtime input (Cypher queries). The dispatcher enforces the read-only contract in agent mode automatically, so individual handlers do not need to check `ctx.AgentMode` for blocking. Handlers *should* check `ctx.AgentMode` only to suppress interactive prompts (e.g. confirmation dialogs).
 
 ---
 

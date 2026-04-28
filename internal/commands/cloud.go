@@ -7,6 +7,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
+	"github.com/cli/go-cli-tool/internal/tool"
 )
 
 // BuildCloudCategory returns the cloud top-level category.
@@ -92,7 +93,8 @@ func instanceToDetail(inst *service.Instance) *presentation.DetailData {
 
 func instanceCreateCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
-		Name:  "create",
+		Name:         "create",
+		MutationMode: tool.ModeWrite,
 		Usage: "create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]",
 		Description: "Create a new Aura instance. " +
 			"Unset fields fall back to aura.instance_defaults in your config.",
@@ -148,7 +150,8 @@ func instanceCreateCmd(svc service.CloudService) *dispatch.Command {
 
 func instanceUpdateCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
-		Name:        "update",
+		Name:         "update",
+		MutationMode: tool.ModeWrite,
 		Usage:       "update <id> [name=<new-name>] [memory=<size>]",
 		Description: "Rename or resize an existing instance",
 		Handler: func(args []string, ctx dispatch.Context) (string, error) {
@@ -182,7 +185,8 @@ func instanceUpdateCmd(svc service.CloudService) *dispatch.Command {
 
 func instancePauseCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
-		Name:        "pause",
+		Name:         "pause",
+		MutationMode: tool.ModeWrite,
 		Usage:       "pause <id>",
 		Description: "Pause a running instance",
 		Handler: func(args []string, ctx dispatch.Context) (string, error) {
@@ -199,7 +203,8 @@ func instancePauseCmd(svc service.CloudService) *dispatch.Command {
 
 func instanceResumeCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
-		Name:        "resume",
+		Name:         "resume",
+		MutationMode: tool.ModeWrite,
 		Usage:       "resume <id>",
 		Description: "Resume a paused instance",
 		Handler: func(args []string, ctx dispatch.Context) (string, error) {
@@ -216,22 +221,27 @@ func instanceResumeCmd(svc service.CloudService) *dispatch.Command {
 
 func instanceDeleteCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
-		Name:        "delete",
-		Aliases:     []string{"rm"},
-		Usage:       "delete <id>",
-		Description: "Permanently delete an instance (prompts for confirmation)",
+		Name:         "delete",
+		Aliases:      []string{"rm"},
+		MutationMode: tool.ModeWrite,
+		Usage:        "delete <id>",
+		Description:  "Permanently delete an instance (prompts for confirmation outside agent mode)",
 		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cloud instances delete <id>")
 			}
 			id := args[0]
-			ctx.IO.Write("Permanently delete instance %s? Type 'yes' to confirm: ", id)
-			confirm, err := ctx.IO.Read()
-			if err != nil {
-				return "", fmt.Errorf("read confirmation: %w", err)
-			}
-			if strings.TrimSpace(confirm) != "yes" {
-				return "Delete cancelled.", nil
+			// In agent mode the dispatcher has already enforced --rw, so skip
+			// the interactive confirmation. In human mode, require explicit "yes".
+			if !ctx.AgentMode {
+				ctx.IO.Write("Permanently delete instance %s? Type 'yes' to confirm: ", id)
+				confirm, err := ctx.IO.Read()
+				if err != nil {
+					return "", fmt.Errorf("read confirmation: %w", err)
+				}
+				if strings.TrimSpace(confirm) != "yes" {
+					return "Delete cancelled.", nil
+				}
 			}
 			if err := svc.Instances().Delete(ctx.Context, id); err != nil {
 				return "", err
