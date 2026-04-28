@@ -284,10 +284,20 @@ func TestCypherCategory_TableFormat_ContainsColumns(t *testing.T) {
 		),
 	}
 	cat := commands.BuildCypherCategory(svc)
+	ctx := cypherCtx(t)
 
-	out, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n.name,", "n.age"}, cypherCtx(t))
+	result, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n.name,", "n.age"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	// JSON channel: Items should contain both rows
+	if len(result.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	}
+	// Human channel: rendered table should contain columns and values
+	out, fmtErr := ctx.Presenter.FormatAs(result.Presentation, result.FormatOverride)
+	if fmtErr != nil {
+		t.Fatalf("FormatAs error: %v", fmtErr)
 	}
 	for _, want := range []string{"name", "age", "Alice", "Bob", "30", "25"} {
 		if !strings.Contains(out, want) {
@@ -307,9 +317,13 @@ func TestCypherCategory_GraphFormat_ContainsValues(t *testing.T) {
 	ctx := cypherCtx(t)
 	ctx.Config.Cypher.OutputFormat = "graph"
 
-	out, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n"}, ctx)
+	result, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	out, fmtErr := ctx.Presenter.FormatAs(result.Presentation, result.FormatOverride)
+	if fmtErr != nil {
+		t.Fatalf("FormatAs error: %v", fmtErr)
 	}
 	if !strings.Contains(out, "Alice") {
 		t.Errorf("graph output should contain value Alice:\n%s", out)
@@ -322,9 +336,13 @@ func TestCypherCategory_FormatFlag_OverridesConfig(t *testing.T) {
 	ctx := cypherCtx(t)
 	ctx.Config.Cypher.OutputFormat = "table" // config says table
 
-	out, err := cat.Dispatch([]string{"--format", "graph", "MATCH", "(n)", "RETURN", "n"}, ctx)
+	result, err := cat.Dispatch([]string{"--format", "graph", "MATCH", "(n)", "RETURN", "n"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	out, fmtErr := ctx.Presenter.FormatAs(result.Presentation, result.FormatOverride)
+	if fmtErr != nil {
+		t.Fatalf("FormatAs error: %v", fmtErr)
 	}
 	// Graph format uses "○" bullet points; table uses "│"
 	if strings.Contains(out, "│") && !strings.Contains(out, "○") {
@@ -335,10 +353,18 @@ func TestCypherCategory_FormatFlag_OverridesConfig(t *testing.T) {
 func TestCypherCategory_NoResults_ReturnsMessage(t *testing.T) {
 	svc := &mockCypherService{result: service.QueryResult{}}
 	cat := commands.BuildCypherCategory(svc)
+	ctx := cypherCtx(t)
 
-	out, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n"}, cypherCtx(t))
+	result, err := cat.Dispatch([]string{"MATCH", "(n)", "RETURN", "n"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 items for empty result, got %d", len(result.Items))
+	}
+	out, fmtErr := ctx.Presenter.FormatAs(result.Presentation, result.FormatOverride)
+	if fmtErr != nil {
+		t.Fatalf("FormatAs error: %v", fmtErr)
 	}
 	if !strings.Contains(out, "no results") {
 		t.Errorf("expected no-results message; got: %q", out)

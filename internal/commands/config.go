@@ -319,18 +319,21 @@ func configListCmd(cfg *config.Config) *dispatch.Command {
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "Show all configuration keys, their current values, and descriptions",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			cols := []string{"Key", "Value", "Description"}
 			rows := make([][]interface{}, 0, len(configRegistry))
+			items := make([]map[string]interface{}, 0, len(configRegistry))
 			for i := range configRegistry {
 				item := &configRegistry[i]
-				rows = append(rows, []interface{}{
-					item.Key,
-					displayValue(item, *cfg),
-					item.Description,
+				val := displayValue(item, *cfg)
+				rows = append(rows, []interface{}{item.Key, val, item.Description})
+				items = append(items, map[string]interface{}{
+					"key":         item.Key,
+					"value":       val,
+					"description": item.Description,
 				})
 			}
-			return ctx.Presenter.Format(presentation.NewTableData(cols, rows))
+			return dispatch.ListResult(presentation.NewTableData(cols, rows), items), nil
 		},
 	}
 }
@@ -342,9 +345,9 @@ func configSetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 		Name:        "set",
 		Usage:       "set <key> <value>",
 		Description: "Set a configuration value and persist it to the config file",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) < 2 {
-				return "", fmt.Errorf(
+				return dispatch.CommandResult{}, fmt.Errorf(
 					"usage: config set <key> <value>\n\nAvailable keys (run 'config list' for descriptions):\n%s",
 					configKeyHint(),
 				)
@@ -355,26 +358,30 @@ func configSetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 
 			item, ok := findConfigItem(key)
 			if !ok {
-				return "", fmt.Errorf(
+				return dispatch.CommandResult{}, fmt.Errorf(
 					"unknown key %q\n\nAvailable keys (run 'config list' for descriptions):\n%s",
 					key, configKeyHint(),
 				)
 			}
 			if item.Set == nil {
-				return "", fmt.Errorf("key %q is read-only", key)
+				return dispatch.CommandResult{}, fmt.Errorf("key %q is read-only", key)
 			}
 			if err := item.Set(cfg, val); err != nil {
-				return "", fmt.Errorf("%s: %w", key, err)
+				return dispatch.CommandResult{}, fmt.Errorf("%s: %w", key, err)
 			}
 			if err := saveConfig(cfg, cfgPath); err != nil {
-				return "", fmt.Errorf("save config: %w", err)
+				return dispatch.CommandResult{}, fmt.Errorf("save config: %w", err)
 			}
 
 			display := val
 			if item.Secret {
 				display = "(set)"
 			}
-			return fmt.Sprintf("✓ %s = %s.", key, display), nil
+			return dispatch.ItemResult(nil, map[string]interface{}{
+				"key":     key,
+				"value":   display,
+				"message": fmt.Sprintf("%s = %s", key, display),
+			}), nil
 		},
 	}
 }
@@ -388,9 +395,9 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 		MutationMode: tool.ModeWrite,
 		Usage:        "delete <key>",
 		Description:  "Reset a configuration key to its default value (prompts for confirmation outside agent mode)",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) == 0 {
-				return "", fmt.Errorf(
+				return dispatch.CommandResult{}, fmt.Errorf(
 					"usage: config delete <key>\n\nAvailable keys (run 'config list' for descriptions):\n%s",
 					configKeyHint(),
 				)
@@ -399,13 +406,13 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 			key := args[0]
 			item, ok := findConfigItem(key)
 			if !ok {
-				return "", fmt.Errorf(
+				return dispatch.CommandResult{}, fmt.Errorf(
 					"unknown key %q\n\nAvailable keys (run 'config list' for descriptions):\n%s",
 					key, configKeyHint(),
 				)
 			}
 			if item.Set == nil {
-				return "", fmt.Errorf("key %q is read-only", key)
+				return dispatch.CommandResult{}, fmt.Errorf("key %q is read-only", key)
 			}
 
 			defaultDisplay := item.Default
@@ -422,21 +429,25 @@ func configDeleteCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 				)
 				confirm, err := ctx.IO.Read()
 				if err != nil {
-					return "", fmt.Errorf("read confirmation: %w", err)
+					return dispatch.CommandResult{}, fmt.Errorf("read confirmation: %w", err)
 				}
 				if strings.TrimSpace(confirm) != "yes" {
-					return "Reset cancelled.", nil
+					return dispatch.MessageResult("Reset cancelled."), nil
 				}
 			}
 
 			if err := item.Set(cfg, item.Default); err != nil {
-				return "", fmt.Errorf("reset %s: %w", key, err)
+				return dispatch.CommandResult{}, fmt.Errorf("reset %s: %w", key, err)
 			}
 			if err := saveConfig(cfg, cfgPath); err != nil {
-				return "", fmt.Errorf("save config: %w", err)
+				return dispatch.CommandResult{}, fmt.Errorf("save config: %w", err)
 			}
 
-			return fmt.Sprintf("✓ %s reset to default (%s).", key, defaultDisplay), nil
+			return dispatch.ItemResult(nil, map[string]interface{}{
+				"key":           key,
+				"value":         defaultDisplay,
+				"message":       fmt.Sprintf("%s reset to default (%s).", key, defaultDisplay),
+			}), nil
 		},
 	}
 }
@@ -449,7 +460,7 @@ func configResetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 		MutationMode: tool.ModeWrite,
 		Usage:        "reset",
 		Description:  "Delete the config file and restore all defaults (prompts for confirmation outside agent mode)",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			path := cfgPath
 			if path == "" {
 				path = config.DefaultConfigFilePath()
@@ -463,24 +474,27 @@ func configResetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 				)
 				confirm, err := ctx.IO.Read()
 				if err != nil {
-					return "", fmt.Errorf("read confirmation: %w", err)
+					return dispatch.CommandResult{}, fmt.Errorf("read confirmation: %w", err)
 				}
 				if strings.TrimSpace(confirm) != "yes" {
-					return "Reset cancelled.", nil
+					return dispatch.MessageResult("Reset cancelled."), nil
 				}
 			}
 
 			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
-				return "", fmt.Errorf("delete config file: %w", removeErr)
+				return dispatch.CommandResult{}, fmt.Errorf("delete config file: %w", removeErr)
 			}
 
 			newCfg, loadErr := config.NewConfigService(config.Overrides{}).LoadConfiguration()
 			if loadErr != nil {
-				return "", fmt.Errorf("reload defaults: %w", loadErr)
+				return dispatch.CommandResult{}, fmt.Errorf("reload defaults: %w", loadErr)
 			}
 			*cfg = newCfg
 
-			return fmt.Sprintf("✓ Configuration reset to defaults.\n  Config file deleted: %s", path), nil
+			return dispatch.ItemResult(nil, map[string]interface{}{
+				"config_file": path,
+				"message":     fmt.Sprintf("Configuration reset to defaults. Config file deleted: %s", path),
+			}), nil
 		},
 	}
 }

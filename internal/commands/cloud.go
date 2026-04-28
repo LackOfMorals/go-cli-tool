@@ -36,25 +36,25 @@ func instanceListCmd(svc service.CloudService) *dispatch.Command {
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "List all Aura instances",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			instances, err := svc.Instances().List(ctx.Context)
 			if err != nil {
-				return "", err
-			}
-			if len(instances) == 0 {
-				return "No instances found.", nil
+				return dispatch.CommandResult{}, err
 			}
 
 			cols := []string{"ID", "Name", "Project", "Cloud"}
 			rows := make([][]any, len(instances))
+			items := make([]map[string]interface{}, len(instances))
 			for i, inst := range instances {
-				rows[i] = []any{
-					inst.ID, inst.Name,
-					orDash(inst.TenantID),
-					orDash(inst.CloudProvider),
+				rows[i] = []any{inst.ID, inst.Name, orDash(inst.TenantID), orDash(inst.CloudProvider)}
+				items[i] = map[string]interface{}{
+					"id":             inst.ID,
+					"name":           inst.Name,
+					"tenant_id":      inst.TenantID,
+					"cloud_provider": inst.CloudProvider,
 				}
 			}
-			return ctx.Presenter.Format(presentation.NewTableData(cols, rows))
+			return dispatch.ListResult(presentation.NewTableData(cols, rows), items), nil
 		},
 	}
 }
@@ -64,15 +64,15 @@ func instanceGetCmd(svc service.CloudService) *dispatch.Command {
 		Name:        "get",
 		Usage:       "get <id>",
 		Description: "Show full details for an instance",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) == 0 {
-				return "", fmt.Errorf("usage: cloud instances get <id>")
+				return dispatch.CommandResult{}, fmt.Errorf("usage: cloud instances get <id>")
 			}
 			inst, err := svc.Instances().Get(ctx.Context, args[0])
 			if err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
 			}
-			return ctx.Presenter.Format(instanceToDetail(inst))
+			return dispatch.ItemResult(instanceToDetail(inst), instanceToMap(inst)), nil
 		},
 	}
 }
@@ -91,14 +91,28 @@ func instanceToDetail(inst *service.Instance) *presentation.DetailData {
 	})
 }
 
+// instanceToMap converts an Instance to a snake_case JSON map.
+func instanceToMap(inst *service.Instance) map[string]interface{} {
+	return map[string]interface{}{
+		"id":             inst.ID,
+		"name":           inst.Name,
+		"status":         inst.Status,
+		"type":           inst.Tier,
+		"memory":         inst.Memory,
+		"region":         inst.Region,
+		"cloud_provider": inst.CloudProvider,
+		"tenant_id":      inst.TenantID,
+		"connection_url": inst.ConnectionURL,
+	}
+}
+
 func instanceCreateCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
 		Name:         "create",
 		MutationMode: tool.ModeWrite,
-		Usage: "create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]",
-		Description: "Create a new Aura instance. " +
-			"Unset fields fall back to aura.instance_defaults in your config.",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Usage:        "create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]",
+		Description:  "Create a new Aura instance. Unset fields fall back to aura.instance_defaults in your config.",
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			kv := parseKV(args)
 			d := ctx.Config.Aura.InstanceDefaults
 
@@ -113,18 +127,21 @@ func instanceCreateCmd(svc service.CloudService) *dispatch.Command {
 			}
 
 			if params.Name == "" {
-				return "", fmt.Errorf(
-					"name is required\n" +
-						"  usage: cloud instances create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]")
+				return dispatch.CommandResult{}, fmt.Errorf(
+					"name is required\n  usage: cloud instances create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]")
 			}
 			if params.TenantID == "" {
-				return "", fmt.Errorf(
+				return dispatch.CommandResult{}, fmt.Errorf(
 					"tenant is required — provide tenant=<id> or set aura.instance_defaults.tenant_id in your config")
 			}
 
 			created, err := svc.Instances().Create(ctx.Context, params)
 			if err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
+			}
+
+			if created.Password != "" {
+				ctx.IO.Write("⚠  Save this password now — it will NOT be shown again.\n")
 			}
 
 			detail := presentation.NewDetailData("Instance created", []presentation.DetailField{
@@ -139,11 +156,20 @@ func instanceCreateCmd(svc service.CloudService) *dispatch.Command {
 				{Label: "Password", Value: orDash(created.Password)},
 			})
 
-			if created.Password != "" {
-				ctx.IO.Write("⚠  Save this password now — it will NOT be shown again.\n")
+			item := map[string]interface{}{
+				"id":             created.ID,
+				"name":           created.Name,
+				"status":         created.Status,
+				"type":           created.Tier,
+				"memory":         created.Memory,
+				"region":         created.Region,
+				"cloud_provider": created.CloudProvider,
+				"tenant_id":      created.TenantID,
+				"connection_url": created.ConnectionURL,
+				"username":       created.Username,
+				"password":       created.Password,
 			}
-
-			return ctx.Presenter.Format(detail)
+			return dispatch.ItemResult(detail, item), nil
 		},
 	}
 }
@@ -152,11 +178,11 @@ func instanceUpdateCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
 		Name:         "update",
 		MutationMode: tool.ModeWrite,
-		Usage:       "update <id> [name=<new-name>] [memory=<size>]",
-		Description: "Rename or resize an existing instance",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Usage:        "update <id> [name=<new-name>] [memory=<size>]",
+		Description:  "Rename or resize an existing instance",
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) == 0 {
-				return "", fmt.Errorf("usage: cloud instances update <id> [name=<new-name>] [memory=<size>]")
+				return dispatch.CommandResult{}, fmt.Errorf("usage: cloud instances update <id> [name=<new-name>] [memory=<size>]")
 			}
 			id := args[0]
 			kv := parseKV(args[1:])
@@ -166,19 +192,27 @@ func instanceUpdateCmd(svc service.CloudService) *dispatch.Command {
 				Memory: kvGet(kv, "memory", ""),
 			}
 			if params.Name == "" && params.Memory == "" {
-				return "", fmt.Errorf("provide at least one of: name=<n>, memory=<size>")
+				return dispatch.CommandResult{}, fmt.Errorf("provide at least one of: name=<n>, memory=<size>")
 			}
 
 			updated, err := svc.Instances().Update(ctx.Context, id, params)
 			if err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
 			}
-			return ctx.Presenter.Format(presentation.NewDetailData("Instance updated", []presentation.DetailField{
+
+			detail := presentation.NewDetailData("Instance updated", []presentation.DetailField{
 				{Label: "ID", Value: updated.ID},
 				{Label: "Name", Value: updated.Name},
 				{Label: "Status", Value: orDash(updated.Status)},
 				{Label: "Memory", Value: orDash(updated.Memory)},
-			}))
+			})
+			item := map[string]interface{}{
+				"id":     updated.ID,
+				"name":   updated.Name,
+				"status": updated.Status,
+				"memory": updated.Memory,
+			}
+			return dispatch.ItemResult(detail, item), nil
 		},
 	}
 }
@@ -187,16 +221,20 @@ func instancePauseCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
 		Name:         "pause",
 		MutationMode: tool.ModeWrite,
-		Usage:       "pause <id>",
-		Description: "Pause a running instance",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Usage:        "pause <id>",
+		Description:  "Pause a running instance",
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) == 0 {
-				return "", fmt.Errorf("usage: cloud instances pause <id>")
+				return dispatch.CommandResult{}, fmt.Errorf("usage: cloud instances pause <id>")
 			}
 			if err := svc.Instances().Pause(ctx.Context, args[0]); err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
 			}
-			return fmt.Sprintf("✓ Instance %s is pausing.", args[0]), nil
+			return dispatch.ItemResult(nil, map[string]interface{}{
+				"id":      args[0],
+				"status":  "pausing",
+				"message": fmt.Sprintf("Instance %s is pausing.", args[0]),
+			}), nil
 		},
 	}
 }
@@ -205,16 +243,20 @@ func instanceResumeCmd(svc service.CloudService) *dispatch.Command {
 	return &dispatch.Command{
 		Name:         "resume",
 		MutationMode: tool.ModeWrite,
-		Usage:       "resume <id>",
-		Description: "Resume a paused instance",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Usage:        "resume <id>",
+		Description:  "Resume a paused instance",
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) == 0 {
-				return "", fmt.Errorf("usage: cloud instances resume <id>")
+				return dispatch.CommandResult{}, fmt.Errorf("usage: cloud instances resume <id>")
 			}
 			if err := svc.Instances().Resume(ctx.Context, args[0]); err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
 			}
-			return fmt.Sprintf("✓ Instance %s is resuming.", args[0]), nil
+			return dispatch.ItemResult(nil, map[string]interface{}{
+				"id":      args[0],
+				"status":  "resuming",
+				"message": fmt.Sprintf("Instance %s is resuming.", args[0]),
+			}), nil
 		},
 	}
 }
@@ -226,9 +268,9 @@ func instanceDeleteCmd(svc service.CloudService) *dispatch.Command {
 		MutationMode: tool.ModeWrite,
 		Usage:        "delete <id>",
 		Description:  "Permanently delete an instance (prompts for confirmation outside agent mode)",
-		Handler: func(args []string, ctx dispatch.Context) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) == 0 {
-				return "", fmt.Errorf("usage: cloud instances delete <id>")
+				return dispatch.CommandResult{}, fmt.Errorf("usage: cloud instances delete <id>")
 			}
 			id := args[0]
 			// In agent mode the dispatcher has already enforced --rw, so skip
@@ -237,16 +279,20 @@ func instanceDeleteCmd(svc service.CloudService) *dispatch.Command {
 				ctx.IO.Write("Permanently delete instance %s? Type 'yes' to confirm: ", id)
 				confirm, err := ctx.IO.Read()
 				if err != nil {
-					return "", fmt.Errorf("read confirmation: %w", err)
+					return dispatch.CommandResult{}, fmt.Errorf("read confirmation: %w", err)
 				}
 				if strings.TrimSpace(confirm) != "yes" {
-					return "Delete cancelled.", nil
+					return dispatch.MessageResult("Delete cancelled."), nil
 				}
 			}
 			if err := svc.Instances().Delete(ctx.Context, id); err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
 			}
-			return fmt.Sprintf("✓ Instance %s deleted.", id), nil
+			return dispatch.ItemResult(nil, map[string]interface{}{
+				"id":      id,
+				"status":  "deleted",
+				"message": fmt.Sprintf("Instance %s deleted.", id),
+			}), nil
 		},
 	}
 }
@@ -260,39 +306,41 @@ func buildProjectsCategory(svc service.CloudService) *dispatch.Category {
 			Aliases:     []string{"ls"},
 			Usage:       "list",
 			Description: "List all projects",
-			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 				projects, err := svc.Projects().List(ctx.Context)
 				if err != nil {
-					return "", err
-				}
-				if len(projects) == 0 {
-					return "No projects found.", nil
+					return dispatch.CommandResult{}, err
 				}
 				rows := make([][]interface{}, len(projects))
+				items := make([]map[string]interface{}, len(projects))
 				for i, p := range projects {
 					rows[i] = []interface{}{p.ID, p.Name}
+					items[i] = map[string]interface{}{"id": p.ID, "name": p.Name}
 				}
-				return ctx.Presenter.Format(presentation.NewTableData(
-					[]string{"ID", "Name"}, rows,
-				))
+				return dispatch.ListResult(
+					presentation.NewTableData([]string{"ID", "Name"}, rows),
+					items,
+				), nil
 			},
 		}).
 		AddCommand(&dispatch.Command{
 			Name:        "get",
 			Usage:       "get <id>",
 			Description: "Show details for a project",
-			Handler: func(args []string, ctx dispatch.Context) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 				if len(args) == 0 {
-					return "", fmt.Errorf("usage: cloud projects get <id>")
+					return dispatch.CommandResult{}, fmt.Errorf("usage: cloud projects get <id>")
 				}
 				proj, err := svc.Projects().Get(ctx.Context, args[0])
 				if err != nil {
-					return "", err
+					return dispatch.CommandResult{}, err
 				}
-				return ctx.Presenter.Format(presentation.NewDetailData("Project", []presentation.DetailField{
+				detail := presentation.NewDetailData("Project", []presentation.DetailField{
 					{Label: "ID", Value: proj.ID},
 					{Label: "Name", Value: proj.Name},
-				}))
+				})
+				item := map[string]interface{}{"id": proj.ID, "name": proj.Name}
+				return dispatch.ItemResult(detail, item), nil
 			},
 		})
 }

@@ -42,20 +42,30 @@ var limitPattern = regexp.MustCompile(`(?i)\bLIMIT\s+\d+`)
 func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 	return dispatch.NewCategory("cypher", "Execute a Cypher query against the connected Neo4j database").
 		AllowEmptyDirectHandler().
-		SetDirectHandler(func(args []string, ctx dispatch.Context) (string, error) {
+		SetDirectHandler(func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			opts := parseCypherFlags(args)
+
+			// DisableFlagParsing prevents cobra from processing persistent flags
+			// that appear after the subcommand name. Merge any that parseCypherFlags
+			// captured so downstream logic sees the correct agent/rw state.
+			if opts.agentMode {
+				ctx.AgentMode = true
+			}
+			if opts.allowWrites {
+				ctx.AllowWrites = true
+			}
 
 			// No query on the command line — prompt interactively.
 			// In agent mode this path returns an error immediately rather than
 			// blocking on stdin.
 			if opts.query == "" {
 				if ctx.AgentMode {
-					return "", tool.NewAgentError("MISSING_QUERY",
+					return dispatch.CommandResult{}, tool.NewAgentError("MISSING_QUERY",
 						"cypher query is required in agent mode; pass the query as an argument")
 				}
 				stmt, promptedParams, err := promptForCypher(ctx)
 				if err != nil {
-					return "", err
+					return dispatch.CommandResult{}, err
 				}
 				opts.query = stmt
 				for k, v := range promptedParams {
@@ -69,18 +79,17 @@ func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 			}
 
 			// Agent-mode write protection: EXPLAIN pre-check unless --rw is set.
-			// Queries that already start with EXPLAIN or PROFILE are run as-is;
-			// the user is explicitly asking for the query plan.
+			// Queries that already start with EXPLAIN or PROFILE are run as-is.
 			if ctx.AgentMode && !ctx.AllowWrites {
 				upper := strings.TrimSpace(strings.ToUpper(opts.query))
 				if !strings.HasPrefix(upper, "EXPLAIN") && !strings.HasPrefix(upper, "PROFILE") {
 					qt, err := svc.Explain(ctx.Context, opts.query)
 					if err != nil {
-						return "", fmt.Errorf("explain check: %w", err)
+						return dispatch.CommandResult{}, fmt.Errorf("explain check: %w", err)
 					}
 					switch qt {
 					case "rw", "w", "s":
-						return "", tool.NewAgentError("WRITE_BLOCKED",
+						return dispatch.CommandResult{}, tool.NewAgentError("WRITE_BLOCKED",
 							fmt.Sprintf("query contains write operations (type=%s); re-run with --rw to permit mutations", qt))
 					}
 				}
@@ -106,21 +115,20 @@ func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 
 			result, err := svc.Execute(ctx.Context, injectLimit(opts.query, limit), opts.params)
 			if err != nil {
-				return "", err
+				return dispatch.CommandResult{}, err
 			}
 
-			data := queryResultToTableData(result)
-
-			if ctx.Presenter == nil {
-				// Fallback for tests that don't wire a presenter.
-				cols := presentation.NewTableData(result.Columns, toInterfaceRows(result)).Columns()
-				if len(cols) == 0 {
-					return "", nil
-				}
-				return cols[0], nil
+			// Items: QueryRow is map[string]interface{}, so result.Rows satisfies directly.
+			items := make([]map[string]interface{}, len(result.Rows))
+			for i, row := range result.Rows {
+				items[i] = row
 			}
 
-			return ctx.Presenter.FormatAs(data, format)
+			return dispatch.CommandResult{
+				Presentation:   queryResultToTableData(result),
+				FormatOverride: format,
+				Items:          items,
+			}, nil
 		})
 }
 
@@ -136,19 +144,6 @@ func queryResultToTableData(r service.QueryResult) *presentation.TableData {
 		rows[i] = cells
 	}
 	return presentation.NewTableData(r.Columns, rows)
-}
-
-// toInterfaceRows is a minimal fallback used when ctx.Presenter is nil.
-func toInterfaceRows(r service.QueryResult) [][]interface{} {
-	rows := make([][]interface{}, len(r.Rows))
-	for i, row := range r.Rows {
-		cells := make([]interface{}, len(r.Columns))
-		for j, col := range r.Columns {
-			cells[j] = row[col]
-		}
-		rows[i] = cells
-	}
-	return rows
 }
 
 // ---- Interactive prompt ------------------------------------------------
@@ -216,10 +211,12 @@ func promptForCypher(ctx dispatch.Context) (query string, params map[string]inte
 // ---- Flag parsing -------------------------------------------------------
 
 type cypherFlags struct {
-	query  string
-	params map[string]interface{}
-	format string
-	limit  int
+	query       string
+	params      map[string]interface{}
+	format      string
+	limit       int
+	agentMode   bool // --agent found in args (DisableFlagParsing bypass)
+	allowWrites bool // --rw found in args (DisableFlagParsing bypass)
 }
 
 func parseCypherFlags(args []string) cypherFlags {
@@ -259,6 +256,24 @@ func parseCypherFlags(args []string) cypherFlags {
 			if n, err := strconv.Atoi(s); err == nil && n > 0 {
 				opts.limit = n
 			}
+		case args[i] == "--agent":
+			// Capture so the handler can activate agent mode even when cobra
+			// didn't parse it (DisableFlagParsing bypasses persistent flags).
+			opts.agentMode = true
+		case args[i] == "--rw":
+			opts.allowWrites = true
+		case globalBoolFlag(args[i]):
+			// Global persistent flag (boolean) — already processed by the root
+			// command or env var. DisableFlagParsing passes them through verbatim;
+			// skip them here so they don't pollute the query string.
+
+		case globalValueFlag(args[i]) && i+1 < len(args) && !strings.HasPrefix(args[i+1], "--"):
+			// Global persistent flag that takes a value — skip flag + value.
+			i++
+
+		case globalValueFlag(args[i]):
+			// Global persistent flag with no following value token — skip just the flag.
+
 		default:
 			queryParts = append(queryParts, args[i])
 		}
@@ -266,6 +281,31 @@ func parseCypherFlags(args []string) cypherFlags {
 
 	opts.query = strings.Join(queryParts, " ")
 	return opts
+}
+
+// globalBoolFlag reports whether s is a known global boolean persistent flag.
+// These flags carry no value and must be silently dropped from the cypher
+// arg stream because DisableFlagParsing passes them through verbatim.
+func globalBoolFlag(s string) bool {
+	switch s {
+	case "--agent", "--rw", "--no-metrics":
+		return true
+	}
+	return false
+}
+
+// globalValueFlag reports whether s is a known global persistent flag that
+// consumes a following value token.
+func globalValueFlag(s string) bool {
+	switch s {
+	case "--config-file",
+		"--log-level", "--log-format", "--log-output", "--log-file",
+		"--neo4j-uri", "--neo4j-username", "--neo4j-database",
+		"--aura-client-id", "--aura-timeout",
+		"--request-id", "--timeout":
+		return true
+	}
+	return false
 }
 
 func splitKV(s string) (key, value string, ok bool) {

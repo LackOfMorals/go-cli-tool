@@ -176,20 +176,20 @@ func (c *Category) Subcat(name string) *Category {
 //  3. args[0] matches a command → call cmd.Handler(args[1:])
 //  4. DirectHandler is set → call it with the full args slice
 //  5. Nothing matches → return a descriptive error
-func (c *Category) Dispatch(args []string, ctx Context) (string, error) {
+func (c *Category) Dispatch(args []string, ctx Context) (CommandResult, error) {
 	if len(args) == 0 {
 		switch {
 		case c.directHandler != nil && c.directHandlerEmptyOK:
 			if c.prerequisite != nil {
 				if err := c.prerequisite(); err != nil {
-					return "", err
+					return CommandResult{}, err
 				}
 			}
 			return c.directHandler(args, ctx)
 		case c.directHandler != nil:
-			return "", fmt.Errorf("usage: %s <query>", c.Name)
+			return CommandResult{}, fmt.Errorf("usage: %s <query>", c.Name)
 		default:
-			return c.Help(), nil
+			return MessageResult(c.Help()), nil
 		}
 	}
 
@@ -198,7 +198,7 @@ func (c *Category) Dispatch(args []string, ctx Context) (string, error) {
 	// even when the dependency is unavailable.
 	if c.prerequisite != nil {
 		if err := c.prerequisite(); err != nil {
-			return "", err
+			return CommandResult{}, err
 		}
 	}
 
@@ -214,7 +214,7 @@ func (c *Category) Dispatch(args []string, ctx Context) (string, error) {
 		// handler is ever called. ModeConditional enforcement (EXPLAIN check)
 		// is delegated to the handler itself (e.g. the cypher direct handler).
 		if ctx.AgentMode && !ctx.AllowWrites && cmd.MutationMode == tool.ModeWrite {
-			return "", tool.NewAgentError("READ_ONLY",
+			return CommandResult{}, tool.NewAgentError("READ_ONLY",
 				fmt.Sprintf("%q is a write operation; re-run with --rw to permit mutations", cmd.Name))
 		}
 		return cmd.Handler(rest, ctx)
@@ -224,7 +224,7 @@ func (c *Category) Dispatch(args []string, ctx Context) (string, error) {
 		return c.directHandler(args, ctx)
 	}
 
-	return "", fmt.Errorf("%s: unknown command %q — run 'neo4j-cli %s --help' to see available commands",
+	return CommandResult{}, fmt.Errorf("%s: unknown command %q — run 'neo4j-cli %s --help' to see available commands",
 		c.Name, name, c.Name)
 }
 
