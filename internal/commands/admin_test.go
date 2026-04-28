@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/cli/go-cli-tool/internal/commands"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/dispatch"
 )
 
 // ---- mockAdminService ---------------------------------------------------
@@ -45,22 +45,40 @@ func adminCtx(t *testing.T) dispatch.Context {
 	}
 }
 
+// humanOut renders a CommandResult to a string for test assertions.
+func humanOut(t *testing.T, result dispatch.CommandResult, ctx dispatch.Context) string {
+	t.Helper()
+	if result.Presentation != nil && ctx.Presenter != nil {
+		out, err := ctx.Presenter.Format(result.Presentation)
+		if err != nil {
+			t.Fatalf("Format error: %v", err)
+		}
+		return out
+	}
+	return result.Message
+}
+
 // ---- show-users ---------------------------------------------------------
 
 func TestAdminCategory_ShowUsers_Empty(t *testing.T) {
 	svc := &mockAdminService{}
 	cat := commands.BuildAdminCategory(svc)
 
-	out, err := cat.Dispatch([]string{"show-users"}, adminCtx(t))
+	result, err := cat.Dispatch([]string{"show-users"}, adminCtx(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "No users found") {
-		t.Errorf("expected empty message, got: %q", out)
+	// Empty list → Items is non-nil empty slice, Presentation shows "(no results)"
+	if result.Items == nil {
+		t.Error("expected Items to be non-nil empty slice for empty list")
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(result.Items))
 	}
 }
 
 func TestAdminCategory_ShowUsers_FormatsTable(t *testing.T) {
+	ctx := adminCtx(t)
 	svc := &mockAdminService{
 		usersResult: []service.User{
 			{Username: "alice", Roles: []string{"admin"}},
@@ -69,13 +87,28 @@ func TestAdminCategory_ShowUsers_FormatsTable(t *testing.T) {
 	}
 	cat := commands.BuildAdminCategory(svc)
 
-	out, err := cat.Dispatch([]string{"show-users"}, adminCtx(t))
+	result, err := cat.Dispatch([]string{"show-users"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	// Check structured Items for JSON output.
+	if len(result.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	}
+	if result.Items[0]["username"] != "alice" {
+		t.Errorf("expected alice in Items[0], got %v", result.Items[0])
+	}
+	roles, ok := result.Items[0]["roles"].([]string)
+	if !ok || len(roles) == 0 || roles[0] != "admin" {
+		t.Errorf("expected roles=[admin] in Items[0], got %v", result.Items[0]["roles"])
+	}
+
+	// Check human rendering.
+	out := humanOut(t, result, ctx)
 	for _, want := range []string{"alice", "admin", "bob", "reader", "writer", "Username", "Roles"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("output should contain %q, got:\n%s", want, out)
+			t.Errorf("human output should contain %q, got:\n%s", want, out)
 		}
 	}
 }
@@ -100,16 +133,20 @@ func TestAdminCategory_ShowDatabases_Empty(t *testing.T) {
 	svc := &mockAdminService{}
 	cat := commands.BuildAdminCategory(svc)
 
-	out, err := cat.Dispatch([]string{"show-databases"}, adminCtx(t))
+	result, err := cat.Dispatch([]string{"show-databases"}, adminCtx(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "No databases found") {
-		t.Errorf("expected empty message, got: %q", out)
+	if result.Items == nil {
+		t.Error("expected Items to be non-nil empty slice for empty list")
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(result.Items))
 	}
 }
 
 func TestAdminCategory_ShowDatabases_FormatsTable(t *testing.T) {
+	ctx := adminCtx(t)
 	svc := &mockAdminService{
 		dbsResult: []service.Database{
 			{Name: "neo4j", Status: "online"},
@@ -118,13 +155,25 @@ func TestAdminCategory_ShowDatabases_FormatsTable(t *testing.T) {
 	}
 	cat := commands.BuildAdminCategory(svc)
 
-	out, err := cat.Dispatch([]string{"show-databases"}, adminCtx(t))
+	result, err := cat.Dispatch([]string{"show-databases"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	if len(result.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	}
+	if result.Items[0]["name"] != "neo4j" {
+		t.Errorf("expected neo4j in Items[0], got %v", result.Items[0])
+	}
+	if result.Items[0]["status"] != "online" {
+		t.Errorf("expected online status, got %v", result.Items[0]["status"])
+	}
+
+	out := humanOut(t, result, ctx)
 	for _, want := range []string{"neo4j", "system", "online", "Name", "Status"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("output should contain %q, got:\n%s", want, out)
+			t.Errorf("human output should contain %q, got:\n%s", want, out)
 		}
 	}
 }
@@ -161,12 +210,12 @@ func TestAdminCategory_NoArgs_ReturnsHelp(t *testing.T) {
 	svc := &mockAdminService{}
 	cat := commands.BuildAdminCategory(svc)
 
-	out, err := cat.Dispatch(nil, adminCtx(t))
+	result, err := cat.Dispatch(nil, adminCtx(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "admin") {
-		t.Errorf("expected help output, got: %q", out)
+	if !strings.Contains(result.Message, "admin") {
+		t.Errorf("expected help output, got: %q", result.Message)
 	}
 }
 
@@ -182,7 +231,6 @@ func TestAdminCategory_ShowUsers_ContextPropagated(t *testing.T) {
 	svc := &mockAdminService{
 		usersResult: []service.User{{Username: "u"}},
 	}
-	// Override via a wrapper that captures the context.
 	cat := commands.BuildAdminCategory(&contextCapturingAdminSvc{
 		inner:   svc,
 		capture: func(c context.Context) { gotCtx = c },
@@ -197,7 +245,6 @@ func TestAdminCategory_ShowUsers_ContextPropagated(t *testing.T) {
 	}
 }
 
-// contextCapturingAdminSvc wraps an AdminService and captures the context.
 type contextCapturingAdminSvc struct {
 	inner   service.AdminService
 	capture func(context.Context)

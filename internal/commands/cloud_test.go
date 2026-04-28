@@ -120,16 +120,20 @@ func TestCloudCategory_InstancesList_Empty(t *testing.T) {
 	svc := &mockCloudService{instances: &mockInstancesService{}}
 	cat := commands.BuildCloudCategory(svc)
 
-	out, err := cat.Dispatch([]string{"instances", "list"}, cloudCtx(t))
+	result, err := cat.Dispatch([]string{"instances", "list"}, cloudCtx(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "No instances found") {
-		t.Errorf("expected empty message, got: %q", out)
+	if result.Items == nil {
+		t.Error("expected non-nil Items for empty list")
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(result.Items))
 	}
 }
 
 func TestCloudCategory_InstancesList_FormatsTable(t *testing.T) {
+	ctx := cloudCtx(t)
 	svc := &mockCloudService{
 		instances: &mockInstancesService{
 			listResult: []service.Instance{
@@ -139,13 +143,27 @@ func TestCloudCategory_InstancesList_FormatsTable(t *testing.T) {
 	}
 	cat := commands.BuildCloudCategory(svc)
 
-	out, err := cat.Dispatch([]string{"instances", "list"}, cloudCtx(t))
+	result, err := cat.Dispatch([]string{"instances", "list"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if len(result.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result.Items))
+	}
+	if result.Items[0]["id"] != "abc-123" {
+		t.Errorf("expected id=abc-123, got %v", result.Items[0]["id"])
+	}
+	if result.Items[0]["name"] != "my-db" {
+		t.Errorf("expected name=my-db, got %v", result.Items[0]["name"])
+	}
+	// Human table rendering
+	out, err := ctx.Presenter.Format(result.Presentation)
+	if err != nil {
+		t.Fatalf("Format error: %v", err)
+	}
 	for _, want := range []string{"abc-123", "my-db", "my-project", "GCP"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("output should contain %q:\n%s", want, out)
+			t.Errorf("human output should contain %q:\n%s", want, out)
 		}
 	}
 }
@@ -174,6 +192,7 @@ func TestCloudCategory_InstancesGet_NoID_ReturnsError(t *testing.T) {
 }
 
 func TestCloudCategory_InstancesGet_ShowsDetail(t *testing.T) {
+	ctx := cloudCtx(t)
 	svc := &mockCloudService{
 		instances: &mockInstancesService{
 			getResult: &service.Instance{
@@ -185,13 +204,28 @@ func TestCloudCategory_InstancesGet_ShowsDetail(t *testing.T) {
 	}
 	cat := commands.BuildCloudCategory(svc)
 
-	out, err := cat.Dispatch([]string{"instances", "get", "xyz"}, cloudCtx(t))
+	result, err := cat.Dispatch([]string{"instances", "get", "xyz"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	// Check JSON Item with snake_case keys
+	if result.Item == nil {
+		t.Fatal("expected Item to be set")
+	}
+	if result.Item["id"] != "xyz" {
+		t.Errorf("expected id=xyz, got %v", result.Item["id"])
+	}
+	if result.Item["connection_url"] != "bolt+s://xyz.databases.neo4j.io" {
+		t.Errorf("expected connection_url set, got %v", result.Item["connection_url"])
+	}
+	// Human rendering
+	out, err := ctx.Presenter.Format(result.Presentation)
+	if err != nil {
+		t.Fatalf("Format error: %v", err)
+	}
 	for _, want := range []string{"xyz", "prod-db", "running", "16GB", "bolt+s://xyz.databases.neo4j.io"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("output should contain %q:\n%s", want, out)
+			t.Errorf("human output should contain %q:\n%s", want, out)
 		}
 	}
 }
@@ -201,7 +235,6 @@ func TestCloudCategory_InstancesGet_ShowsDetail(t *testing.T) {
 func TestCloudCategory_InstancesCreate_MissingName_ReturnsError(t *testing.T) {
 	svc := &mockCloudService{instances: &mockInstancesService{}}
 	cat := commands.BuildCloudCategory(svc)
-
 	_, err := cat.Dispatch([]string{"instances", "create"}, cloudCtx(t))
 	if err == nil {
 		t.Fatal("expected error when name is missing")
@@ -211,8 +244,6 @@ func TestCloudCategory_InstancesCreate_MissingName_ReturnsError(t *testing.T) {
 func TestCloudCategory_InstancesCreate_MissingTenant_ReturnsError(t *testing.T) {
 	svc := &mockCloudService{instances: &mockInstancesService{}}
 	cat := commands.BuildCloudCategory(svc)
-
-	// name provided but no tenant in args or config defaults
 	_, err := cat.Dispatch([]string{"instances", "create", "name=my-db"}, cloudCtx(t))
 	if err == nil {
 		t.Fatal("expected error when tenant ID is missing")
@@ -243,25 +274,26 @@ func TestCloudCategory_InstancesCreate_Success(t *testing.T) {
 	}
 	cat := commands.BuildCloudCategory(svc)
 
-	out, err := cat.Dispatch([]string{"instances", "create", "name=my-db"}, ctx)
+	result, err := cat.Dispatch([]string{"instances", "create", "name=my-db"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Password and core fields must appear in the formatted output.
-	for _, want := range []string{"new-id", "my-db", "s3cr3t!"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output should contain %q:\n%s", want, out)
-		}
+	// JSON Item should have snake_case keys including password
+	if result.Item == nil {
+		t.Fatal("expected Item to be set")
+	}
+	if result.Item["id"] != "new-id" {
+		t.Errorf("expected id=new-id, got %v", result.Item["id"])
+	}
+	if result.Item["password"] != "s3cr3t!" {
+		t.Errorf("expected password in Item, got %v", result.Item["password"])
 	}
 
-	// The save-now warning must be written to IO (stderr), not embedded in output.
+	// Save warning goes to IO, not to the structured result
 	ioOut := strings.Join(io.written, "")
 	if !strings.Contains(ioOut, "NOT be shown again") {
 		t.Errorf("expected save warning in IO output, got: %q", ioOut)
-	}
-	if strings.Contains(out, "NOT be shown again") {
-		t.Errorf("save warning should not appear in formatted output, got: %q", out)
 	}
 }
 
@@ -294,12 +326,18 @@ func TestCloudCategory_InstancesUpdate_Success(t *testing.T) {
 	}
 	cat := commands.BuildCloudCategory(svc)
 
-	out, err := cat.Dispatch([]string{"instances", "update", "abc", "name=renamed-db", "memory=16GB"}, cloudCtx(t))
+	result, err := cat.Dispatch([]string{"instances", "update", "abc", "name=renamed-db", "memory=16GB"}, cloudCtx(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "renamed-db") {
-		t.Errorf("output should contain new name, got: %q", out)
+	if result.Item == nil {
+		t.Fatal("expected Item to be set")
+	}
+	if result.Item["name"] != "renamed-db" {
+		t.Errorf("expected name=renamed-db, got %v", result.Item["name"])
+	}
+	if result.Item["memory"] != "16GB" {
+		t.Errorf("expected memory=16GB, got %v", result.Item["memory"])
 	}
 }
 
@@ -313,12 +351,15 @@ func TestCloudCategory_InstancesDelete_Confirmed(t *testing.T) {
 	ctx := cloudCtx(t)
 	ctx.IO = io
 
-	out, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
+	result, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "deleted") {
-		t.Errorf("expected deleted message, got: %q", out)
+	if result.Item == nil {
+		t.Fatal("expected Item to be set")
+	}
+	if result.Item["status"] != "deleted" {
+		t.Errorf("expected status=deleted, got %v", result.Item["status"])
 	}
 }
 
@@ -330,12 +371,12 @@ func TestCloudCategory_InstancesDelete_Cancelled(t *testing.T) {
 	ctx := cloudCtx(t)
 	ctx.IO = io
 
-	out, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
+	result, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "cancelled") {
-		t.Errorf("expected cancellation message, got: %q", out)
+	if !strings.Contains(result.Message, "cancelled") {
+		t.Errorf("expected cancellation message, got: %q", result.Message)
 	}
 }
 
@@ -350,12 +391,15 @@ func TestCloudCategory_InstancesDelete_AgentMode_NoPrompt(t *testing.T) {
 	ctx.AgentMode = true
 	ctx.AllowWrites = true
 
-	out, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
+	result, err := cat.Dispatch([]string{"instances", "delete", "del-id"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error in agent+rw mode: %v", err)
 	}
-	if !strings.Contains(out, "deleted") {
-		t.Errorf("expected deleted message without prompt, got: %q", out)
+	if result.Item == nil {
+		t.Fatal("expected Item to be set")
+	}
+	if result.Item["status"] != "deleted" {
+		t.Errorf("expected status=deleted without prompt, got %v", result.Item["status"])
 	}
 	if len(io.written) > 0 {
 		t.Errorf("no output should be written in agent mode; got: %v", io.written)
@@ -394,10 +438,22 @@ func TestCloudCategory_ProjectsList_FormatsTable(t *testing.T) {
 		},
 	}
 	cat := commands.BuildCloudCategory(svc)
+	ctx := cloudCtx(t)
 
-	out, err := cat.Dispatch([]string{"projects", "list"}, cloudCtx(t))
+	result, err := cat.Dispatch([]string{"projects", "list"}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	}
+	if result.Items[0]["id"] != "tenant-1" {
+		t.Errorf("expected first item id=tenant-1, got %v", result.Items[0]["id"])
+	}
+	// Human rendering
+	out, fmtErr := ctx.Presenter.Format(result.Presentation)
+	if fmtErr != nil {
+		t.Fatalf("Format error: %v", fmtErr)
 	}
 	for _, want := range []string{"tenant-1", "Production", "tenant-2", "Development"} {
 		if !strings.Contains(out, want) {

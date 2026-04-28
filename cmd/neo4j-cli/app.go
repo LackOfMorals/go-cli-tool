@@ -77,8 +77,20 @@ type App struct {
 }
 
 func run() int {
-	// Honour NEO4J_CLI_AGENT / NEO4J_CLI_RW env vars before flag parsing so
-	// they are available as defaults even when no flags are passed.
+	// Pre-scan raw os.Args for agent-mode flags before cobra runs.
+	// This ensures that errors cobra raises itself (e.g. unknown subcommand,
+	// flag parse failure) are still formatted as JSON envelopes when --agent
+	// is present anywhere on the command line.
+	for _, arg := range os.Args[1:] {
+		switch arg {
+		case "--agent":
+			agentMode = true
+		case "--rw":
+			allowWrites = true
+		}
+	}
+
+	// Honour env vars too; either source winning is correct.
 	if os.Getenv("NEO4J_CLI_AGENT") == "true" {
 		agentMode = true
 	}
@@ -126,9 +138,14 @@ func printAgentError(err error, reqID string) {
 	message := err.Error()
 
 	var ae *tool.AgentError
-	if errors.As(err, &ae) {
+	switch {
+	case errors.As(err, &ae):
 		code = ae.Code
 		message = ae.Message
+	case strings.Contains(message, "unknown command"):
+		code = "UNKNOWN_COMMAND"
+	case strings.Contains(message, "unknown flag") || strings.Contains(message, "unknown shorthand flag"):
+		code = "UNKNOWN_FLAG"
 	}
 
 	envelope := map[string]interface{}{
@@ -197,33 +214,104 @@ func runCategory(name string) func(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// dispatchCategory routes args through the named category and prints
-// the result. With no args it prints the category's help text. Credential
-// prerequisites (Aura, Neo4j) are triggered automatically by Dispatch.
+// isJSONMode reports whether the current invocation should produce JSON envelope
+// output. True when --format json/pretty-json is set, or when --agent is active
+// with no explicit format override.
+func isJSONMode() bool {
+	switch outputFormat {
+	case "json", "pretty-json":
+		return true
+	}
+	return agentMode && outputFormat == ""
+}
+
+// resolveHumanFormat returns the output format to use for human-mode rendering,
+// preferring a per-result override, then the --format flag, then a default.
+func resolveHumanFormat(override presentation.OutputFormat) presentation.OutputFormat {
+	if override != "" {
+		return override
+	}
+	if f := presentation.OutputFormat(outputFormat); f.IsValid() {
+		return f
+	}
+	return presentation.OutputFormatTable
+}
+
+// buildJSONEnvelope assembles the standard JSON response envelope.
+func buildJSONEnvelope(result dispatch.CommandResult, reqID string) string {
+	var data interface{}
+	switch {
+	case result.Item != nil:
+		data = result.Item
+	case result.Items != nil:
+		data = result.Items
+	case result.Message != "":
+		data = map[string]interface{}{"message": result.Message}
+	}
+
+	envelope := map[string]interface{}{
+		"status":         "ok",
+		"data":           data,
+		"request_id":     reqID,
+		"schema_version": "1",
+	}
+	var b []byte
+	if outputFormat == "pretty-json" {
+		b, _ = json.MarshalIndent(envelope, "", "  ")
+	} else {
+		b, _ = json.Marshal(envelope)
+	}
+	return string(b)
+}
+
+// printHumanResult renders result for a human reader using the presentation
+// service. Falls back to Message when Presentation is nil.
+func (a *App) printHumanResult(result dispatch.CommandResult) error {
+	if result.Presentation != nil {
+		format := resolveHumanFormat(result.FormatOverride)
+		out, err := a.presentation.FormatAs(result.Presentation, format)
+		if err != nil {
+			return fmt.Errorf("format result: %w", err)
+		}
+		if out != "" {
+			fmt.Println(out)
+		}
+		return nil
+	}
+	if result.Message != "" {
+		fmt.Println(result.Message)
+	}
+	return nil
+}
+
+// dispatchCategory routes args through the named category, formats the
+// CommandResult, and writes it to stdout. Errors in agent mode are rendered
+// as JSON envelopes by run(); dispatchCategory returns them unwrapped.
 func (a *App) dispatchCategory(name string, args []string) error {
+	// For subcommands with DisableFlagParsing (e.g. cypher), cobra skips
+	// persistent flag parsing, so --agent and --rw arrive unprocessed in args.
+	// Pre-scan here so that isJSONMode(), shellCtx, and buildCategories() all
+	// see the correct agent/rw state before dispatch runs.
+	for _, arg := range args {
+		switch arg {
+		case "--agent":
+			agentMode = true
+		case "--rw":
+			allowWrites = true
+		}
+	}
+
 	cats := a.buildCategories()
 	cat, ok := cats[name]
 	if !ok {
 		return fmt.Errorf("unknown category %q", name)
 	}
 
-	if len(args) == 0 {
-		fmt.Println(cat.Help())
-		return nil
-	}
-
+	// Validate --format early so we surface bad values before network calls.
 	if outputFormat != "" {
 		f := presentation.OutputFormat(outputFormat)
 		if !f.IsValid() {
 			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph", outputFormat)
-		}
-		if err := a.presentation.SetFormat(f); err != nil {
-			return fmt.Errorf("set format: %w", err)
-		}
-	} else if agentMode {
-		// Agent mode defaults to JSON output when no explicit format is set.
-		if err := a.presentation.SetFormat(presentation.OutputFormatJSON); err != nil {
-			return fmt.Errorf("set agent format: %w", err)
 		}
 	}
 
@@ -273,10 +361,12 @@ func (a *App) dispatchCategory(name string, args []string) error {
 		}
 		return err
 	}
-	if result != "" {
-		fmt.Println(result)
+
+	if isJSONMode() {
+		fmt.Println(buildJSONEnvelope(result, reqID))
+		return nil
 	}
-	return nil
+	return a.printHumanResult(result)
 }
 
 func buildCloudCommand() *cobra.Command {
