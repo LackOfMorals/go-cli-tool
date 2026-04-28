@@ -4,32 +4,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/shell"
 )
 
 // BuildCloudCategory returns the cloud top-level category.
-//
-//	neo4j> cloud instances list
-//	neo4j> cloud instances get <id>
-//	neo4j> cloud instances create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]
-//	neo4j> cloud instances update <id> [name=<n>] [memory=<size>]
-//	neo4j> cloud instances pause <id>
-//	neo4j> cloud instances resume <id>
-//	neo4j> cloud instances delete <id>
-//	neo4j> cloud projects list
-//	neo4j> cloud projects get <id>
-func BuildCloudCategory(svc service.CloudService) *shell.Category {
-	return shell.NewCategory("cloud", "Manage Neo4j Aura cloud resources").
+func BuildCloudCategory(svc service.CloudService) *dispatch.Category {
+	return dispatch.NewCategory("cloud", "Manage Neo4j Aura cloud resources").
 		AddSubcategory(buildInstancesCategory(svc)).
 		AddSubcategory(buildProjectsCategory(svc))
 }
 
 // ---- Instances ----------------------------------------------------------
 
-func buildInstancesCategory(svc service.CloudService) *shell.Category {
-	return shell.NewCategory("instances", "Manage Aura DB instances").
+func buildInstancesCategory(svc service.CloudService) *dispatch.Category {
+	return dispatch.NewCategory("instances", "Manage Aura DB instances").
 		AddCommand(instanceListCmd(svc)).
 		AddCommand(instanceGetCmd(svc)).
 		AddCommand(instanceCreateCmd(svc)).
@@ -39,13 +29,13 @@ func buildInstancesCategory(svc service.CloudService) *shell.Category {
 		AddCommand(instanceDeleteCmd(svc))
 }
 
-func instanceListCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instanceListCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "list",
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "List all Aura instances",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			instances, err := svc.Instances().List(ctx.Context)
 			if err != nil {
 				return "", err
@@ -68,12 +58,12 @@ func instanceListCmd(svc service.CloudService) *shell.Command {
 	}
 }
 
-func instanceGetCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instanceGetCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "get",
 		Usage:       "get <id>",
 		Description: "Show full details for an instance",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cloud instances get <id>")
 			}
@@ -100,13 +90,13 @@ func instanceToDetail(inst *service.Instance) *presentation.DetailData {
 	})
 }
 
-func instanceCreateCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instanceCreateCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:  "create",
 		Usage: "create name=<n> [tenant=<id>] [cloud=<provider>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]",
 		Description: "Create a new Aura instance. " +
 			"Unset fields fall back to aura.instance_defaults in your config.",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			kv := parseKV(args)
 			d := ctx.Config.Aura.InstanceDefaults
 
@@ -156,12 +146,12 @@ func instanceCreateCmd(svc service.CloudService) *shell.Command {
 	}
 }
 
-func instanceUpdateCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instanceUpdateCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "update",
 		Usage:       "update <id> [name=<new-name>] [memory=<size>]",
 		Description: "Rename or resize an existing instance",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cloud instances update <id> [name=<new-name>] [memory=<size>]")
 			}
@@ -190,12 +180,12 @@ func instanceUpdateCmd(svc service.CloudService) *shell.Command {
 	}
 }
 
-func instancePauseCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instancePauseCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "pause",
 		Usage:       "pause <id>",
 		Description: "Pause a running instance",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cloud instances pause <id>")
 			}
@@ -207,12 +197,12 @@ func instancePauseCmd(svc service.CloudService) *shell.Command {
 	}
 }
 
-func instanceResumeCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instanceResumeCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "resume",
 		Usage:       "resume <id>",
 		Description: "Resume a paused instance",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cloud instances resume <id>")
 			}
@@ -224,13 +214,13 @@ func instanceResumeCmd(svc service.CloudService) *shell.Command {
 	}
 }
 
-func instanceDeleteCmd(svc service.CloudService) *shell.Command {
-	return &shell.Command{
+func instanceDeleteCmd(svc service.CloudService) *dispatch.Command {
+	return &dispatch.Command{
 		Name:        "delete",
 		Aliases:     []string{"rm"},
 		Usage:       "delete <id>",
 		Description: "Permanently delete an instance (prompts for confirmation)",
-		Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+		Handler: func(args []string, ctx dispatch.Context) (string, error) {
 			if len(args) == 0 {
 				return "", fmt.Errorf("usage: cloud instances delete <id>")
 			}
@@ -253,14 +243,14 @@ func instanceDeleteCmd(svc service.CloudService) *shell.Command {
 
 // ---- Projects -----------------------------------------------------------
 
-func buildProjectsCategory(svc service.CloudService) *shell.Category {
-	return shell.NewCategory("projects", "Manage Aura projects / tenants").
-		AddCommand(&shell.Command{
+func buildProjectsCategory(svc service.CloudService) *dispatch.Category {
+	return dispatch.NewCategory("projects", "Manage Aura projects / tenants").
+		AddCommand(&dispatch.Command{
 			Name:        "list",
 			Aliases:     []string{"ls"},
 			Usage:       "list",
 			Description: "List all projects",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				projects, err := svc.Projects().List(ctx.Context)
 				if err != nil {
 					return "", err
@@ -277,11 +267,11 @@ func buildProjectsCategory(svc service.CloudService) *shell.Category {
 				))
 			},
 		}).
-		AddCommand(&shell.Command{
+		AddCommand(&dispatch.Command{
 			Name:        "get",
 			Usage:       "get <id>",
 			Description: "Show details for a project",
-			Handler: func(args []string, ctx shell.ShellContext) (string, error) {
+			Handler: func(args []string, ctx dispatch.Context) (string, error) {
 				if len(args) == 0 {
 					return "", fmt.Errorf("usage: cloud projects get <id>")
 				}

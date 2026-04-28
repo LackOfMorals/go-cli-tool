@@ -17,7 +17,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/repository"
 	"github.com/cli/go-cli-tool/internal/service"
-	"github.com/cli/go-cli-tool/internal/shell"
+	"github.com/cli/go-cli-tool/internal/dispatch"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
 	"github.com/spf13/cobra"
@@ -41,9 +41,6 @@ var (
 	logFormat          string
 	logOutput          string
 	logFile            string
-	shellMode          bool
-	execTool           string
-	execArgs           []string
 	noMetrics          bool
 	neo4jURI           string
 	neo4jUsername      string
@@ -92,10 +89,12 @@ func run() int {
 
 func buildRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:           "neo4j-cli",
-		Short:         "A CLI for Neo4j",
-		Long:          `neo4j-cli is a CLI for Neo4j and can be used with commands, or if no commands are given, as a shell.  `,
-		RunE:          runCLI,
+		Use:   "neo4j-cli",
+		Short: "A CLI for Neo4j",
+		Long: `neo4j-cli is a command-line tool for Neo4j.
+
+Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
+		// No RunE: cobra prints help when called with no subcommand.
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -107,7 +106,6 @@ func buildRootCommand() *cobra.Command {
 	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
 	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.neo4j-cli/neo4j-cli.log)")
 	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var)")
-	pf.BoolVarP(&shellMode, "shell", "s", false, "Start interactive shell (default when no --exec)")
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
 	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
@@ -124,8 +122,7 @@ func buildRootCommand() *cobra.Command {
 }
 
 // runCategory returns a cobra RunE that creates the app, finds the named
-// shell category, and dispatches the remaining CLI args through it directly —
-// no interactive shell required.
+// category, and dispatches the remaining CLI args through it directly.
 func runCategory(name string) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		app, err := newApp(cmd, args)
@@ -137,7 +134,7 @@ func runCategory(name string) func(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// dispatchCategory routes args through the named shell category and prints
+// dispatchCategory routes args through the named category and prints
 // the result. With no args it prints the category's help text. Credential
 // prerequisites (Aura, Neo4j) are triggered automatically by Dispatch.
 func (a *App) dispatchCategory(name string, args []string) error {
@@ -165,7 +162,7 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	shellCtx := shell.ShellContext{
+	shellCtx := dispatch.Context{
 		Context:   ctx,
 		Config:    *a.cfg,
 		Logger:    a.log,
@@ -217,10 +214,9 @@ func buildCypherCommand() *cobra.Command {
 		Short: "Execute a Cypher query against a Neo4j database",
 		Long: `Execute a Cypher query against the connected Neo4j database.
 
-Supply the query directly on the command line. Without a query, an
-interactive prompt is shown.
+Supply the query directly on the command line.
 
-Query flags (parsed inline, not by the shell):
+Query flags (parsed inline, not by cobra):
   --param key=value    Add a query parameter (repeatable; auto-typed)
   --format table|json|pretty-json|graph
                        Override output format for this query
@@ -306,10 +302,6 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 		v := !noMetrics // --no-metrics disables; --no-metrics=false re-enables
 		o.MetricsEnabled = &v
 	}
-	if f.Changed("shell") {
-		v, _ := f.GetBool("shell")
-		o.ShellEnabled = &v
-	}
 	if f.Changed("neo4j-uri") {
 		o.Neo4jURI, _ = f.GetString("neo4j-uri")
 	}
@@ -327,15 +319,6 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 		o.AuraTimeout = &v
 	}
 	return o
-}
-
-func runCLI(cmd *cobra.Command, args []string) error {
-	app, err := newApp(cmd, args)
-	if err != nil {
-		return fmt.Errorf("startup: %w", err)
-	}
-	defer app.close()
-	return app.dispatch()
 }
 
 func newApp(cmd *cobra.Command, _ []string) (*App, error) {
@@ -410,8 +393,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 }
 
 // buildRegistry constructs the tool registry. QueryTool receives the same
-// CypherService used by the 'cypher' shell category — one query path, no
-// duplication.
+// CypherService used by the 'cypher' command — one query path, no duplication.
 func buildRegistry(cfg *config.Config, log logger.Service, cypherSvc service.CypherService) *tools.ToolRegistry {
 	registry := tools.NewToolRegistry()
 
@@ -447,8 +429,8 @@ func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log lo
 	}
 }
 
-func (a *App) buildCategories() map[string]*shell.Category {
-	return map[string]*shell.Category{
+func (a *App) buildCategories() map[string]*dispatch.Category {
+	return map[string]*dispatch.Category{
 		// InteractiveNeo4jPrerequisite prompts for URI/username/password on
 		// first use and saves them so subsequent sessions skip the prompt.
 		"cypher": commands.BuildCypherCategory(a.cypherSvc).
@@ -459,62 +441,6 @@ func (a *App) buildCategories() map[string]*shell.Category {
 			SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
 		"config": commands.BuildConfigCategory(a.cfg, configPath),
 	}
-}
-
-func (a *App) dispatch() error {
-	a.log.Debug("starting neo4j-cli", logger.Field{Key: "version", Value: Version})
-
-	if execTool != "" {
-		return a.executeDirect()
-	}
-	return a.startShell()
-}
-
-func (a *App) executeDirect() error {
-	t, err := a.registry.Get(execTool)
-	if err != nil {
-		return fmt.Errorf("tool %q not found", execTool)
-	}
-
-	// Cancel the tool if the user presses Ctrl+C.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-
-	toolCtx := tool.NewContext().
-		WithContext(ctx).
-		WithArgs(execArgs).
-		WithLogger(a.log).
-		WithIO(tool.NewDefaultIOHandler()).
-		WithPresenter(a.presentation)
-
-	result, err := t.Execute(*toolCtx)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return fmt.Errorf("interrupted")
-		}
-		return fmt.Errorf("execute %q: %w", execTool, err)
-	}
-	if !result.Success {
-		return fmt.Errorf("tool %q reported failure: %s", execTool, result.Output)
-	}
-	if result.Output != "" {
-		fmt.Println(result.Output)
-	}
-	return nil
-}
-
-func (a *App) startShell() error {
-	s := shell.NewInteractiveShell()
-	s.SetLogger(a.log)
-	s.SetConfig(*a.cfg)
-	s.SetRegistry(a.registry)
-	s.SetTelemetry(a.analytic)
-	s.SetPresenter(a.presentation)
-	s.SetCategories(a.buildCategories())
-	s.SetVersion(Version)
-
-	a.log.Debug("starting interactive shell")
-	return s.Start()
 }
 
 func (a *App) close() {

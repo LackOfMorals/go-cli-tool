@@ -1,4 +1,4 @@
-package shell
+package dispatch
 
 import (
 	"fmt"
@@ -19,21 +19,21 @@ type Command struct {
 //
 // # Nesting
 //
-// Categories can be nested one level deep, enabling input like:
+// Categories can be nested one level deep:
 //
-//	neo4j> cloud instances list
-//	neo4j> cloud instances pause <id>
+//	neo4j-cli cloud instances list
+//	neo4j-cli cloud instances pause <id>
 //
 // A category may also carry a DirectHandler for cases where the entire
 // remaining input should be forwarded verbatim:
 //
-//	neo4j> cypher MATCH (n) RETURN n LIMIT 5
+//	neo4j-cli cypher "MATCH (n) RETURN n LIMIT 5"
 //
 // # Prerequisites
 //
 // Categories that require an external dependency (a database connection,
 // API credentials, etc.) should declare it via SetPrerequisite. The check
-// runs on every non-empty dispatch so the user gets a clear, actionable
+// runs on every non-empty dispatch so the caller gets a clear, actionable
 // error message before the underlying service call fails. Invoking the
 // category with no arguments (to show help) always succeeds even when the
 // prerequisite would fail.
@@ -46,13 +46,14 @@ type Command struct {
 // Help, or Find. Dispatch, Help, Find, SubcategoryNames, CommandNames, and
 // Subcat are safe to call concurrently once the category tree is fully built.
 type Category struct {
-	Name          string
-	Description   string
-	directHandler          CommandHandler
-	directHandlerEmptyOK   bool         // if true, directHandler is called even with no args
-	prerequisite  func() error // optional; checked before every non-help dispatch
-	subcats       map[string]*Category
-	commands      map[string]*Command
+	Name        string
+	Description string
+
+	directHandler        CommandHandler
+	directHandlerEmptyOK bool         // if true, directHandler is called even with no args
+	prerequisite         func() error // optional; checked before every non-help dispatch
+	subcats              map[string]*Category
+	commands             map[string]*Command
 }
 
 // NewCategory creates an empty category ready for commands and sub-categories.
@@ -77,8 +78,8 @@ func (c *Category) SetDirectHandler(h CommandHandler) *Category {
 
 // AllowEmptyDirectHandler permits the direct handler to be invoked with no
 // arguments. The prerequisite (if any) is still fired first. Use this for
-// interactive categories where the handler can prompt for input when nothing
-// is provided on the command line (e.g. the cypher category).
+// categories where the handler can prompt for input when nothing is provided
+// on the command line (e.g. the cypher category).
 func (c *Category) AllowEmptyDirectHandler() *Category {
 	c.directHandlerEmptyOK = true
 	return c
@@ -86,11 +87,7 @@ func (c *Category) AllowEmptyDirectHandler() *Category {
 
 // SetPrerequisite installs a dependency check that runs before every
 // non-help dispatch on this category. If fn returns an error the command is
-// not executed and the error is returned to the user directly.
-//
-// Typical usage in app wiring:
-//
-//	cmds.BuildCypherCategory(svc).SetPrerequisite(cmds.Neo4jPrerequisite(&cfg.Neo4j))
+// not executed and the error is returned to the caller directly.
 //
 // Returns the receiver for chaining.
 func (c *Category) SetPrerequisite(fn func() error) *Category {
@@ -109,8 +106,7 @@ func (c *Category) AddCommand(cmd *Command) *Category {
 	return c
 }
 
-// AddSubcategory registers a nested category. Returns the receiver for
-// chaining.
+// AddSubcategory registers a nested category. Returns the receiver for chaining.
 func (c *Category) AddSubcategory(sub *Category) *Category {
 	c.subcats[sub.Name] = sub
 	return c
@@ -130,7 +126,7 @@ func (c *Category) SubcategoryNames() []string {
 
 // CommandNames returns the canonical name of every direct command, sorted.
 // Alias keys registered by AddCommand are excluded; use AllCommandNames for
-// tab-completion where aliases should also be offered.
+// cases where aliases should also be offered.
 func (c *Category) CommandNames() []string {
 	seen := make(map[string]bool, len(c.commands))
 	var names []string
@@ -145,7 +141,7 @@ func (c *Category) CommandNames() []string {
 }
 
 // AllCommandNames returns every registered key (canonical names + aliases),
-// sorted. Use this when building tab-completion so aliases are offered too.
+// sorted.
 func (c *Category) AllCommandNames() []string {
 	names := make([]string, 0, len(c.commands))
 	for k := range c.commands {
@@ -172,12 +168,10 @@ func (c *Category) Subcat(name string) *Category {
 //  3. args[0] matches a command → call cmd.Handler(args[1:])
 //  4. DirectHandler is set → call it with the full args slice
 //  5. Nothing matches → return a descriptive error
-func (c *Category) Dispatch(args []string, ctx ShellContext) (string, error) {
+func (c *Category) Dispatch(args []string, ctx Context) (string, error) {
 	if len(args) == 0 {
 		switch {
 		case c.directHandler != nil && c.directHandlerEmptyOK:
-			// Interactive direct-handler: fire the prerequisite first so that
-			// credential prompts run before the handler asks for input.
 			if c.prerequisite != nil {
 				if err := c.prerequisite(); err != nil {
 					return "", err
@@ -192,8 +186,8 @@ func (c *Category) Dispatch(args []string, ctx ShellContext) (string, error) {
 	}
 
 	// Check dependency prerequisites before any real work. This is done after
-	// the no-args guard so that typing a bare category name (e.g. "admin")
-	// always shows help even when the dependency is unavailable.
+	// the no-args guard so that calling a bare category name always shows help
+	// even when the dependency is unavailable.
 	if c.prerequisite != nil {
 		if err := c.prerequisite(); err != nil {
 			return "", err
@@ -215,7 +209,7 @@ func (c *Category) Dispatch(args []string, ctx ShellContext) (string, error) {
 		return c.directHandler(args, ctx)
 	}
 
-	return "", fmt.Errorf("%s: unknown command %q — type 'help %s' to see available commands",
+	return "", fmt.Errorf("%s: unknown command %q — run 'neo4j-cli %s --help' to see available commands",
 		c.Name, name, c.Name)
 }
 
@@ -273,5 +267,3 @@ func sortedKeys(m map[string]*Category) []string {
 	sort.Strings(keys)
 	return keys
 }
-
-
