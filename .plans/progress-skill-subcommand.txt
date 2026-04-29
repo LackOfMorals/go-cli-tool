@@ -157,3 +157,36 @@ Key Decisions:
   trivially comparable.
 
 Next Task: task-007
+
+================================================================================
+TASK-007: Implement SkillService (Install / Remove / List)
+Date: 2026-04-29T18:10:00Z
+================================================================================
+
+Summary:
+Implemented SkillServiceImpl in internal/service/skill_service.go. Install
+writes skill.SkillMD to <skills_dir>/neo4j-cli/SKILL.md per target agent;
+empty agentName fans to all detected agents (errors if none); known but
+undetected agent still installs. Remove deletes <skills_dir>/neo4j-cli/;
+empty agentName removes from every installed agent. List returns AgentStatus
+for all 10 catalog agents. No canonical/cache dir per PRD.
+
+Files Changed:
+- internal/service/skill_service.go (created — SkillServiceImpl + NewSkillService + NewSkillServiceWith)
+
+Key Decisions:
+- NewSkillServiceWith(fs, agents, content) constructor exposed so task-008
+  tests can inject TempDir-backed Filesystem + alt agents/content without
+  touching real $HOME or fiddling with HOME env.
+- isInstalled uses Lstat (matches Rust symlink_metadata): a symlinked
+  install still reports installed even if the link target is gone.
+- isDetected uses Stat (follows symlinks): an agent dir that happens to be
+  a symlink is still "installed".
+- removePath wipes any prior file/dir/symlink before WriteFile so prior
+  symlink-style installs (Rust era) don't collide with new file install.
+- InstallResult.Path is the SKILL.md file path, not the dir — more useful
+  for agent-mode JSON consumers.
+- ctx is intentionally unused; kept on interface for future-proofing
+  (cancellation if filesystem ops ever go remote).
+
+Next Task: task-008

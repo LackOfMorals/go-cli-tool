@@ -117,7 +117,7 @@ tasks:
       agentName, install to every detected agent; error if none detected. Remove deletes
       <skills_dir>/neo4j-cli/; empty agentName removes from every agent that has it. List returns the
       AgentStatus table for all known agents. No canonical/cache dir.
-    status: pending
+    status: completed
     dependencies:
       - task-002
       - task-006
@@ -128,7 +128,7 @@ tasks:
       - "Remove tolerates missing targets silently per agent"
       - "List returns one entry per AGENTS member with correct detected/installed booleans"
       - "Re-running Install is idempotent (no error, files identical)"
-    completed_at: null
+    completed_at: 2026-04-29T18:10:00Z
 
   - id: task-008
     title: "Service unit tests for SkillService with a TempDir-backed filesystem"
