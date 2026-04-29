@@ -73,3 +73,33 @@ Key Decisions:
   output diff'd against pre-refactor and matches.
 
 Next Task: task-004
+
+================================================================================
+TASK-004: Build cmd/gen-skill generator that walks cobra tree and writes skill.md.gen
+Date: 2026-04-29T16:15:00Z
+================================================================================
+
+Summary:
+Added cmd/gen-skill/main.go: builds the cobra tree via cli.BuildCobraTree
+with nil services, walks subcommands in stable name order, and emits
+deterministic Markdown to internal/skill/skill.md.gen. Output sections:
+root heading + Short + Long, Global Flags table (root persistent flags),
+per-subcommand `## <name>` with usage/short/long/flags/examples, then
+`## Gotchas` appended from skill-additions.md.
+
+Files Changed:
+- cmd/gen-skill/main.go (created)
+- internal/skill/skill.md.gen (regenerated from placeholder)
+
+Key Decisions:
+- projectRoot resolved via runtime.Caller so output is identical whether
+  invoked via `go run ./cmd/gen-skill` (CWD=root) or `go generate ./...`
+  (CWD=internal/skill).
+- Persistent flags rendered once at root as Global Flags; subcommand flag
+  tables show local flags only (avoids duplication when subcommands gain
+  their own flags).
+- Sorted both subcommands and flag rows by name for byte-stable output.
+- Skipped Hidden cmds and the auto-injected `help` command.
+- Pipe chars in flag usage strings are escaped for Markdown table cells.
+
+Next Task: task-005

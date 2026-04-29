@@ -64,7 +64,7 @@ tasks:
       subcommand with usage, description, flags table, examples. Read internal/skill/skill-additions.md
       and append under `## Gotchas`. Write to internal/skill/skill.md.gen. Output must be deterministic
       (stable subcommand ordering).
-    status: pending
+    status: completed
     dependencies:
       - task-002
       - task-003
@@ -74,7 +74,7 @@ tasks:
       - "Generated file ends with `## Gotchas` followed by skill-additions.md content"
       - "Re-running the generator on unchanged inputs produces byte-identical output"
       - "`go generate ./...` invokes the generator successfully"
-    completed_at: null
+    completed_at: 2026-04-29T16:15:00Z
 
   - id: task-005
     title: "CI gate: fail PRs that forget to regenerate skill.md.gen"
