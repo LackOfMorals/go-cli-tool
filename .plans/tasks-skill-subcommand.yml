@@ -12,7 +12,7 @@ tasks:
       copilot, gemini-cli, cline, codex, pi, opencode, junie), an expandPath helper supporting `~` and
       `$XDG_CONFIG_HOME` (default `~/.config`), and FindAgent / DetectAgents helpers.
       Include focused unit tests for path expansion and agent lookup.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "AGENTS slice contains all 10 reference agents with correct detect/skills paths"
@@ -20,7 +20,7 @@ tasks:
       - "FindAgent is case-insensitive and returns nil for unknown names"
       - "DetectAgents returns only agents whose detect_dir exists on disk (use t.TempDir + HOME override in tests)"
       - "Package compiles, tests pass with `go test ./internal/skill/...`"
-    completed_at: null
+    completed_at: 2026-04-29T15:30:00Z
 
   - id: task-002
     title: "Add skill-additions.md stub and embed scaffolding"

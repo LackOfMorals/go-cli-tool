@@ -1,0 +1,21 @@
+================================================================================
+TASK-001: Add internal/skill package: Agent type, AGENTS list, path helpers
+Date: 2026-04-29T15:30:00Z
+================================================================================
+
+Summary:
+Created internal/skill package with Agent struct, hardcoded 10-agent AGENTS slice
+mirroring Rust reference, expandPath helper handling ~/$XDG_CONFIG_HOME, and
+FindAgent/DetectAgents lookups. Tests use t.TempDir + HOME override.
+
+Files Changed:
+- internal/skill/agents.go (created — Agent struct, AGENTS slice, expandPath, FindAgent, DetectAgents)
+- internal/skill/agents_test.go (created — TestExpandPath, TestExpandPathNoHome, TestFindAgent, TestAgentsCatalog, TestDetectAgents, TestAgentSkillsPath)
+
+Key Decisions:
+- Used os.LookupEnv for HOME so missing-HOME returns ok=false explicitly.
+- strings.CutPrefix for ~/-prefix (Go 1.20+, available since project uses 1.24).
+- DetectAgents returns []*Agent of pointers into AGENTS slice — matches Rust ergonomics.
+- Test uses t.Setenv (auto-restored) and t.TempDir for HOME isolation.
+
+Next Task: task-002
