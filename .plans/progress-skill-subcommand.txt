@@ -127,3 +127,33 @@ Key Decisions:
 - Single ubuntu runner; no matrix needed for this gate.
 
 Next Task: task-006
+
+================================================================================
+TASK-006: Define SkillService interface and Filesystem abstraction
+Date: 2026-04-29T17:50:00Z
+================================================================================
+
+Summary:
+Added SkillService interface (Install/Remove/List) and result types
+(InstallResult, RemoveResult, AgentStatus) to internal/service/interfaces.go
+with JSON tags for agent-mode envelopes. Added Filesystem interface +
+OSFilesystem wrapper in internal/skill/filesystem.go (Stat/Lstat/MkdirAll/
+WriteFile/RemoveAll/Remove) so task-007's service is testable via a
+TempDir-backed or fake fs without touching real $HOME.
+
+Files Changed:
+- internal/service/interfaces.go (modified — added Skill section)
+- internal/skill/filesystem.go (created)
+
+Key Decisions:
+- Filesystem placed in internal/skill, not internal/service: skill is the
+  only consumer and already owns the agent/embed domain. Keeps service
+  package free of fs concerns.
+- JSON tags use snake_case (display_name) — sets the convention for
+  agent-mode envelopes; existing service result types lack JSON tags.
+- Lstat included alongside Stat so task-007 can detect symlinked install
+  targets that must be removed before WriteFile.
+- OSFilesystem is a value receiver (zero-size struct) — no allocation cost,
+  trivially comparable.
+
+Next Task: task-007

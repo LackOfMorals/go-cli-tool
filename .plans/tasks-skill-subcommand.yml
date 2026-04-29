@@ -99,7 +99,7 @@ tasks:
       AgentStatus{Name, DisplayName, Detected, Installed}. Define a small Filesystem interface
       (Stat, Lstat, MkdirAll, WriteFile, RemoveAll, Remove) so the service is testable with a fake or
       a t.TempDir-backed wrapper.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -107,7 +107,7 @@ tasks:
       - "Result types are exported and have JSON tags suitable for agent-mode envelopes"
       - "Filesystem interface lives in a sensible package (internal/service or internal/skill) and wraps stdlib os"
       - "`go build ./...` succeeds"
-    completed_at: null
+    completed_at: 2026-04-29T17:50:00Z
 
   - id: task-007
     title: "Implement SkillService (Install / Remove / List)"
