@@ -281,3 +281,38 @@ Key Decisions:
   ~/.claude is never written to during verification.
 
 Next Task: task-011
+
+================================================================================
+TASK-011: Command-layer tests for skill category using mockgen
+Date: 2026-04-29T19:30:00Z
+================================================================================
+
+Summary:
+Added mockgen directive in internal/service/interfaces.go (matches the
+internal/analytics pattern) and committed the generated MockSkillService
+under internal/service/mocks/. internal/commands/skill_test.go covers
+all three commands (install/remove/list) with positional and no-positional
+variants, error propagation, table vs json output, ls alias, agent-mode
+write blocking via dispatcher (READ_ONLY AgentError), and read-mode pass-
+through.
+
+Files Changed:
+- internal/service/interfaces.go (added //go:generate mockgen directive)
+- internal/service/mocks/mock_skill_service.go (generated)
+- internal/commands/skill_test.go (created — 15 tests)
+
+Key Decisions:
+- Used go.uber.org/mock (gomock) for SkillService since the analytics
+  package already follows that pattern; the older hand-written mocks in
+  cloud/admin/cypher tests are kept untouched to avoid scope creep.
+- Agent-mode block tests intentionally set NO EXPECT() on the mock — if
+  the dispatcher forwarded to the handler the gomock controller would
+  fail the test, making the block guarantee a hard assertion.
+- JSON-output coverage uses FormatAs(OutputFormatJSON) on the result's
+  Presentation rather than re-serialising Items, exercising the same path
+  app code takes when --format json is set.
+- Reused humanOut helper from admin_test.go (same package: commands_test).
+- Installed mockgen v0.6.0 via `go install go.uber.org/mock/mockgen@v0.6.0`
+  to match go.sum; CI already does the same in ci.yml.
+
+Next Task: task-012

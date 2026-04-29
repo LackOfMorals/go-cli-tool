@@ -193,7 +193,7 @@ tasks:
       internal/commands/skill_test.go covering: install with/without positional, remove with/without
       positional, list, error propagation from the service, table vs json output, and mutation-mode
       enforcement under agent mode.
-    status: pending
+    status: completed
     dependencies:
       - task-009
     acceptance_criteria:
@@ -201,7 +201,7 @@ tasks:
       - "Tests cover all three commands and both output formats"
       - "Agent-mode write blocking is verified end-to-end through the dispatcher"
       - "Tests pass with `go test ./internal/commands/...`"
-    completed_at: null
+    completed_at: 2026-04-29T19:30:00Z
 
   - id: task-012
     title: "Documentation: README + changie fragment"

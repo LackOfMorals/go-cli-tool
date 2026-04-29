@@ -2,6 +2,8 @@ package service
 
 import "context"
 
+//go:generate mockgen -destination=mocks/mock_skill_service.go -package=service_mocks -typed github.com/cli/go-cli-tool/internal/service SkillService
+
 // ---- Cypher -------------------------------------------------------------
 
 // QueryRow is a single result row: column name → value.
