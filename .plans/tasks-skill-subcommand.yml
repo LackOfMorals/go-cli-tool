@@ -82,14 +82,14 @@ tasks:
       Add a CI step that runs `go generate ./...` then `git diff --exit-code internal/skill/skill.md.gen`.
       Fits into the existing GitHub Actions workflow. Keeps the embedded SKILL.md in sync with the cobra
       tree without manual coordination.
-    status: pending
+    status: completed
     dependencies:
       - task-004
     acceptance_criteria:
       - "CI workflow runs `go generate ./...` before tests"
       - "CI fails when skill.md.gen is out of date"
       - "CI passes on a fresh checkout where the file is current"
-    completed_at: null
+    completed_at: 2026-04-29T17:30:00Z
 
   - id: task-006
     title: "Define SkillService interface and Filesystem abstraction"

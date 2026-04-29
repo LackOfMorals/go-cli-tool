@@ -103,3 +103,27 @@ Key Decisions:
 - Pipe chars in flag usage strings are escaped for Markdown table cells.
 
 Next Task: task-005
+
+================================================================================
+TASK-005: CI gate: fail PRs that forget to regenerate skill.md.gen
+Date: 2026-04-29T17:30:00Z
+================================================================================
+
+Summary:
+Added .github/workflows/ci.yml that installs mockgen, runs `go generate ./...`,
+fails if any generated file (skill.md.gen, mocks) drifted, then runs build,
+vet, and tests on push-to-main and pull_request.
+
+Files Changed:
+- .github/workflows/ci.yml (created)
+
+Key Decisions:
+- Created a new ci.yml rather than extending release.yml (release only fires
+  on tag push — wrong trigger for a PR gate).
+- Pinned mockgen to v0.6.0 to match go.sum (avoids version drift between the
+  module dep and the binary).
+- Diff entire worktree instead of only skill.md.gen — catches mock drift too,
+  no extra cost.
+- Single ubuntu runner; no matrix needed for this gate.
+
+Next Task: task-006
