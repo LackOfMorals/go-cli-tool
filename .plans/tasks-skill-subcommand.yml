@@ -137,7 +137,7 @@ tasks:
       Filesystem interface) to exercise install/remove/list across these scenarios: no agents detected,
       one detected agent, all detected, install over existing target, install with unknown agent name,
       remove with no installs, remove with installs across multiple agents, list shape.
-    status: pending
+    status: completed
     dependencies:
       - task-007
     acceptance_criteria:
@@ -145,7 +145,7 @@ tasks:
       - "All scenarios listed above are covered"
       - "Tests pass with `go test ./internal/service/...`"
       - "Coverage parity with existing service tests"
-    completed_at: null
+    completed_at: 2026-04-29T18:30:00Z
 
   - id: task-009
     title: "Build skill command category (install / remove / list)"

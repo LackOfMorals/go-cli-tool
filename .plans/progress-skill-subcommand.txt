@@ -190,3 +190,32 @@ Key Decisions:
   (cancellation if filesystem ops ever go remote).
 
 Next Task: task-008
+
+================================================================================
+TASK-008: Service unit tests for SkillService with a TempDir-backed filesystem
+Date: 2026-04-29T18:30:00Z
+================================================================================
+
+Summary:
+Added internal/service/skill_service_test.go (11 tests) covering install/
+remove/list across all PRD scenarios. Tests run against TempDir-isolated
+$HOME with XDG_CONFIG_HOME unset, using OSFilesystem + a synthetic
+3-agent catalog (alpha/beta/gamma) injected via NewSkillServiceWith so
+production AGENTS catalog stays out of test paths.
+
+Files Changed:
+- internal/service/skill_service_test.go (created)
+
+Key Decisions:
+- Used real OSFilesystem against TempDir HOME instead of a fake fs —
+  exercises expandPath/Stat/Lstat wiring end-to-end at no extra cost.
+- Synthetic agents avoid coupling tests to changes in the production
+  catalog (e.g. opencode's $XDG_CONFIG_HOME branch). All synthetic
+  agents use ~/-prefix paths.
+- Idempotency check baked into Install_OverExistingTarget rather than a
+  separate test — same fixture, second invocation.
+- Sort on Remove_AcrossMultipleAgents result names is defensive; the
+  service emits catalog order today but the assertion stays correct
+  if that ever changes.
+
+Next Task: task-009
