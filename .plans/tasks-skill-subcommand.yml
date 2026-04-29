@@ -155,7 +155,7 @@ tasks:
       list (ModeRead). Each command sets Usage, Description, Aliases (none initially), and a Handler that
       calls the service and returns formatted output. Provide rich Example strings on the cobra side and
       a clear `Long` description. No prerequisite (no Neo4j/Aura needed).
-    status: pending
+    status: completed
     dependencies:
       - task-006
     acceptance_criteria:
@@ -164,7 +164,7 @@ tasks:
       - "Handlers call SkillService methods and surface errors with `fmt.Errorf(\"...: %w\", err)`"
       - "Output format honours --format table|json (consistent with config list)"
       - "No prerequisite is set on the category"
-    completed_at: null
+    completed_at: 2026-04-29T18:50:00Z
 
   - id: task-010
     title: "Wire skill subcommand into cmd/neo4j-cli/app.go"

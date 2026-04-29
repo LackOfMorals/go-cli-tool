@@ -219,3 +219,29 @@ Key Decisions:
   if that ever changes.
 
 Next Task: task-009
+
+================================================================================
+TASK-009: Build skill command category (install / remove / list)
+Date: 2026-04-29T18:50:00Z
+================================================================================
+
+Summary:
+Added internal/commands/skill.go with BuildSkillCategory(svc) exposing
+install [agent] (ModeWrite), remove [agent] (ModeWrite), and list (ModeRead;
+alias ls). Each handler calls SkillService and emits both presentation table
+and items[] for table|json parity. No prerequisite — purely local fs ops.
+
+Files Changed:
+- internal/commands/skill.go (created)
+
+Key Decisions:
+- ListResult used for all three commands (even single-agent install) so the
+  JSON envelope is uniform: array of {agent,path} / {agent} / status rows.
+- boolYesNo helper renders Detected/Installed as yes/no in table mode while
+  the JSON keeps native booleans — matches scannable status-column convention.
+- Long/Example strings live on the cobra side per task spec; the dispatch
+  Category only carries Usage + Description.
+- list gets ls alias to match cloud instances list / config list ergonomics;
+  install/remove deliberately have no aliases per spec.
+
+Next Task: task-010
