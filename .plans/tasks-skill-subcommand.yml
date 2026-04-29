@@ -209,11 +209,11 @@ tasks:
       Add a `skill` row to the commands table in README.md and a brief usage section under Commands
       (mirroring style of cypher/cloud/admin/config). Add a changie fragment via `changie new`
       (kind: Added) describing the new subcommand.
-    status: pending
+    status: completed
     dependencies:
       - task-010
     acceptance_criteria:
       - "README commands table lists `skill` with a one-line description"
       - "README has a Skill section with example invocations (install / remove / list)"
       - "A changie fragment file is committed under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-04-29T17:45:00Z

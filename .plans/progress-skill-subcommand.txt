@@ -316,3 +316,33 @@ Key Decisions:
   to match go.sum; CI already does the same in ci.yml.
 
 Next Task: task-012
+
+================================================================================
+TASK-012: Documentation: README + changie fragment
+Date: 2026-04-29T17:45:00Z
+================================================================================
+
+Summary:
+Added `skill` row to README commands table and a `### skill` section under
+Commands with install/remove/list examples (mirrors cypher/cloud/admin/config
+style). Hand-created the changie fragment (kind: Added) since changie isn't
+on PATH locally; format matches the pre-existing
+.changes/unreleased/Removed-20260428-133758.yaml fragment from git history.
+
+Files Changed:
+- README.md (added skill table row + ### skill section)
+- .changes/unreleased/Added-20260429-174409.yaml (created)
+
+Key Decisions:
+- Hand-created the YAML fragment instead of running `changie new` —
+  changie isn't installed locally and the fragment format is trivial
+  (kind/body/time). Matches prior Removed-... fragment exactly.
+- Skill section placed after `### config` (last subcommand section) and
+  before the `---` that closes the Commands block.
+- Section copy mentions agent-mode --rw requirement so users discover the
+  read-only/write distinction without leaving the section.
+- README table description kept to one line per existing convention.
+- skill.md.gen verified clean via `go run ./cmd/gen-skill` + git diff
+  (full `go generate ./...` skipped — mockgen not on local PATH; CI runs it).
+
+Next Task: COMPLETE — final task in feature
