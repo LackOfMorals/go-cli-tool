@@ -31,6 +31,17 @@ const (
 	outputFilename    = "skill.md.gen"
 )
 
+// frontMatter is the YAML front-matter prepended to the generated SKILL.md so
+// agent runtimes (Claude Code, Cursor, etc.) can index and trigger the skill.
+// Keep the description trigger-rich: it is the field agents match against to
+// decide whether to load the skill.
+const frontMatter = `---
+name: neo4j-cli
+description: Run Cypher queries against Neo4j databases and manage Neo4j Aura cloud resources (instances, projects, tenants) from the command line. Use when the user asks to query a Neo4j graph, inspect the schema, list/create/pause/resume/delete an Aura instance, manage projects, or run admin operations like show-users or show-databases. Always invoke with ` + "`--agent`" + ` for JSON output; pair with ` + "`--rw`" + ` only when a write or mutation is explicitly intended.
+---
+
+`
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "gen-skill: %v\n", err)
@@ -53,6 +64,7 @@ func run() error {
 	tree := cli.BuildCobraTree(cli.Options{})
 
 	var buf bytes.Buffer
+	buf.WriteString(frontMatter)
 	renderRoot(&buf, tree)
 	renderSubcommands(&buf, tree)
 	renderGotchas(&buf, additions)
