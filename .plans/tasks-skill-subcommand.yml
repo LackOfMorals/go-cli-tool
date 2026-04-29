@@ -47,14 +47,14 @@ tasks:
       command tree (Use, Short, Long, Flags, Example) can be assembled with nil or stub services. RunE
       closures may capture nil services; they must not be invoked during tree walking. Extract a
       `buildCobraTree(services...)` function callable from both App and the generator.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "A pure cobra-tree builder is callable without a fully-wired App"
       - "Existing CLI behaviour unchanged — `go build ./...` and existing tests pass"
       - "No service constructors are called during tree construction"
       - "buildCobraTree produces identical Use/Short/Long/Flags/Example as before"
-    completed_at: null
+    completed_at: 2026-04-29T16:00:00Z
 
   - id: task-004
     title: "Build cmd/gen-skill generator that walks cobra tree and writes skill.md.gen"

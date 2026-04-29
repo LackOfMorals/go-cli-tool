@@ -43,3 +43,33 @@ Key Decisions:
 - Used blank import `_ "embed"` per stdlib convention for embed-only files.
 
 Next Task: task-003
+
+================================================================================
+TASK-003: Refactor cobra wiring so the command tree is buildable without wired services
+Date: 2026-04-29T16:00:00Z
+================================================================================
+
+Summary:
+Extracted the cobra tree construction from cmd/neo4j-cli into internal/cli
+as BuildCobraTree(Options). Persistent flag bindings now live on a shared
+*cli.Flags struct so cmd/neo4j-cli and cmd/gen-skill walk identical Use/
+Short/Long/Flags/Example. RunE is injected via Options.RunFactory; passing
+nil yields a tree with no service wiring (generator-friendly).
+
+Files Changed:
+- internal/cli/tree.go (created — Flags, Options, BuildCobraTree, subcommand builders)
+- internal/cli/cli.go (deleted — placeholder dead-code file)
+- cmd/neo4j-cli/app.go (modified — package-level flag vars collapsed to *cli.Flags; buildRootCommand delegates to cli.BuildCobraTree)
+
+Key Decisions:
+- Single Flags struct in internal/cli avoids splitting the source of truth
+  between app and generator.
+- RunFactory injection (not service injection) keeps the cli package free of
+  service imports — important so cmd/gen-skill can import internal/cli without
+  pulling repository, analytics, etc.
+- runEFor returns nil when RunFactory is nil so cobra prints help instead of
+  invoking a missing handler — exactly what the generator wants.
+- All existing flag names, defaults, usage strings preserved verbatim; help
+  output diff'd against pre-refactor and matches.
+
+Next Task: task-004

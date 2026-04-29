@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cli/go-cli-tool/internal/analytics"
+	"github.com/cli/go-cli-tool/internal/cli"
 	"github.com/cli/go-cli-tool/internal/commands"
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/dispatch"
@@ -37,28 +38,9 @@ const (
 	mixPanelToken    = "4bfb2414ab973c741b6f067bf06d5575" // #nosec G101
 )
 
-// ---- CLI flag vars -------------------------------------------------------
-
-var (
-	configPath         string
-	logLevel           string
-	logFormat          string
-	logOutput          string
-	logFile            string
-	noMetrics          bool
-	neo4jURI           string
-	neo4jUsername      string
-	neo4jDatabase      string
-	auraClientID       string
-	auraTimeoutSeconds int
-	outputFormat       string
-
-	// Agent-mode flags
-	agentMode   bool   // --agent / NEO4J_CLI_AGENT=true
-	allowWrites bool   // --rw / NEO4J_CLI_RW=true
-	requestID   string // --request-id / NEO4J_CLI_REQUEST_ID
-	timeoutStr  string // --timeout (e.g. "30s")
-)
+// flags holds every persistent flag bound by the cobra tree. The cli package
+// owns the struct so the tree builder is reusable from cmd/gen-skill.
+var flags = &cli.Flags{}
 
 // ---- App ----------------------------------------------------------------
 
@@ -84,26 +66,26 @@ func run() int {
 	for _, arg := range os.Args[1:] {
 		switch arg {
 		case "--agent":
-			agentMode = true
+			flags.AgentMode = true
 		case "--rw":
-			allowWrites = true
+			flags.AllowWrites = true
 		}
 	}
 
 	// Honour env vars too; either source winning is correct.
 	if os.Getenv("NEO4J_CLI_AGENT") == "true" {
-		agentMode = true
+		flags.AgentMode = true
 	}
 	if os.Getenv("NEO4J_CLI_RW") == "true" {
-		allowWrites = true
+		flags.AllowWrites = true
 	}
 	if v := os.Getenv("NEO4J_CLI_REQUEST_ID"); v != "" {
-		requestID = v
+		flags.RequestID = v
 	}
 
 	cmd := buildRootCommand()
 	if err := cmd.Execute(); err != nil {
-		if agentMode {
+		if flags.AgentMode {
 			printAgentError(err, currentRequestID())
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
@@ -125,8 +107,8 @@ func run() int {
 // currentRequestID returns the active request ID, generating one if the user
 // did not supply --request-id or NEO4J_CLI_REQUEST_ID.
 func currentRequestID() string {
-	if requestID != "" {
-		return requestID
+	if flags.RequestID != "" {
+		return flags.RequestID
 	}
 	return uuid.New().String()
 }
@@ -161,44 +143,13 @@ func printAgentError(err error, reqID string) {
 	fmt.Println(string(b))
 }
 
+// buildRootCommand assembles the cobra tree and wires RunE handlers via the
+// shared internal/cli builder so cmd/gen-skill walks an identical tree.
 func buildRootCommand() *cobra.Command {
-	rootCmd := &cobra.Command{
-		Use:   "neo4j-cli",
-		Short: "A CLI for Neo4j",
-		Long: `neo4j-cli is a command-line tool for Neo4j.
-
-Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
-		// No RunE: cobra prints help when called with no subcommand.
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-
-	pf := rootCmd.PersistentFlags()
-	pf.StringVar(&configPath, "config-file", "", "Path to a JSON configuration file")
-	pf.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error")
-	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
-	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
-	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.neo4j-cli/neo4j-cli.log)")
-	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var)")
-	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
-	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
-	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
-	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
-	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
-	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
-
-	// Agent-mode flags
-	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NEO4J_CLI_AGENT=true)")
-	pf.BoolVar(&allowWrites, "rw", false, "Permit write/mutating operations in agent mode (env: NEO4J_CLI_RW=true)")
-	pf.StringVar(&requestID, "request-id", "", "Correlation ID included in every agent-mode JSON response (env: NEO4J_CLI_REQUEST_ID)")
-	pf.StringVar(&timeoutStr, "timeout", "", "Maximum time for a command to run, e.g. 30s or 2m (exit code 124 on timeout)")
-
-	rootCmd.AddCommand(buildCloudCommand())
-	rootCmd.AddCommand(buildCypherCommand())
-	rootCmd.AddCommand(buildAdminCommand())
-	rootCmd.AddCommand(buildConfigCommand())
-
-	return rootCmd
+	return cli.BuildCobraTree(cli.Options{
+		Flags:      flags,
+		RunFactory: runCategory,
+	})
 }
 
 // runCategory returns a cobra RunE that creates the app, finds the named
@@ -218,11 +169,11 @@ func runCategory(name string) func(cmd *cobra.Command, args []string) error {
 // output. True when --format json/pretty-json is set, or when --agent is active
 // with no explicit format override.
 func isJSONMode() bool {
-	switch outputFormat {
+	switch flags.OutputFormat {
 	case "json", "pretty-json":
 		return true
 	}
-	return agentMode && outputFormat == ""
+	return flags.AgentMode && flags.OutputFormat == ""
 }
 
 // resolveHumanFormat returns the output format to use for human-mode rendering,
@@ -231,7 +182,7 @@ func resolveHumanFormat(override presentation.OutputFormat) presentation.OutputF
 	if override != "" {
 		return override
 	}
-	if f := presentation.OutputFormat(outputFormat); f.IsValid() {
+	if f := presentation.OutputFormat(flags.OutputFormat); f.IsValid() {
 		return f
 	}
 	return presentation.OutputFormatTable
@@ -256,7 +207,7 @@ func buildJSONEnvelope(result dispatch.CommandResult, reqID string) string {
 		"schema_version": "1",
 	}
 	var b []byte
-	if outputFormat == "pretty-json" {
+	if flags.OutputFormat == "pretty-json" {
 		b, _ = json.MarshalIndent(envelope, "", "  ")
 	} else {
 		b, _ = json.Marshal(envelope)
@@ -295,9 +246,9 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	for _, arg := range args {
 		switch arg {
 		case "--agent":
-			agentMode = true
+			flags.AgentMode = true
 		case "--rw":
-			allowWrites = true
+			flags.AllowWrites = true
 		}
 	}
 
@@ -308,10 +259,10 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	}
 
 	// Validate --format early so we surface bad values before network calls.
-	if outputFormat != "" {
-		f := presentation.OutputFormat(outputFormat)
+	if flags.OutputFormat != "" {
+		f := presentation.OutputFormat(flags.OutputFormat)
 		if !f.IsValid() {
-			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph", outputFormat)
+			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph", flags.OutputFormat)
 		}
 	}
 
@@ -320,10 +271,10 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	defer stop()
 
 	var ctx context.Context
-	if timeoutStr != "" {
-		d, err := time.ParseDuration(timeoutStr)
+	if flags.TimeoutStr != "" {
+		d, err := time.ParseDuration(flags.TimeoutStr)
 		if err != nil {
-			return fmt.Errorf("invalid --timeout %q: %w", timeoutStr, err)
+			return fmt.Errorf("invalid --timeout %q: %w", flags.TimeoutStr, err)
 		}
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(baseCtx, d)
@@ -342,8 +293,8 @@ func (a *App) dispatchCategory(name string, args []string) error {
 		Presenter:   a.presentation,
 		Registry:    a.registry,
 		IO:          tool.NewDefaultIOHandler(),
-		AgentMode:   agentMode,
-		AllowWrites: allowWrites,
+		AgentMode:   flags.AgentMode,
+		AllowWrites: flags.AllowWrites,
 		RequestID:   reqID,
 	}
 
@@ -353,11 +304,11 @@ func (a *App) dispatchCategory(name string, args []string) error {
 			return fmt.Errorf("interrupted")
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			if agentMode {
+			if flags.AgentMode {
 				return tool.NewAgentError("TIMEOUT",
-					fmt.Sprintf("command timed out after %s", timeoutStr))
+					fmt.Sprintf("command timed out after %s", flags.TimeoutStr))
 			}
-			return fmt.Errorf("command timed out after %s", timeoutStr)
+			return fmt.Errorf("command timed out after %s", flags.TimeoutStr)
 		}
 		return err
 	}
@@ -367,98 +318,6 @@ func (a *App) dispatchCategory(name string, args []string) error {
 		return nil
 	}
 	return a.printHumanResult(result)
-}
-
-func buildCloudCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "cloud",
-		Short: "Manage Neo4j Aura cloud resources",
-		Long: `Manage Neo4j Aura cloud resources.
-
-Available sub-commands:
-  instances   Create, list, get, update, pause, resume, and delete Aura DB instances
-  projects    List and inspect Aura projects (tenants)
-
-Use --format to control output (table, json, pretty-json, graph).`,
-		Example: `  neo4j-cli cloud instances list
-  neo4j-cli cloud instances list --format json
-  neo4j-cli cloud instances get <id>
-  neo4j-cli cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
-  neo4j-cli cloud instances pause <id>
-  neo4j-cli cloud projects list`,
-		RunE:          runCategory("cloud"),
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-}
-
-func buildCypherCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "cypher [query]",
-		Short: "Execute a Cypher query against a Neo4j database",
-		Long: `Execute a Cypher query against the connected Neo4j database.
-
-Supply the query directly on the command line.
-
-Query flags (parsed inline, not by cobra):
-  --param key=value    Add a query parameter (repeatable; auto-typed)
-  --format table|json|pretty-json|graph
-                       Override output format for this query
-  --limit N            Override the auto-injected row limit (default 25)`,
-		Example: `  neo4j-cli cypher "MATCH (n:Person) RETURN n.name, n.age;"
-  neo4j-cli cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n;"
-  neo4j-cli cypher --format json "MATCH (n) RETURN n;"`,
-		RunE:               runCategory("cypher"),
-		DisableFlagParsing: true, // let parseCypherFlags handle --param/--format/--limit
-		SilenceUsage:       true,
-		SilenceErrors:      true,
-	}
-}
-
-func buildAdminCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "admin",
-		Short: "Administrative operations against a Neo4j database",
-		Long: `Perform administrative operations against the connected Neo4j database.
-
-Available commands:
-  show-users       List all database users and their roles
-  show-databases   List all databases and their status
-
-Use --format to control output (table, json, pretty-json, graph).`,
-		Example: `  neo4j-cli admin show-users
-  neo4j-cli admin show-users --format json
-  neo4j-cli admin show-databases`,
-		RunE:          runCategory("admin"),
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-}
-
-func buildConfigCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "config",
-		Short: "Manage CLI configuration",
-		Long: `Manage CLI configuration. Changes made with 'set' and 'delete' are
-persisted to the config file immediately.
-
-Available commands:
-  list             Show all keys, their current values, and descriptions
-  set <key> <val>  Set a configuration value
-  delete <key>     Reset a key to its default
-  reset            Wipe the config file and restore all defaults
-
-Use --format to control output for 'config list'.`,
-		Example: `  neo4j-cli config list
-  neo4j-cli config list --format json
-  neo4j-cli config set neo4j.uri bolt://myhost:7687
-  neo4j-cli config set cypher.output_format json
-  neo4j-cli config delete neo4j.password
-  neo4j-cli config reset`,
-		RunE:          runCategory("config"),
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
 }
 
 // overridesFromCmd extracts only the flags the user explicitly set, so a
@@ -483,7 +342,7 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 		o.LogFile, _ = f.GetString("log-file")
 	}
 	if f.Changed("no-metrics") {
-		v := !noMetrics // --no-metrics disables; --no-metrics=false re-enables
+		v := !flags.NoMetrics // --no-metrics disables; --no-metrics=false re-enables
 		o.MetricsEnabled = &v
 	}
 	if f.Changed("neo4j-uri") {
@@ -617,12 +476,12 @@ func (a *App) buildCategories() map[string]*dispatch.Category {
 	// In agent mode use non-interactive prerequisites so missing credentials
 	// return a structured error immediately rather than blocking on stdin.
 	var neo4jPrereq, auraPrereq func() error
-	if agentMode {
+	if flags.AgentMode {
 		neo4jPrereq = commands.Neo4jPrerequisite(&a.cfg.Neo4j)
 		auraPrereq = commands.AuraPrerequisite(&a.cfg.Aura)
 	} else {
-		neo4jPrereq = commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)
-		auraPrereq = commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, configPath)
+		neo4jPrereq = commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, flags.ConfigPath)
+		auraPrereq = commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, flags.ConfigPath)
 	}
 
 	return map[string]*dispatch.Category{
@@ -632,7 +491,7 @@ func (a *App) buildCategories() map[string]*dispatch.Category {
 			SetPrerequisite(auraPrereq),
 		"admin": commands.BuildAdminCategory(a.adminSvc).
 			SetPrerequisite(neo4jPrereq),
-		"config": commands.BuildConfigCategory(a.cfg, configPath),
+		"config": commands.BuildConfigCategory(a.cfg, flags.ConfigPath),
 	}
 }
 

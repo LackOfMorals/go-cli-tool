@@ -27,6 +27,7 @@ Project-specific notes for AI agents working on this repo.
 
 - `cmd/neo4j-cli/` — main entry (wires services into cobra)
 - `cmd/gen-skill/` — build-time SKILL.md generator (planned, task-004)
+- `internal/cli/` — shared cobra tree builder (Use/Short/Long/Flags/Example), reused by app + generator
 - `internal/skill/` — agent catalog + embedded SKILL.md
 - `internal/service/` — service interfaces + impls (Cypher, Cloud, Admin, Skill planned)
 - `internal/commands/` — cobra-agnostic dispatch.Category builders per service
