@@ -173,7 +173,7 @@ tasks:
       a buildSkillCommand cobra builder with Short, Long, and Example. Verify `neo4j-cli --help` lists
       `skill`, `skill --help` lists install/remove/list, and each leaf command's --help shows usage,
       Long, flags, and at least one Example.
-    status: pending
+    status: completed
     dependencies:
       - task-007
       - task-009
@@ -184,7 +184,7 @@ tasks:
       - "`./bin/neo4j-cli --agent skill install` returns READ_ONLY JSON error on stdout (without --rw)"
       - "`./bin/neo4j-cli --agent --rw skill install <agent>` succeeds and emits the standard JSON envelope"
       - "`./bin/neo4j-cli --agent skill list` returns a JSON array as `data`"
-    completed_at: null
+    completed_at: 2026-04-29T19:10:00Z
 
   - id: task-011
     title: "Command-layer tests for skill category using mockgen"

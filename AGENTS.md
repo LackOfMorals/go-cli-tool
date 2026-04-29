@@ -50,3 +50,4 @@ Project-specific notes for AI agents working on this repo.
 - Tests should never write to real `$HOME`; use `t.TempDir()` + `t.Setenv("HOME", tmp)`.
 - The repo's Rust reference for the skill subcommand is at `/Users/oskarhane/Development/neo4j-query/src/skill.rs` (see PRD).
 - `neo4j-cli` binary in repo root is a build artifact — do not stage it in commits.
+- Nested cobra leaves (e.g. `skill install`) need `runEForLeaf` in `internal/cli/tree.go` so the leaf name is prepended before dispatch; raw RunE on the leaf would lose it.

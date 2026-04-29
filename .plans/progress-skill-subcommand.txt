@@ -245,3 +245,39 @@ Key Decisions:
   install/remove deliberately have no aliases per spec.
 
 Next Task: task-010
+
+================================================================================
+TASK-010: Wire skill subcommand into cmd/neo4j-cli/app.go
+Date: 2026-04-29T19:10:00Z
+================================================================================
+
+Summary:
+Wired SkillService into App and added the skill cobra subtree (parent +
+install/remove/list leaves) to internal/cli/tree.go. Each leaf has its own
+Short/Long/Example/Args; RunE delegates via runEForLeaf which prepends the
+leaf name onto args before flowing through dispatchCategory("skill"). All
+six --help and JSON acceptance probes pass; skill.md.gen regenerated and
+contains a `## skill` section.
+
+Files Changed:
+- internal/cli/tree.go (added buildSkillCommand + runEForLeaf helper)
+- cmd/neo4j-cli/app.go (added skillSvc field, NewSkillService wiring,
+  skill entry in buildCategories)
+- internal/skill/skill.md.gen (regenerated — adds `## skill` section)
+
+Key Decisions:
+- Leaf cobra commands instead of one flat skill command: required by
+  acceptance criteria ("skill install --help shows usage/Long/flags/Example").
+  cloud/cypher/admin/config get away with a single cobra node because their
+  Long bodies summarise children; skill's leaves need first-class help.
+- runEForLeaf added (not generalised to all categories) — only skill needs
+  it today; keeping the helper narrow avoids changing existing dispatch flow
+  for cypher's DisableFlagParsing trick.
+- Args constraints (MaximumNArgs(1) on install/remove, NoArgs on list)
+  surface argument errors at cobra parse time before the dispatcher runs.
+- ls alias preserved on the list cobra leaf via Aliases:[]string{"ls"} —
+  matches the dispatch.Category alias and keeps muscle memory consistent.
+- Tested write probes against $(mktemp -d) HOME so the developer's real
+  ~/.claude is never written to during verification.
+
+Next Task: task-011

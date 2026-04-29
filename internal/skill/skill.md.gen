@@ -126,6 +126,36 @@ neo4j-cli cypher "MATCH (n:Person) RETURN n.name, n.age;"
   neo4j-cli cypher --format json "MATCH (n) RETURN n;"
 ```
 
+## skill
+
+Usage: `neo4j-cli skill`
+
+Manage the embedded neo4j-cli SKILL.md across supported AI agents
+
+Manage the embedded neo4j-cli SKILL.md for supported AI agents.
+
+The neo4j-cli binary embeds a generated SKILL.md describing every command,
+flag, and gotcha. The skill subcommand writes that file into each agent's
+skills directory so the agent can load it on demand.
+
+Available commands:
+  install [agent]  Install SKILL.md into one agent (or every detected agent)
+  remove  [agent]  Remove SKILL.md from one agent (or every agent that has it)
+  list             Show every supported agent with detected/installed status
+
+No Neo4j or Aura connection is required — install/remove/list operate purely
+on the local filesystem.
+
+### Examples
+
+```
+neo4j-cli skill list
+  neo4j-cli skill install
+  neo4j-cli skill install claude-code
+  neo4j-cli skill remove claude-code
+  neo4j-cli skill remove
+```
+
 ## Gotchas
 
 Always pass --agent when invoking neo4j-cli from another agent — output becomes JSON and writes are blocked unless --rw is also passed.

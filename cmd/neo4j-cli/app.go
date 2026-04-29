@@ -56,6 +56,7 @@ type App struct {
 	cypherSvc service.CypherService
 	cloudSvc  service.CloudService
 	adminSvc  service.AdminService
+	skillSvc  service.SkillService
 }
 
 func run() int {
@@ -417,6 +418,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 	cypherSvc := service.NewCypherService(repo)
 	cloudSvc := service.NewCloudService(&cfg.Aura) // pointer so interactive prerequisite can populate credentials
 	adminSvc := service.NewAdminService(repo)
+	skillSvc := service.NewSkillService()
 
 	// 7. Tool registry — QueryTool reuses cypherSvc so there is one query path.
 	registry := buildRegistry(&cfg, log, cypherSvc)
@@ -432,6 +434,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		cypherSvc:    cypherSvc,
 		cloudSvc:     cloudSvc,
 		adminSvc:     adminSvc,
+		skillSvc:     skillSvc,
 	}, nil
 }
 
@@ -492,6 +495,7 @@ func (a *App) buildCategories() map[string]*dispatch.Category {
 		"admin": commands.BuildAdminCategory(a.adminSvc).
 			SetPrerequisite(neo4jPrereq),
 		"config": commands.BuildConfigCategory(a.cfg, flags.ConfigPath),
+		"skill":  commands.BuildSkillCategory(a.skillSvc),
 	}
 }
 

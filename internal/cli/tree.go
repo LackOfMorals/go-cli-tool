@@ -76,6 +76,7 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
 	rootCmd.AddCommand(buildCypherCommand(opts.RunFactory))
 	rootCmd.AddCommand(buildAdminCommand(opts.RunFactory))
 	rootCmd.AddCommand(buildConfigCommand(opts.RunFactory))
+	rootCmd.AddCommand(buildSkillCommand(opts.RunFactory))
 
 	return rootCmd
 }
@@ -204,4 +205,114 @@ func runEFor(rf RunFactory, name string) func(*cobra.Command, []string) error {
 		return nil
 	}
 	return rf(name)
+}
+
+// runEForLeaf returns a RunE that dispatches through the named category with
+// the leaf's own name prepended to args. This is used by skill's install /
+// remove / list cobra subcommands so each leaf can have its own help/flags
+// while still flowing through the shared dispatch tree.
+func runEForLeaf(rf RunFactory, category, leaf string) func(*cobra.Command, []string) error {
+	if rf == nil {
+		return nil
+	}
+	inner := rf(category)
+	if inner == nil {
+		return nil
+	}
+	return func(cmd *cobra.Command, args []string) error {
+		prefixed := append([]string{leaf}, args...)
+		return inner(cmd, prefixed)
+	}
+}
+
+func buildSkillCommand(rf RunFactory) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "skill",
+		Short: "Manage the embedded neo4j-cli SKILL.md across supported AI agents",
+		Long: `Manage the embedded neo4j-cli SKILL.md for supported AI agents.
+
+The neo4j-cli binary embeds a generated SKILL.md describing every command,
+flag, and gotcha. The skill subcommand writes that file into each agent's
+skills directory so the agent can load it on demand.
+
+Available commands:
+  install [agent]  Install SKILL.md into one agent (or every detected agent)
+  remove  [agent]  Remove SKILL.md from one agent (or every agent that has it)
+  list             Show every supported agent with detected/installed status
+
+No Neo4j or Aura connection is required — install/remove/list operate purely
+on the local filesystem.`,
+		Example: `  neo4j-cli skill list
+  neo4j-cli skill install
+  neo4j-cli skill install claude-code
+  neo4j-cli skill remove claude-code
+  neo4j-cli skill remove`,
+		RunE:          runEFor(rf, "skill"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "install [agent]",
+		Short: "Install SKILL.md into one agent (or every detected agent when omitted)",
+		Long: `Install the embedded SKILL.md into a supported AI agent's skills directory.
+
+When called with no agent argument, install targets every agent detected on
+the local machine. Pass an agent name (e.g. claude-code, cursor, copilot) to
+install for a specific agent even if it is not currently detected.
+
+The destination is <agent.skills_dir>/neo4j-cli/SKILL.md. Any existing file,
+directory, or symlink at that path is removed before the new file is written,
+so re-running install is idempotent.
+
+Run 'neo4j-cli skill list' to see every supported agent and the canonical
+agent names accepted here.`,
+		Example: `  neo4j-cli skill install
+  neo4j-cli skill install claude-code
+  neo4j-cli skill install cursor`,
+		Args:          cobra.MaximumNArgs(1),
+		RunE:          runEForLeaf(rf, "skill", "install"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "remove [agent]",
+		Short: "Remove SKILL.md from one agent (or every agent that has it when omitted)",
+		Long: `Remove the embedded SKILL.md from a supported AI agent's skills directory.
+
+When called with no agent argument, remove targets every agent that currently
+has the skill installed. Pass an agent name to remove for a specific agent.
+Missing targets are silently ignored, so remove is safe to re-run.
+
+Run 'neo4j-cli skill list' to see which agents currently have SKILL.md
+installed.`,
+		Example: `  neo4j-cli skill remove
+  neo4j-cli skill remove claude-code`,
+		Args:          cobra.MaximumNArgs(1),
+		RunE:          runEForLeaf(rf, "skill", "remove"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "Show every supported agent with its detected/installed status",
+		Long: `List every supported AI agent with two booleans per row:
+
+  Detected   the agent's config directory exists on this machine
+  Installed  neo4j-cli's SKILL.md is currently installed for the agent
+
+Use --format=json for machine-readable output suitable for agent-mode
+consumers.`,
+		Example: `  neo4j-cli skill list
+  neo4j-cli skill list --format json`,
+		Args:          cobra.NoArgs,
+		RunE:          runEForLeaf(rf, "skill", "list"),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	})
+
+	return cmd
 }
