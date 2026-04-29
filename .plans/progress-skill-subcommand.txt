@@ -19,3 +19,27 @@ Key Decisions:
 - Test uses t.Setenv (auto-restored) and t.TempDir for HOME isolation.
 
 Next Task: task-002
+
+================================================================================
+TASK-002: Add skill-additions.md stub and embed scaffolding
+Date: 2026-04-29T15:45:00Z
+================================================================================
+
+Summary:
+Added embed scaffolding for SKILL.md: skill-additions.md stub with the
+agent-mode gotcha, embed.go exposing SkillMD []byte via //go:embed plus a
+//go:generate directive targeting cmd/gen-skill, and a placeholder
+skill.md.gen so the package builds before the generator exists.
+
+Files Changed:
+- internal/skill/skill-additions.md (created — single gotcha line)
+- internal/skill/embed.go (created — //go:embed + //go:generate, exports SkillMD)
+- internal/skill/skill.md.gen (created — placeholder; will be overwritten by generator)
+
+Key Decisions:
+- //go:generate path is `go run ../../cmd/gen-skill` (relative from internal/skill).
+- Placeholder skill.md.gen mirrors final structure (heading + Gotchas) so
+  embed sanity holds before generator lands.
+- Used blank import `_ "embed"` per stdlib convention for embed-only files.
+
+Next Task: task-003

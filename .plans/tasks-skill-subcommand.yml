@@ -30,7 +30,7 @@ tasks:
       Create internal/skill/embed.go with `//go:embed skill.md.gen` exposing SkillMD []byte. Commit a
       placeholder skill.md.gen so the package builds before the generator exists. Add the //go:generate
       directive to embed.go.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -38,7 +38,7 @@ tasks:
       - "internal/skill/embed.go declares //go:embed and a //go:generate directive pointing at cmd/gen-skill"
       - "internal/skill/skill.md.gen placeholder exists; package builds with `go build ./...`"
       - "SkillMD []byte is exported and non-empty"
-    completed_at: null
+    completed_at: 2026-04-29T15:45:00Z
 
   - id: task-003
     title: "Refactor cobra wiring so the command tree is buildable without wired services"
