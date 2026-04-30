@@ -2,6 +2,8 @@ package service
 
 import "context"
 
+//go:generate mockgen -destination=mocks/mock_skill_service.go -package=service_mocks -typed github.com/cli/go-cli-tool/internal/service SkillService
+
 // ---- Cypher -------------------------------------------------------------
 
 // QueryRow is a single result row: column name → value.
@@ -9,8 +11,8 @@ type QueryRow = map[string]interface{}
 
 // QueryResult holds the structured output of a Cypher query.
 type QueryResult struct {
-	Columns   []string
-	Rows      []QueryRow
+	Columns []string
+	Rows    []QueryRow
 	// QueryType is the Neo4j planner classification populated when the query
 	// was preceded by EXPLAIN: "r" (read), "rw" (read/write), "w" (write
 	// only), "s" (schema write). Empty string when not determined.
@@ -122,4 +124,35 @@ type Database struct {
 type AdminService interface {
 	ShowUsers(ctx context.Context) ([]User, error)
 	ShowDatabases(ctx context.Context) ([]Database, error)
+}
+
+// ---- Skill --------------------------------------------------------------
+
+// InstallResult describes a single successful agent install.
+type InstallResult struct {
+	Agent string `json:"agent"`
+	Path  string `json:"path"`
+}
+
+// RemoveResult describes a single successful agent removal.
+type RemoveResult struct {
+	Agent string `json:"agent"`
+}
+
+// AgentStatus is the per-agent row returned by SkillService.List.
+type AgentStatus struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Detected    bool   `json:"detected"`
+	Installed   bool   `json:"installed"`
+}
+
+// SkillService installs, removes, and reports the status of the embedded
+// SKILL.md across the supported AI agents. An empty agentName fans out to
+// every detected agent (Install) or every agent that currently has the skill
+// installed (Remove).
+type SkillService interface {
+	Install(ctx context.Context, agentName string) ([]InstallResult, error)
+	Remove(ctx context.Context, agentName string) ([]RemoveResult, error)
+	List(ctx context.Context) ([]AgentStatus, error)
 }

@@ -1,0 +1,3 @@
+kind: Added
+body: Added `skill` subcommand to install, remove, and list the embedded neo4j-cli SKILL.md across detected AI agents (claude-code, cursor, windsurf, copilot, gemini-cli, cline, codex, pi, opencode, junie); the SKILL.md is generated at build time from the cobra command tree so agents always see current usage; `install` writes to `<agent-skills-dir>/neo4j-cli/SKILL.md` (replacing any existing file/symlink), with no agent name installs to every detected agent; `list` is read-only, `install`/`remove` require --rw in agent mode
+time: 2026-04-29T17:44:09+02:00
