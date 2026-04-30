@@ -114,42 +114,6 @@ func (c *MockServiceEmitCommandEventCall) DoAndReturn(f func(string, bool, analy
 	return c
 }
 
-// EmitStartupEvent mocks base method.
-func (m *MockService) EmitStartupEvent() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "EmitStartupEvent")
-}
-
-// EmitStartupEvent indicates an expected call of EmitStartupEvent.
-func (mr *MockServiceMockRecorder) EmitStartupEvent() *MockServiceEmitStartupEventCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmitStartupEvent", reflect.TypeOf((*MockService)(nil).EmitStartupEvent))
-	return &MockServiceEmitStartupEventCall{Call: call}
-}
-
-// MockServiceEmitStartupEventCall wrap *gomock.Call
-type MockServiceEmitStartupEventCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockServiceEmitStartupEventCall) Return() *MockServiceEmitStartupEventCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockServiceEmitStartupEventCall) Do(f func()) *MockServiceEmitStartupEventCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockServiceEmitStartupEventCall) DoAndReturn(f func()) *MockServiceEmitStartupEventCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // EmitEvent mocks base method.
 func (m *MockService) EmitEvent(event analytics.TrackEvent) {
 	m.ctrl.T.Helper()
@@ -182,6 +146,42 @@ func (c *MockServiceEmitEventCall) Do(f func(analytics.TrackEvent)) *MockService
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockServiceEmitEventCall) DoAndReturn(f func(analytics.TrackEvent)) *MockServiceEmitEventCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// EmitStartupEvent mocks base method.
+func (m *MockService) EmitStartupEvent() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "EmitStartupEvent")
+}
+
+// EmitStartupEvent indicates an expected call of EmitStartupEvent.
+func (mr *MockServiceMockRecorder) EmitStartupEvent() *MockServiceEmitStartupEventCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmitStartupEvent", reflect.TypeOf((*MockService)(nil).EmitStartupEvent))
+	return &MockServiceEmitStartupEventCall{Call: call}
+}
+
+// MockServiceEmitStartupEventCall wrap *gomock.Call
+type MockServiceEmitStartupEventCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockServiceEmitStartupEventCall) Return() *MockServiceEmitStartupEventCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockServiceEmitStartupEventCall) Do(f func()) *MockServiceEmitStartupEventCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockServiceEmitStartupEventCall) DoAndReturn(f func()) *MockServiceEmitStartupEventCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

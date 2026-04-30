@@ -89,7 +89,7 @@ func bindPersistentFlags(rootCmd *cobra.Command, flags *Flags) {
 	pf.StringVar(&flags.LogFormat, "log-format", "", "Log format: text, json")
 	pf.StringVar(&flags.LogOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
 	pf.StringVar(&flags.LogFile, "log-file", "", "Log file path when --log-output=file (default: ~/.neo4j-cli/neo4j-cli.log)")
-	pf.BoolVar(&flags.NoMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var)")
+	pf.BoolVar(&flags.NoMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides CLI_TELEMETRY_METRICS env var)")
 	pf.StringVar(&flags.Neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&flags.Neo4jUsername, "neo4j-username", "", "Neo4j username")
 	pf.StringVar(&flags.Neo4jDatabase, "neo4j-database", "", "Neo4j database name")
