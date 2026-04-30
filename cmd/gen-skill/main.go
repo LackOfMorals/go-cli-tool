@@ -37,7 +37,7 @@ const (
 // decide whether to load the skill.
 const frontMatter = `---
 name: neo4j-cli
-description: Run Cypher queries against Neo4j databases and manage Neo4j Aura cloud resources (instances, projects, tenants) from the command line. Use when the user asks to query a Neo4j graph, inspect the schema, list/create/pause/resume/delete an Aura instance, manage projects, or run admin operations like show-users or show-databases. Always invoke with ` + "`--agent`" + ` for JSON output; pair with ` + "`--rw`" + ` only when a write or mutation is explicitly intended.
+description: Run Cypher queries against Neo4j databases and manage Neo4j Aura cloud resources (instances, projects, tenants) from the command line. Use when the user asks to query a Neo4j graph, inspect the schema, or list/create/pause/resume/delete an Aura instance or project. Always invoke with ` + "`--agent`" + ` for JSON output; pair with ` + "`--rw`" + ` only when a write or mutation is explicitly intended.
 ---
 
 `

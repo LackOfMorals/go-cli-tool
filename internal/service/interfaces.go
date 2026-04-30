@@ -106,26 +106,6 @@ type ProjectsService interface {
 	Get(ctx context.Context, id string) (*Project, error)
 }
 
-// ---- Admin --------------------------------------------------------------
-
-// User represents a database user.
-type User struct {
-	Username string
-	Roles    []string
-}
-
-// Database represents a Neo4j database within an instance.
-type Database struct {
-	Name   string
-	Status string
-}
-
-// AdminService performs administrative operations against a Neo4j instance.
-type AdminService interface {
-	ShowUsers(ctx context.Context) ([]User, error)
-	ShowDatabases(ctx context.Context) ([]Database, error)
-}
-
 // ---- Skill --------------------------------------------------------------
 
 // InstallResult describes a single successful agent install.
