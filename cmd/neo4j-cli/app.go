@@ -55,7 +55,6 @@ type App struct {
 
 	cypherSvc service.CypherService
 	cloudSvc  service.CloudService
-	adminSvc  service.AdminService
 	skillSvc  service.SkillService
 }
 
@@ -300,6 +299,17 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	}
 
 	result, err := cat.Dispatch(args, shellCtx)
+	a.analytic.EmitCommandEvent(
+		commandPath(name, args),
+		err == nil,
+		analytics.ActiveFlags{
+			AgentMode:    flags.AgentMode,
+			AllowWrites:  flags.AllowWrites,
+			OutputFormat: flags.OutputFormat,
+			TimeoutSet:   flags.TimeoutStr != "",
+		},
+	)
+
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return fmt.Errorf("interrupted")
@@ -327,9 +337,6 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 	o := config.Overrides{}
 	f := cmd.Flags()
 
-	if f.Changed("config-file") {
-		o.ConfigFile, _ = f.GetString("config-file")
-	}
 	if f.Changed("log-level") {
 		o.LogLevel, _ = f.GetString("log-level")
 	}
@@ -400,6 +407,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 	if !cfg.Telemetry.Metrics {
 		an.Disable()
 	}
+	an.EmitStartupEvent()
 
 	// 4. Presentation service — always start in table mode for a CLI.
 	// Commands use FormatAs for per-query overrides; the session default
@@ -416,8 +424,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 
 	// 6. Domain services
 	cypherSvc := service.NewCypherService(repo)
-	cloudSvc := service.NewCloudService(&cfg.Aura) // pointer so interactive prerequisite can populate credentials
-	adminSvc := service.NewAdminService(repo)
+	cloudSvc := service.NewCloudService(&cfg.Aura) // pointer so prerequisite can populate credentials
 	skillSvc := service.NewSkillService()
 
 	// 7. Tool registry — QueryTool reuses cypherSvc so there is one query path.
@@ -433,7 +440,6 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		repo:         repo,
 		cypherSvc:    cypherSvc,
 		cloudSvc:     cloudSvc,
-		adminSvc:     adminSvc,
 		skillSvc:     skillSvc,
 	}, nil
 }
@@ -475,27 +481,34 @@ func registerTool(r *tools.ToolRegistry, t tool.Tool, cfg *config.Config, log lo
 	}
 }
 
-func (a *App) buildCategories() map[string]*dispatch.Category {
-	// In agent mode use non-interactive prerequisites so missing credentials
-	// return a structured error immediately rather than blocking on stdin.
-	var neo4jPrereq, auraPrereq func() error
-	if flags.AgentMode {
-		neo4jPrereq = commands.Neo4jPrerequisite(&a.cfg.Neo4j)
-		auraPrereq = commands.AuraPrerequisite(&a.cfg.Aura)
-	} else {
-		neo4jPrereq = commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, flags.ConfigPath)
-		auraPrereq = commands.InteractiveAuraPrerequisite(&a.cfg.Aura, a.cfg, flags.ConfigPath)
+// commandPath builds the full command name for analytics from the top-level
+// category and the remaining args. For cypher the query is never included.
+// For other categories up to two path segments (subcategory + command) are
+// appended, stopping at any flag or key=value argument.
+func commandPath(category string, args []string) string {
+	if category == "cypher" {
+		return "cypher"
 	}
+	parts := []string{category}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--") || strings.Contains(arg, "=") {
+			break
+		}
+		parts = append(parts, arg)
+		if len(parts) == 3 { // category + subcategory + command is enough
+			break
+		}
+	}
+	return strings.Join(parts, " ")
+}
 
+func (a *App) buildCategories() map[string]*dispatch.Category {
 	return map[string]*dispatch.Category{
 		"cypher": commands.BuildCypherCategory(a.cypherSvc).
-			SetPrerequisite(neo4jPrereq),
+			SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
 		"cloud": commands.BuildCloudCategory(a.cloudSvc).
-			SetPrerequisite(auraPrereq),
-		"admin": commands.BuildAdminCategory(a.adminSvc).
-			SetPrerequisite(neo4jPrereq),
-		"config": commands.BuildConfigCategory(a.cfg, flags.ConfigPath),
-		"skill":  commands.BuildSkillCategory(a.skillSvc),
+			SetPrerequisite(commands.AuraPrerequisite(&a.cfg.Aura)),
+		"skill": commands.BuildSkillCategory(a.skillSvc),
 	}
 }
 

@@ -15,7 +15,6 @@ import (
 // binds its own *Flags so cobra mutates these fields during parse; the
 // generator can pass nil to use a throwaway *Flags instance.
 type Flags struct {
-	ConfigPath         string
 	LogLevel           string
 	LogFormat          string
 	LogOutput          string
@@ -70,12 +69,12 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
 		SilenceErrors: true,
 	}
 
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
 	bindPersistentFlags(rootCmd, flags)
 
 	rootCmd.AddCommand(buildCloudCommand(opts.RunFactory))
 	rootCmd.AddCommand(buildCypherCommand(opts.RunFactory))
-	rootCmd.AddCommand(buildAdminCommand(opts.RunFactory))
-	rootCmd.AddCommand(buildConfigCommand(opts.RunFactory))
 	rootCmd.AddCommand(buildSkillCommand(opts.RunFactory))
 
 	return rootCmd
@@ -86,7 +85,6 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
 // whether called from the app or the generator.
 func bindPersistentFlags(rootCmd *cobra.Command, flags *Flags) {
 	pf := rootCmd.PersistentFlags()
-	pf.StringVar(&flags.ConfigPath, "config-file", "", "Path to a JSON configuration file")
 	pf.StringVar(&flags.LogLevel, "log-level", "", "Log level: debug, info, warn, error")
 	pf.StringVar(&flags.LogFormat, "log-format", "", "Log format: text, json")
 	pf.StringVar(&flags.LogOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
@@ -149,52 +147,6 @@ Query flags (parsed inline, not by cobra):
 		DisableFlagParsing: true, // let parseCypherFlags handle --param/--format/--limit
 		SilenceUsage:       true,
 		SilenceErrors:      true,
-	}
-}
-
-func buildAdminCommand(rf RunFactory) *cobra.Command {
-	return &cobra.Command{
-		Use:   "admin",
-		Short: "Administrative operations against a Neo4j database",
-		Long: `Perform administrative operations against the connected Neo4j database.
-
-Available commands:
-  show-users       List all database users and their roles
-  show-databases   List all databases and their status
-
-Use --format to control output (table, json, pretty-json, graph).`,
-		Example: `  neo4j-cli admin show-users
-  neo4j-cli admin show-users --format json
-  neo4j-cli admin show-databases`,
-		RunE:          runEFor(rf, "admin"),
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-}
-
-func buildConfigCommand(rf RunFactory) *cobra.Command {
-	return &cobra.Command{
-		Use:   "config",
-		Short: "Manage CLI configuration",
-		Long: `Manage CLI configuration. Changes made with 'set' and 'delete' are
-persisted to the config file immediately.
-
-Available commands:
-  list             Show all keys, their current values, and descriptions
-  set <key> <val>  Set a configuration value
-  delete <key>     Reset a key to its default
-  reset            Wipe the config file and restore all defaults
-
-Use --format to control output for 'config list'.`,
-		Example: `  neo4j-cli config list
-  neo4j-cli config list --format json
-  neo4j-cli config set neo4j.uri bolt://myhost:7687
-  neo4j-cli config set cypher.output_format json
-  neo4j-cli config delete neo4j.password
-  neo4j-cli config reset`,
-		RunE:          runEFor(rf, "config"),
-		SilenceUsage:  true,
-		SilenceErrors: true,
 	}
 }
 

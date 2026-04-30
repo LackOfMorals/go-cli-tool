@@ -185,6 +185,47 @@ func TestEnableDisable(t *testing.T) {
 
 // ---- Event constructors --------------------------------------------------
 
+func TestEmitStartupEvent_SendsEvent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := amocks.NewMockHTTPClient(ctrl)
+
+	mockClient.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_, _ string, body io.Reader) (*http.Response, error) {
+			b, _ := io.ReadAll(body)
+			var events []analytics.TrackEvent
+			if err := json.Unmarshal(b, &events); err != nil {
+				t.Fatalf("unmarshal body: %v", err)
+			}
+			if len(events) != 1 {
+				t.Fatalf("expected 1 event, got %d", len(events))
+			}
+			if !strings.HasSuffix(events[0].Event, "STARTUP") {
+				t.Errorf("expected STARTUP event, got %q", events[0].Event)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("1")),
+			}, nil
+		})
+
+	svc := newTestAnalytics(t, mockClient)
+	svc.EmitStartupEvent()
+	svc.Flush()
+}
+
+// TestEmitStartupEvent_Disabled verifies that a disabled analytics instance
+// does not send the startup event.
+func TestEmitStartupEvent_Disabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := amocks.NewMockHTTPClient(ctrl)
+	// No Post calls expected.
+
+	svc := newTestAnalytics(t, mockClient)
+	svc.Disable()
+	svc.EmitStartupEvent()
+}
+
 func TestNewStartupEvent(t *testing.T) {
 	svc := newTestAnalytics(t, nil)
 	event := svc.NewStartupEvent()

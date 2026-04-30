@@ -19,6 +19,12 @@ type Service interface {
 	Disable()
 	Enable()
 	IsEnabled() bool
+	// EmitStartupEvent records that the CLI has started with all standard
+	// base properties (OS, machine ID, version, etc.).
+	EmitStartupEvent()
+	// EmitCommandEvent records a CLI command invocation with the full command
+	// path (e.g. "cloud instances list"), success, and active flags.
+	EmitCommandEvent(command string, success bool, flags ActiveFlags)
 	// EmitEvent queues a pre-built event. Prefer EmitToolEvent for tool
 	// invocations — it attaches all standard properties automatically.
 	EmitEvent(event TrackEvent)
