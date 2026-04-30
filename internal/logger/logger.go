@@ -74,8 +74,8 @@ type Field struct {
 
 // ---- LoggerService ------------------------------------------------------
 
-// LoggerService is the concrete implementation of the logger service
-type LoggerService struct {
+// loggerServiceImpl is the concrete implementation of the logger service
+type loggerServiceImpl struct {
 	logger *slog.Logger
 	level  *slog.LevelVar
 	format LogFormat
@@ -107,7 +107,7 @@ func NewLoggerServiceToWriter(format LogFormat, defaultLevel LogLevel, w io.Writ
 		handler = slog.NewTextHandler(w, opts)
 	}
 
-	return &LoggerService{
+	return &loggerServiceImpl{
 		logger: slog.New(handler),
 		level:  levelVar,
 		format: format,
@@ -131,32 +131,32 @@ func OpenLogFile(path string) (*os.File, error) {
 	return f, nil
 }
 
-func (l *LoggerService) Debug(msg string, fields ...Field) {
+func (l *loggerServiceImpl) Debug(msg string, fields ...Field) {
 	l.logger.Debug(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) Info(msg string, fields ...Field) {
+func (l *loggerServiceImpl) Info(msg string, fields ...Field) {
 	l.logger.Info(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) Warn(msg string, fields ...Field) {
+func (l *loggerServiceImpl) Warn(msg string, fields ...Field) {
 	l.logger.Warn(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) Error(msg string, fields ...Field) {
+func (l *loggerServiceImpl) Error(msg string, fields ...Field) {
 	l.logger.Error(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) SetLevel(level LogLevel) {
+func (l *loggerServiceImpl) SetLevel(level LogLevel) {
 	l.level.Set(toSlogLevel(level))
 }
 
-func (l *LoggerService) GetLevel() LogLevel {
+func (l *loggerServiceImpl) GetLevel() LogLevel {
 	return fromSlogLevel(l.level.Level())
 }
 
-func (l *LoggerService) WithFields(fields ...Field) Service {
-	return &LoggerService{
+func (l *loggerServiceImpl) WithFields(fields ...Field) Service {
+	return &loggerServiceImpl{
 		logger: l.logger.With(toSlogArgs(fields)...),
 		level:  l.level,
 		format: l.format,

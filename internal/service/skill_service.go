@@ -53,7 +53,7 @@ func NewSkillServiceWith(fs skill.Filesystem, agents []skill.Agent, content []by
 // install proceeds even if the agent is not currently detected. Any pre-
 // existing file, directory, or symlink at the destination is removed first
 // so the operation is idempotent.
-func (s *SkillServiceImpl) Install(ctx context.Context, agentName string) ([]InstallResult, error) {
+func (s *SkillServiceImpl) Install(_ context.Context, agentName string) ([]InstallResult, error) {
 	targets, err := s.resolveInstallTargets(agentName)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (s *SkillServiceImpl) Install(ctx context.Context, agentName string) ([]Ins
 // Remove deletes the per-tool skill folder for each target agent. With an
 // empty agentName, every agent that currently has the skill installed is
 // targeted. Missing targets are silently ignored per agent.
-func (s *SkillServiceImpl) Remove(ctx context.Context, agentName string) ([]RemoveResult, error) {
+func (s *SkillServiceImpl) Remove(_ context.Context, agentName string) ([]RemoveResult, error) {
 	targets, err := s.resolveRemoveTargets(agentName)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (s *SkillServiceImpl) Remove(ctx context.Context, agentName string) ([]Remo
 // List returns the per-agent status for every known agent. Detected reflects
 // whether the agent's detect_dir exists; Installed reflects whether the
 // per-tool skill directory exists under the agent's skills_dir.
-func (s *SkillServiceImpl) List(ctx context.Context) ([]AgentStatus, error) {
+func (s *SkillServiceImpl) List(_ context.Context) ([]AgentStatus, error) {
 	out := make([]AgentStatus, 0, len(s.agents))
 	for i := range s.agents {
 		a := s.agents[i]

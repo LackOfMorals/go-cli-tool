@@ -9,7 +9,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/presentation"
 )
 
-func newTestService(t *testing.T, format presentation.OutputFormat) *presentation.PresentationService {
+func newTestService(t *testing.T, format presentation.OutputFormat) presentation.Service {
 	t.Helper()
 	log := logger.NewLoggerService(logger.FormatText, logger.LevelError)
 	svc, err := presentation.NewPresentationService(format, log)
