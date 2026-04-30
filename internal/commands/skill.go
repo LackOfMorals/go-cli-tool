@@ -90,7 +90,7 @@ func skillListCmd(svc service.SkillService) *dispatch.Command {
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "Show every supported agent with its detected/installed status",
-		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+		Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			statuses, err := svc.List(ctx.Context)
 			if err != nil {
 				return dispatch.CommandResult{}, fmt.Errorf("list skills: %w", err)

@@ -49,7 +49,7 @@ type App struct {
 	log          logger.Service
 	logCloser    io.Closer // non-nil when logging to a file; closed last in close()
 	analytic     analytics.Service
-	presentation *presentation.PresentationService
+	presentation presentation.Service
 	registry     *tools.ToolRegistry
 	repo         repository.GraphRepository // held so close() can release driver resources
 

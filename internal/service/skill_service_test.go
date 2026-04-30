@@ -127,7 +127,7 @@ func TestSkillService_Install_OverExistingTarget(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(target, []byte("STALE"), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte("STALE"), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 

@@ -56,7 +56,9 @@ func (t *EchoTool) Validate(_ tool.Context) error {
 }
 
 func (t *EchoTool) Configure(params map[string]interface{}) error {
-	t.BaseTool.Configure(params)
+	if err := t.BaseTool.Configure(params); err != nil {
+		return err
+	}
 
 	if val, ok := params["uppercase"]; ok {
 		if b, ok := val.(bool); ok {
