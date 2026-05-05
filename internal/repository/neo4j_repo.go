@@ -116,7 +116,7 @@ func toRecordSet(r *neo4j.EagerResult) *RecordSet {
 	}
 	qt := ""
 	if r.Summary != nil {
-		qt = fmt.Sprintf("%s", r.Summary.QueryType())
+		qt = r.Summary.QueryType().String()
 	}
 	return &RecordSet{Columns: r.Keys, Rows: rows, QueryType: qt}
 }
@@ -154,7 +154,19 @@ func convertValue(v interface{}) interface{} {
 		return m
 
 	case neo4j.Path:
-		return fmt.Sprintf("(path: %d nodes, %d rels)", len(t.Nodes), len(t.Relationships))
+		nodes := make([]interface{}, len(t.Nodes))
+		for i, n := range t.Nodes {
+			nodes[i] = convertValue(n)
+		}
+		rels := make([]interface{}, len(t.Relationships))
+		for i, r := range t.Relationships {
+			rels[i] = convertValue(r)
+		}
+		return map[string]interface{}{
+			"_type": "path",
+			"nodes": nodes,
+			"rels":  rels,
+		}
 
 	case []interface{}:
 		out := make([]interface{}, len(t))

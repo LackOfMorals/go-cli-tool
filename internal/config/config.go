@@ -133,10 +133,10 @@ type ToolConfig struct {
 
 // ---- Service ------------------------------------------------------------
 
-// ConfigService loads and merges configuration from defaults, a file, and
+// configService loads and merges configuration from defaults, a file, and
 // explicit overrides. It no longer depends on Cobra — flag values are
 // extracted by the caller and passed in as an Overrides struct.
-type ConfigService struct {
+type configService struct {
 	overrides Overrides
 	loader    configLoader
 }
@@ -146,7 +146,7 @@ type ConfigService struct {
 //
 //	explicit Overrides → env vars (CLI_ prefix) → config file → defaults
 func NewConfigService(overrides Overrides) Service {
-	return &ConfigService{
+	return &configService{
 		overrides: overrides,
 		loader:    newViperConfigLoader(),
 	}
@@ -159,7 +159,7 @@ func NewConfigService(overrides Overrides) Service {
 // File loading precedence:
 //  1. Explicit --config-file path (hard error if file is missing)
 //  2. DefaultConfigFilePath() — ~/.neo4j-cli/config.json (silently skipped if absent)
-func (c *ConfigService) LoadConfiguration() (Config, error) {
+func (c *configService) LoadConfiguration() (Config, error) {
 	if c.overrides.ConfigFile != "" {
 		// Explicit path: treat a missing file as an error.
 		if err := c.loader.readFile(c.overrides.ConfigFile); err != nil {
@@ -181,13 +181,41 @@ func (c *ConfigService) LoadConfiguration() (Config, error) {
 	}
 
 	c.applyOverrides(&cfg)
+	if err := validateConfig(cfg); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+func validateConfig(cfg Config) error {
+	if cfg.LogLevel != "" {
+		switch strings.ToLower(cfg.LogLevel) {
+		case "debug", "info", "warn", "warning", "error", "fatal":
+		default:
+			return fmt.Errorf("invalid log_level %q: must be one of debug, info, warn, error, fatal", cfg.LogLevel)
+		}
+	}
+	if cfg.LogFormat != "" {
+		switch strings.ToLower(cfg.LogFormat) {
+		case "text", "json":
+		default:
+			return fmt.Errorf("invalid log_format %q: must be text or json", cfg.LogFormat)
+		}
+	}
+	if cfg.LogOutput != "" {
+		switch strings.ToLower(strings.TrimSpace(cfg.LogOutput)) {
+		case "stderr", "stdout", "file":
+		default:
+			return fmt.Errorf("invalid log_output %q: must be stderr, stdout, or file", cfg.LogOutput)
+		}
+	}
+	return nil
 }
 
 // applyOverrides applies only the non-zero fields from Overrides, so an
 // explicit CLI flag always wins without a flag default silently overwriting
 // a file value.
-func (c *ConfigService) applyOverrides(cfg *Config) {
+func (c *configService) applyOverrides(cfg *Config) {
 	o := c.overrides
 	if o.LogLevel != "" {
 		cfg.LogLevel = o.LogLevel
@@ -227,7 +255,7 @@ func (c *ConfigService) applyOverrides(cfg *Config) {
 // SaveConfiguration writes cfg back to the file specified in Overrides.
 // The caller is responsible for supplying a path; use DefaultConfigFilePath()
 // when none is available (e.g. in InteractiveAuraPrerequisite).
-func (c *ConfigService) SaveConfiguration(cfg Config) error {
+func (c *configService) SaveConfiguration(cfg Config) error {
 	if c.overrides.ConfigFile == "" {
 		return fmt.Errorf("no config file path specified (use --config-file)")
 	}

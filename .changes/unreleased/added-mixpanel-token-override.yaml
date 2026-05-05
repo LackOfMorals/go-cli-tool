@@ -1,0 +1,2 @@
+kind: Added
+body: 'The Mixpanel analytics token can now be overridden via the `CLI_TELEMETRY_MIXPANEL_TOKEN` environment variable or `telemetry.mixpanel_token` in the config file, removing the need for a custom build to change it'

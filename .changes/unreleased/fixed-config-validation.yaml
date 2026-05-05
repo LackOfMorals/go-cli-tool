@@ -1,0 +1,2 @@
+kind: Fixed
+body: 'Invalid `log_level`, `log_format`, or `log_output` values in the config file now produce a clear error on startup instead of silently defaulting'

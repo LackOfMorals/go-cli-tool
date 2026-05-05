@@ -2,18 +2,9 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/cli/go-cli-tool/internal/repository"
-)
-
-// ErrResultNotParseable is returned by the admin service when the repository
-// result cannot be decoded into typed records. This is expected until
-// neo4j-go-driver/v5 is wired into Neo4jRepository; once the driver lands
-// the parse* functions below will use neo4j.Record field accessors instead.
-var ErrResultNotParseable = errors.New(
-	"result parsing not implemented: wire neo4j-go-driver/v5 into the repository",
 )
 
 // AdminServiceImpl performs administrative operations via the graph repository.
@@ -50,32 +41,53 @@ func (s *AdminServiceImpl) ShowDatabases(ctx context.Context) ([]Database, error
 	return dbs, nil
 }
 
-// parseUsersResult converts a raw repository result into a []User slice.
-//
-// TODO: when neo4j-go-driver/v5 is wired in, type-assert result to
-// []neo4j.Record and iterate over each record using:
-//
-//	username, _ := record.Get("user")
-//	roles, _ := record.Get("roles")
+// parseUsersResult converts a *repository.RecordSet from SHOW USERS into []User.
+// SHOW USERS returns columns: user, roles, passwordChangeRequired, suspended, home.
 func parseUsersResult(result interface{}) ([]User, error) {
-	// The placeholder repository returns a plain string; any string result
-	// means the real driver is not yet connected.
-	if _, ok := result.(string); ok {
-		return nil, ErrResultNotParseable
+	rs, ok := result.(*repository.RecordSet)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type %T", result)
 	}
-	return nil, fmt.Errorf("unrecognised result type %T: %w", result, ErrResultNotParseable)
+	users := make([]User, 0, len(rs.Rows))
+	for _, row := range rs.Rows {
+		u := User{}
+		if v, ok := row["user"]; ok {
+			u.Username, _ = v.(string)
+		}
+		if v, ok := row["roles"]; ok {
+			switch rv := v.(type) {
+			case []interface{}:
+				for _, r := range rv {
+					if s, ok := r.(string); ok {
+						u.Roles = append(u.Roles, s)
+					}
+				}
+			case []string:
+				u.Roles = rv
+			}
+		}
+		users = append(users, u)
+	}
+	return users, nil
 }
 
-// parseDatabasesResult converts a raw repository result into a []Database slice.
-//
-// TODO: when neo4j-go-driver/v5 is wired in, type-assert result to
-// []neo4j.Record and iterate over each record using:
-//
-//	name, _ := record.Get("name")
-//	status, _ := record.Get("currentStatus")
+// parseDatabasesResult converts a *repository.RecordSet from SHOW DATABASES into []Database.
+// SHOW DATABASES returns many columns; we extract name and currentStatus.
 func parseDatabasesResult(result interface{}) ([]Database, error) {
-	if _, ok := result.(string); ok {
-		return nil, ErrResultNotParseable
+	rs, ok := result.(*repository.RecordSet)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type %T", result)
 	}
-	return nil, fmt.Errorf("unrecognised result type %T: %w", result, ErrResultNotParseable)
+	dbs := make([]Database, 0, len(rs.Rows))
+	for _, row := range rs.Rows {
+		db := Database{}
+		if v, ok := row["name"]; ok {
+			db.Name, _ = v.(string)
+		}
+		if v, ok := row["currentStatus"]; ok {
+			db.Status, _ = v.(string)
+		}
+		dbs = append(dbs, db)
+	}
+	return dbs, nil
 }

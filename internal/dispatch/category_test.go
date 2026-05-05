@@ -48,7 +48,7 @@ func TestDispatch_NoArgs_NoDirectHandler_ReturnsHelp(t *testing.T) {
 
 func TestDispatch_NoArgs_WithDirectHandler_ReturnsUsageError(t *testing.T) {
 	c := newTestCategory("cypher").
-		SetDirectHandler(func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+		SetDirectHandler(func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 			return dispatch.MessageResult("direct"), nil
 		})
 	_, err := c.Dispatch(nil, blankCtx())
@@ -67,7 +67,7 @@ func TestDispatch_NamedCommand(t *testing.T) {
 	c := newTestCategory("admin").
 		AddCommand(&dispatch.Command{
 			Name:    "show-users",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) { called = true; return dispatch.MessageResult("users"), nil },
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) { called = true; return dispatch.MessageResult("users"), nil },
 		})
 
 	result, err := c.Dispatch([]string{"show-users"}, blankCtx())
@@ -87,7 +87,7 @@ func TestDispatch_NamedCommand_PassesRestArgs(t *testing.T) {
 	c := newTestCategory("root").
 		AddCommand(&dispatch.Command{
 			Name: "get",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(args []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				gotArgs = args
 				return dispatch.CommandResult{}, nil
 			},
@@ -104,7 +104,7 @@ func TestDispatch_NamedCommand_PassesRestArgs(t *testing.T) {
 func TestDispatch_DirectHandler_CalledWhenNoCommandMatches(t *testing.T) {
 	var gotArgs []string
 	c := newTestCategory("cypher").
-		SetDirectHandler(func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+		SetDirectHandler(func(args []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 			gotArgs = args
 			return dispatch.MessageResult("ok"), nil
 		})
@@ -128,7 +128,7 @@ func TestDispatch_Subcategory(t *testing.T) {
 	sub := newTestCategory("instances").
 		AddCommand(&dispatch.Command{
 			Name:    "list",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) { called = true; return dispatch.MessageResult("list"), nil },
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) { called = true; return dispatch.MessageResult("list"), nil },
 		})
 
 	c := newTestCategory("cloud").AddSubcategory(sub)
@@ -245,7 +245,7 @@ func TestPrerequisite_BlocksDispatch(t *testing.T) {
 	c := newTestCategory("admin").
 		AddCommand(&dispatch.Command{
 			Name:    "show-users",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) { return dispatch.MessageResult("ok"), nil },
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) { return dispatch.MessageResult("ok"), nil },
 		}).
 		SetPrerequisite(func() error {
 			return fmt.Errorf("database not configured")
@@ -265,7 +265,7 @@ func TestPrerequisite_PassesWhenMet(t *testing.T) {
 	c := newTestCategory("admin").
 		AddCommand(&dispatch.Command{
 			Name:    "show-users",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) { called = true; return dispatch.MessageResult("ok"), nil },
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) { called = true; return dispatch.MessageResult("ok"), nil },
 		}).
 		SetPrerequisite(func() error { return nil })
 
@@ -296,7 +296,7 @@ func TestPrerequisite_NoArgsAlwaysShowsHelp(t *testing.T) {
 func TestPrerequisite_DirectHandlerNoArgsShowsUsage(t *testing.T) {
 	prereqCalled := false
 	c := newTestCategory("cypher").
-		SetDirectHandler(func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+		SetDirectHandler(func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 			return dispatch.MessageResult("ok"), nil
 		}).
 		SetPrerequisite(func() error {
@@ -317,7 +317,7 @@ func TestPrerequisite_WrapsErrPrerequisite(t *testing.T) {
 	c := newTestCategory("test").
 		AddCommand(&dispatch.Command{
 			Name:    "cmd",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) { return dispatch.CommandResult{}, nil },
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) { return dispatch.CommandResult{}, nil },
 		}).
 		SetPrerequisite(func() error {
 			return fmt.Errorf("%w: something missing", tool.ErrPrerequisite)
@@ -337,7 +337,7 @@ func TestDispatch_Alias(t *testing.T) {
 		AddCommand(&dispatch.Command{
 			Name:    "show-users",
 			Aliases: []string{"su", "users"},
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				called = true
 				return dispatch.MessageResult("users"), nil
 			},
@@ -451,7 +451,7 @@ func TestDispatch_ModeWrite_BlockedInAgentMode(t *testing.T) {
 		AddCommand(&dispatch.Command{
 			Name:         "delete",
 			MutationMode: tool.ModeWrite,
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				called = true
 				return dispatch.MessageResult("deleted"), nil
 			},
@@ -479,7 +479,7 @@ func TestDispatch_ModeWrite_AllowedWith_RW(t *testing.T) {
 		AddCommand(&dispatch.Command{
 			Name:         "delete",
 			MutationMode: tool.ModeWrite,
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				called = true
 				return dispatch.MessageResult("deleted"), nil
 			},
@@ -500,7 +500,7 @@ func TestDispatch_ModeWrite_AllowedOutsideAgentMode(t *testing.T) {
 		AddCommand(&dispatch.Command{
 			Name:         "delete",
 			MutationMode: tool.ModeWrite,
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				called = true
 				return dispatch.MessageResult("deleted"), nil
 			},
@@ -521,7 +521,7 @@ func TestDispatch_ModeRead_NeverBlocked(t *testing.T) {
 		AddCommand(&dispatch.Command{
 			Name:         "list",
 			MutationMode: tool.ModeRead,
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				called = true
 				return dispatch.MessageResult("list"), nil
 			},
@@ -542,7 +542,7 @@ func TestDispatch_ModeConditional_NotBlockedByDispatcher(t *testing.T) {
 		AddCommand(&dispatch.Command{
 			Name:         "query",
 			MutationMode: tool.ModeConditional,
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
 				called = true
 				return dispatch.MessageResult("result"), nil
 			},
@@ -568,7 +568,7 @@ func TestDispatch_ContextPropagated(t *testing.T) {
 	c := newTestCategory("root").
 		AddCommand(&dispatch.Command{
 			Name: "check",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 				gotCtx = ctx.Context
 				return dispatch.CommandResult{}, nil
 			},

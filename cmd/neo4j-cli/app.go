@@ -67,7 +67,7 @@ type App struct {
 	log          logger.Service
 	logCloser    io.Closer // non-nil when logging to a file; closed last in close()
 	analytic     analytics.Service
-	presentation *presentation.PresentationService
+	presentation presentation.Service
 	registry     *tools.ToolRegistry
 	repo         repository.GraphRepository // held so close() can release driver resources
 
@@ -535,8 +535,13 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		logWriter,
 	)
 
-	// 3. Analytics
-	an := analytics.NewAnalytics(mixPanelToken, mixPanelEndpoint, cfg.Neo4j.URI, Version, log)
+	// 3. Analytics — prefer a token from config/env (CLI_TELEMETRY_MIXPANEL_TOKEN)
+	// so the hardcoded default can be overridden without a rebuild.
+	token := mixPanelToken
+	if cfg.Telemetry.MixpanelToken != "" {
+		token = cfg.Telemetry.MixpanelToken
+	}
+	an := analytics.NewAnalytics(token, mixPanelEndpoint, cfg.Neo4j.URI, Version, log)
 	if !cfg.Telemetry.Metrics {
 		an.Disable()
 	}

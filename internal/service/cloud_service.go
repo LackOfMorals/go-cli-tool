@@ -10,6 +10,9 @@ import (
 	"github.com/cli/go-cli-tool/internal/config"
 )
 
+// defaultAuraTimeout is used when AuraConfig.TimeoutSeconds is zero or negative.
+const defaultAuraTimeout = 30 * time.Second
+
 // ---- CloudServiceImpl ---------------------------------------------------
 
 // CloudServiceImpl is the top-level Aura cloud service. It holds a pointer to
@@ -45,7 +48,7 @@ func (s *CloudServiceImpl) ensureClient() (*aura.AuraAPIClient, error) {
 
 	if s.cfg.ClientID == "" || s.cfg.ClientSecret == "" {
 		return nil, fmt.Errorf(
-			"Aura API credentials not configured — " +
+			"aura API credentials not configured — " +
 				"set CLI_AURA_CLIENT_ID and CLI_AURA_CLIENT_SECRET " +
 				"or aura.client_id / aura.client_secret in your config file",
 		)
@@ -53,7 +56,7 @@ func (s *CloudServiceImpl) ensureClient() (*aura.AuraAPIClient, error) {
 
 	timeout := time.Duration(s.cfg.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = defaultAuraTimeout
 	}
 
 	client, err := aura.NewClient(

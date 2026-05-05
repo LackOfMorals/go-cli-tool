@@ -22,11 +22,11 @@ type mockAdminService struct {
 	dbsErr      error
 }
 
-func (m *mockAdminService) ShowUsers(ctx context.Context) ([]service.User, error) {
+func (m *mockAdminService) ShowUsers(_ context.Context) ([]service.User, error) {
 	return m.usersResult, m.usersErr
 }
 
-func (m *mockAdminService) ShowDatabases(ctx context.Context) ([]service.Database, error) {
+func (m *mockAdminService) ShowDatabases(_ context.Context) ([]service.Database, error) {
 	return m.dbsResult, m.dbsErr
 }
 

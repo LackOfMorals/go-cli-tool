@@ -98,7 +98,7 @@ type Context struct {
 	Config    config.Config
 	Logger    logger.Service
 	Telemetry analytics.Service
-	Presenter *presentation.PresentationService
+	Presenter presentation.Service
 	Registry  Registry
 	IO        tool.IOHandler
 

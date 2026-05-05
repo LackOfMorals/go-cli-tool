@@ -15,7 +15,7 @@ func BuildAdminCategory(svc service.AdminService) *dispatch.Category {
 			Name:        "show-users",
 			Usage:       "show-users",
 			Description: "List all database users and their roles",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 				users, err := svc.ShowUsers(ctx.Context)
 				if err != nil {
 					return dispatch.CommandResult{}, err
@@ -40,7 +40,7 @@ func BuildAdminCategory(svc service.AdminService) *dispatch.Category {
 			Name:        "show-databases",
 			Usage:       "show-databases",
 			Description: "List all databases and their current status",
-			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 				dbs, err := svc.ShowDatabases(ctx.Context)
 				if err != nil {
 					return dispatch.CommandResult{}, err

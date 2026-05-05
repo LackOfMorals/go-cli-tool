@@ -72,10 +72,10 @@ type Field struct {
 	Value interface{}
 }
 
-// ---- LoggerService ------------------------------------------------------
+// ---- loggerService ------------------------------------------------------
 
-// LoggerService is the concrete implementation of the logger service
-type LoggerService struct {
+// loggerService is the concrete implementation of the logger service
+type loggerService struct {
 	logger *slog.Logger
 	level  *slog.LevelVar
 	format LogFormat
@@ -107,7 +107,7 @@ func NewLoggerServiceToWriter(format LogFormat, defaultLevel LogLevel, w io.Writ
 		handler = slog.NewTextHandler(w, opts)
 	}
 
-	return &LoggerService{
+	return &loggerService{
 		logger: slog.New(handler),
 		level:  levelVar,
 		format: format,
@@ -131,32 +131,32 @@ func OpenLogFile(path string) (*os.File, error) {
 	return f, nil
 }
 
-func (l *LoggerService) Debug(msg string, fields ...Field) {
+func (l *loggerService) Debug(msg string, fields ...Field) {
 	l.logger.Debug(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) Info(msg string, fields ...Field) {
+func (l *loggerService) Info(msg string, fields ...Field) {
 	l.logger.Info(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) Warn(msg string, fields ...Field) {
+func (l *loggerService) Warn(msg string, fields ...Field) {
 	l.logger.Warn(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) Error(msg string, fields ...Field) {
+func (l *loggerService) Error(msg string, fields ...Field) {
 	l.logger.Error(msg, toSlogArgs(fields)...)
 }
 
-func (l *LoggerService) SetLevel(level LogLevel) {
+func (l *loggerService) SetLevel(level LogLevel) {
 	l.level.Set(toSlogLevel(level))
 }
 
-func (l *LoggerService) GetLevel() LogLevel {
+func (l *loggerService) GetLevel() LogLevel {
 	return fromSlogLevel(l.level.Level())
 }
 
-func (l *LoggerService) WithFields(fields ...Field) Service {
-	return &LoggerService{
+func (l *loggerService) WithFields(fields ...Field) Service {
+	return &loggerService{
 		logger: l.logger.With(toSlogArgs(fields)...),
 		level:  l.level,
 		format: l.format,

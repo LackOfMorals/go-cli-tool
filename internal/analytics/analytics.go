@@ -225,13 +225,6 @@ func (a *Analytics) logWarn(msg string, fields ...logger.Field) {
 	}
 }
 
-// logInfo logs at info level if a logger has been injected.
-func (a *Analytics) logInfo(msg string, fields ...logger.Field) {
-	if a.log != nil {
-		a.log.Info(msg, fields...)
-	}
-}
-
 // logError logs at error level if a logger has been injected.
 func (a *Analytics) logError(msg string, fields ...logger.Field) {
 	if a.log != nil {

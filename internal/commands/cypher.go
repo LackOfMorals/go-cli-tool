@@ -120,9 +120,7 @@ func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 
 			// Items: QueryRow is map[string]interface{}, so result.Rows satisfies directly.
 			items := make([]map[string]interface{}, len(result.Rows))
-			for i, row := range result.Rows {
-				items[i] = row
-			}
+			copy(items, result.Rows)
 
 			return dispatch.CommandResult{
 				Presentation:   queryResultToTableData(result),
@@ -286,6 +284,9 @@ func parseCypherFlags(args []string) cypherFlags {
 // globalBoolFlag reports whether s is a known global boolean persistent flag.
 // These flags carry no value and must be silently dropped from the cypher
 // arg stream because DisableFlagParsing passes them through verbatim.
+//
+// MAINTENANCE: keep in sync with the BoolVar persistent flags registered in
+// buildRootCommand() in cmd/neo4j-cli/app.go.
 func globalBoolFlag(s string) bool {
 	switch s {
 	case "--agent", "--rw", "--no-metrics":
@@ -296,6 +297,9 @@ func globalBoolFlag(s string) bool {
 
 // globalValueFlag reports whether s is a known global persistent flag that
 // consumes a following value token.
+//
+// MAINTENANCE: keep in sync with the StringVar/IntVar persistent flags
+// registered in buildRootCommand() in cmd/neo4j-cli/app.go.
 func globalValueFlag(s string) bool {
 	switch s {
 	case "--config-file",

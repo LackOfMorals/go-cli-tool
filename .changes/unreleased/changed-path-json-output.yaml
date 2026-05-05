@@ -1,0 +1,2 @@
+kind: Changed
+body: 'Cypher queries returning path values now produce structured JSON objects (`{"_type":"path","nodes":[...],"rels":[...]}`) instead of a lossy string summary; existing consumers of path output will need to update their parsing'
