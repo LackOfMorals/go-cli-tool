@@ -115,7 +115,7 @@ tasks:
       In .goreleaser.yaml update the build entry: id from neo4j-cli to nctl,
       main from ./cmd/neo4j-cli to ./cmd/nctl, and binary from neo4j-cli to
       nctl. No other fields need changing.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -123,7 +123,7 @@ tasks:
       - "main is ./cmd/nctl"
       - "binary is nctl"
       - "goreleaser check (if available) passes, or go build ./cmd/nctl succeeds as proxy"
-    completed_at: null
+    completed_at: "2026-05-05T05:00:00Z"
 
   - id: task-008
     title: "Update README.md to use nctl throughout"

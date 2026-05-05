@@ -46,3 +46,7 @@
 - Updated `OutputStderr` constant comment shell redirection example from `neo4j-cli 2>neo4j-cli.log` to `nctl 2>nctl.log`.
 - Updated `logger_test.go` test assertion in `TestOpenLogFile_DefaultPath` to check for `"nctl"` instead of `"neo4j-cli"`.
 - `go test ./internal/logger/...` and `go test ./...` both pass; `golangci-lint run ./internal/logger/...` reports 0 issues.
+
+### task-007 — 2026-05-05
+- Updated `.goreleaser.yaml` build entry: `id: neo4j-cli` → `id: nctl`, `main: ./cmd/neo4j-cli` → `main: ./cmd/nctl`, `binary: neo4j-cli` → `binary: nctl`.
+- `goreleaser check` passes; `go build ./cmd/nctl` succeeds.
