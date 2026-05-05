@@ -359,9 +359,36 @@ func (s *InteractiveShell) makeContext(ctx context.Context) Context {
 	}
 }
 
+const defaultNeo4jURI = "bolt://localhost:7687"
+
+// isUnconfigured reports true when no meaningful Neo4j connection config has
+// been provided — i.e. the URI is absent or still the default sentinel AND no
+// password has been set.
+func isUnconfigured(cfg *config.Config) bool {
+	if cfg == nil {
+		return true
+	}
+	uri := cfg.Neo4j.URI
+	uriIsDefault := uri == "" || uri == defaultNeo4jURI
+	return uriIsDefault && cfg.Neo4j.Password == ""
+}
+
 func (s *InteractiveShell) printWelcome() {
 	fmt.Println("Neo4j CLI — type 'help' for commands, 'exit' to quit.")
 	fmt.Println()
+
+	if isUnconfigured(s.cfg) {
+		fmt.Println("Welcome! No connection configuration detected.")
+		fmt.Println("To get started, set your Neo4j connection details:")
+		fmt.Println()
+		fmt.Println("  config set neo4j.uri    bolt://<host>:7687")
+		fmt.Println("  config set neo4j.username <username>")
+		fmt.Println("  config set neo4j.password <password>")
+		fmt.Println()
+		fmt.Println("Then run 'cypher' commands to query your database.")
+		fmt.Println("Type 'help' to see all available commands.")
+		fmt.Println()
+	}
 }
 
 // ---- Built-in commands --------------------------------------------------

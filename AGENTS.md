@@ -51,3 +51,4 @@ Generated files must be committed. CI fails if they are stale.
 - `CLI_SHELL_ENABLED` env var is handled automatically by viper's AutomaticEnv via the `shell.enabled` → `CLI_SHELL_ENABLED` key remapping (prefix CLI, `.` → `_`)
 - Root command `RunE` for the shell: check `agentMode` first (fall back to `cmd.Help()`), then check `cfg.Shell.Enabled` (fall back to `cmd.Help()`), then call `startShell`. Split into two functions (`launchShell` + `startShell`) for testability.
 - `shell.BridgeCategory` ctxFor closure: set `AgentMode=false` and `AllowWrites=true` for the interactive shell — human sessions are not agent sessions and write operations should not be blocked.
+- First-time banner detection: URI empty-or-equals `"bolt://localhost:7687"` AND password empty — use the package-level `isUnconfigured(*config.Config) bool` helper; do not inline this check in `printWelcome` so it can be tested independently.

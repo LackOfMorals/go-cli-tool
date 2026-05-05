@@ -157,3 +157,33 @@ Key Decisions:
 - golangci-lint reports 0 issues; go test ./... passes with all packages green.
 
 Next Task: task-007 (Welcome banner for no-config first-time users)
+
+================================================================================
+TASK-007: Welcome banner for no-config first-time users
+Date: 2026-05-05T06:00:00Z
+================================================================================
+
+Summary:
+Added a welcome banner to InteractiveShell.printWelcome() that appears when no
+meaningful Neo4j connection config is detected (URI is absent or equals the
+default sentinel bolt://localhost:7687 AND password is empty). The banner
+explains the config set commands needed to get started. A package-level helper
+isUnconfigured(cfg *config.Config) bool implements the detection logic.
+
+Files Changed:
+- internal/shell/interactive.go (added const defaultNeo4jURI, isUnconfigured
+  helper, extended printWelcome to print first-time banner when unconfigured)
+
+Key Decisions:
+- Detection condition: URI empty or equals default sentinel ("bolt://localhost:7687")
+  AND password empty — matches the acceptance criteria exactly. Using a custom URI
+  alone (without a password) is still considered "configured" since the user has
+  deliberately changed a setting.
+- isUnconfigured is a package-level function (not a method) so it can be tested
+  independently without needing a full InteractiveShell instance.
+- Banner is printed inside printWelcome() immediately before the REPL loop starts,
+  satisfying "before the prompt" requirement.
+- Shell operation after the banner is unchanged — it's purely additive fmt.Println calls.
+- golangci-lint reports 0 issues; go test ./... passes with all packages green.
+
+Next Task: task-008 (Lint and test pass)

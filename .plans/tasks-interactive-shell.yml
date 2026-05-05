@@ -118,7 +118,7 @@ tasks:
       default bolt://localhost:7687 sentinel AND password is empty). When detected,
       print a welcome banner before entering the read loop explaining the config set
       commands needed to get started.
-    status: pending
+    status: completed
     dependencies:
       - task-006
     acceptance_criteria:
@@ -126,7 +126,7 @@ tasks:
       - "Banner includes config set neo4j.uri and config set neo4j.password examples"
       - "Banner does not appear when valid connection config is present"
       - "Shell still accepts commands normally after banner is shown"
-    completed_at: null
+    completed_at: "2026-05-05T06:00:00Z"
 
   - id: task-008
     title: "Lint and test pass: golangci-lint run and go test ./..."
