@@ -13,3 +13,11 @@
 - Updated variable comments for `agentMode`, `allowWrites`, and `requestID`.
 - Updated all three flag description strings (--agent, --rw, --request-id) to reference `NCTL_` env var names.
 - `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
+
+### task-003 — 2026-05-05
+- Changed `v.SetEnvPrefix("CLI")` to `v.SetEnvPrefix("NCTL")` in `newViperConfigLoader()`.
+- Updated `DefaultConfigFilePath()` to return `~/.nctl/config.json`; fallback is `.nctl-config.json`.
+- Updated all `CLI_` references in comments throughout `internal/config/config.go` to `NCTL_` (Neo4jConfig, AuraConfig, AuraInstanceDefaults, CypherConfig, NewConfigService, LoadConfiguration, newViperConfigLoader).
+- Updated `config_test.go`: comment about `~/.neo4j-cli/config.json`, and two `t.Setenv` calls (`CLI_NEO4J_URI` → `NCTL_NEO4J_URI`, `CLI_NEO4J_DATABASE` → `NCTL_NEO4J_DATABASE`).
+- Note: user-facing `CLI_` strings in other packages (prerequisites.go, cloud_service.go, neo4j_repo.go, app.go) are in scope for task-005 and task-006.
+- `go test ./internal/config/...` and `go test ./...` both pass; `golangci-lint run ./internal/config/...` reports 0 issues.

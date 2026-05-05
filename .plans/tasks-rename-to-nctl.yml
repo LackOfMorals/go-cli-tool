@@ -45,7 +45,7 @@ tasks:
       viperConfigLoader function. Update DefaultConfigFilePath() to return
       ~/.nctl/config.json (and fall back to .nctl-config.json). Update all
       CLI_ comments in the file to NCTL_.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "SetEnvPrefix is called with \"NCTL\""
@@ -53,7 +53,7 @@ tasks:
       - "Fallback path is .nctl-config.json"
       - "All CLI_ references in comments are updated to NCTL_"
       - "go test ./internal/config/... passes"
-    completed_at: null
+    completed_at: "2026-05-05T01:00:00Z"
 
   - id: task-004
     title: "Update default log file path in internal/logger/logger.go"
