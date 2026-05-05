@@ -5,3 +5,11 @@
 - `go build ./cmd/nctl` and `go build ./...` both succeed with no changes to Go source files.
 - `go test ./...` passes — all existing tests still pass after the directory rename.
 - No Go source edits were needed: `package main` declarations and import paths are unaffected by a directory rename in this module layout.
+
+### task-002 — 2026-05-05
+- Replaced all three `os.Getenv` calls in `cmd/nctl/app.go`: `NEO4J_CLI_AGENT` → `NCTL_AGENT`, `NEO4J_CLI_RW` → `NCTL_RW`, `NEO4J_CLI_REQUEST_ID` → `NCTL_REQUEST_ID`.
+- Updated the error string from `'neo4j-cli --help'` to `'nctl --help'` in `run()`.
+- Updated the comment on `currentRequestID()` to reference `NCTL_REQUEST_ID`.
+- Updated variable comments for `agentMode`, `allowWrites`, and `requestID`.
+- Updated all three flag description strings (--agent, --rw, --request-id) to reference `NCTL_` env var names.
+- `go build ./cmd/nctl` and `go test ./...` both pass with no failures.

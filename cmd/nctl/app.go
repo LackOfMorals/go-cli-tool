@@ -58,9 +58,9 @@ var (
 	shellFlag bool // --shell (explicit; may be true or false)
 
 	// Agent-mode flags
-	agentMode   bool   // --agent / NEO4J_CLI_AGENT=true
-	allowWrites bool   // --rw / NEO4J_CLI_RW=true
-	requestID   string // --request-id / NEO4J_CLI_REQUEST_ID
+	agentMode   bool   // --agent / NCTL_AGENT=true
+	allowWrites bool   // --rw / NCTL_RW=true
+	requestID   string // --request-id / NCTL_REQUEST_ID
 	timeoutStr  string // --timeout (e.g. "30s")
 )
 
@@ -95,13 +95,13 @@ func run() int {
 	}
 
 	// Honour env vars too; either source winning is correct.
-	if os.Getenv("NEO4J_CLI_AGENT") == "true" {
+	if os.Getenv("NCTL_AGENT") == "true" {
 		agentMode = true
 	}
-	if os.Getenv("NEO4J_CLI_RW") == "true" {
+	if os.Getenv("NCTL_RW") == "true" {
 		allowWrites = true
 	}
-	if v := os.Getenv("NEO4J_CLI_REQUEST_ID"); v != "" {
+	if v := os.Getenv("NCTL_REQUEST_ID"); v != "" {
 		requestID = v
 	}
 
@@ -119,7 +119,7 @@ func run() int {
 			}
 			sort.Strings(names)
 			fmt.Fprintf(os.Stderr, "Valid commands: %s\n", strings.Join(names, ", "))
-			fmt.Fprintf(os.Stderr, "Run 'neo4j-cli --help' for usage.\n")
+			fmt.Fprintf(os.Stderr, "Run 'nctl --help' for usage.\n")
 		}
 		return 1
 	}
@@ -127,7 +127,7 @@ func run() int {
 }
 
 // currentRequestID returns the active request ID, generating one if the user
-// did not supply --request-id or NEO4J_CLI_REQUEST_ID.
+// did not supply --request-id or NCTL_REQUEST_ID.
 func currentRequestID() string {
 	if requestID != "" {
 		return requestID
@@ -196,9 +196,9 @@ run without arguments to start the interactive shell.`,
 	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: CLI_SHELL_ENABLED=false to disable)")
 
 	// Agent-mode flags
-	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NEO4J_CLI_AGENT=true)")
-	pf.BoolVar(&allowWrites, "rw", false, "Permit write/mutating operations in agent mode (env: NEO4J_CLI_RW=true)")
-	pf.StringVar(&requestID, "request-id", "", "Correlation ID included in every agent-mode JSON response (env: NEO4J_CLI_REQUEST_ID)")
+	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NCTL_AGENT=true)")
+	pf.BoolVar(&allowWrites, "rw", false, "Permit write/mutating operations in agent mode (env: NCTL_RW=true)")
+	pf.StringVar(&requestID, "request-id", "", "Correlation ID included in every agent-mode JSON response (env: NCTL_REQUEST_ID)")
 	pf.StringVar(&timeoutStr, "timeout", "", "Maximum time for a command to run, e.g. 30s or 2m (exit code 124 on timeout)")
 
 	rootCmd.AddCommand(buildCloudCommand())

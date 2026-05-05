@@ -27,7 +27,7 @@ tasks:
       NEO4J_CLI_RW -> NCTL_RW, NEO4J_CLI_REQUEST_ID -> NCTL_REQUEST_ID.
       Also update the 'Run nctl --help' error string and all variable comments
       that reference the old env var names.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -36,7 +36,7 @@ tasks:
       - "os.Getenv(\"NCTL_REQUEST_ID\") replaces NEO4J_CLI_REQUEST_ID"
       - "Flag descriptions reference NCTL_ env var names"
       - "go build ./cmd/nctl succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-003
     title: "Update viper env prefix from CLI to NCTL in internal/config/config.go"

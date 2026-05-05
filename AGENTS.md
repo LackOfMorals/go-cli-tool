@@ -54,3 +54,4 @@ Generated files must be committed. CI fails if they are stale.
 - First-time banner detection: URI empty-or-equals `"bolt://localhost:7687"` AND password empty — use the package-level `isUnconfigured(*config.Config) bool` helper; do not inline this check in `printWelcome` so it can be tested independently.
 - Tests for unexported shell helpers (e.g. `isUnconfigured`) must be in `package shell` (not `shell_test`); name the file `*_internal_test.go` to distinguish from the external `*_test.go` files in the same directory.
 - In bridge loops that call `cat.Commands()`, snapshot the map once before the loop (`cmds := cat.Commands()`) to avoid O(n) repeated map allocations.
+- Agent-mode env vars are now `NCTL_AGENT`, `NCTL_RW`, `NCTL_REQUEST_ID` (renamed from `NEO4J_CLI_*` in task-002). The viper prefix `CLI_` (for `CLI_SHELL_ENABLED` etc.) is a separate rename tracked in task-003.
