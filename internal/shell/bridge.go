@@ -33,9 +33,11 @@ func BridgeCategory(cat *dispatch.Category, ctxFor func(Context) dispatch.Contex
 		bridged.AddSubcategory(BridgeCategory(sub, ctxFor))
 	}
 
-	// Bridge every named command.
+	// Bridge every named command. Snapshot the commands map once to avoid
+	// O(n) map copies inside the loop.
+	cmds := cat.Commands()
 	for _, cmdName := range cat.CommandNames() {
-		dispCmd := cat.Commands()[cmdName]
+		dispCmd := cmds[cmdName]
 		if dispCmd == nil {
 			continue
 		}

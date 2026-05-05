@@ -187,3 +187,30 @@ Key Decisions:
 - golangci-lint reports 0 issues; go test ./... passes with all packages green.
 
 Next Task: task-008 (Lint and test pass)
+
+================================================================================
+TASK-008: Lint and test pass: golangci-lint run and go test ./...
+Date: 2026-05-05T07:00:00Z
+================================================================================
+
+Summary:
+Verified the completed interactive-shell feature passes all feedback loops:
+golangci-lint run (0 issues), go test ./... (all packages green), go build ./...
+(no errors), and go generate ./... (no diff in generated files).
+Applied two improvements from code review: (1) hoisted cat.Commands() snapshot
+before the bridge loop in bridge.go to avoid O(n) repeated map copies; (2) added
+internal/shell/interactive_internal_test.go with 7 table-driven test cases for
+the isUnconfigured helper (package shell, since the function is unexported).
+
+Files Changed:
+- internal/shell/bridge.go (hoist cmds := cat.Commands() before loop)
+- internal/shell/interactive_internal_test.go (created — 7 tests for isUnconfigured)
+- .plans/tasks-interactive-shell.yml (task-008 status updated to completed)
+
+Key Decisions:
+- Tests for isUnconfigured live in package shell (internal test file), not
+  shell_test, because the function is unexported. Named the file
+  interactive_internal_test.go to distinguish from the external interactive_test.go.
+- All acceptance criteria confirmed: lint, test, generate, and build all pass.
+
+Next Task: NONE (all tasks complete)

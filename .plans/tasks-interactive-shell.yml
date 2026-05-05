@@ -135,7 +135,7 @@ tasks:
       Fix any lint issues (unused parameters, errcheck, revive stutter, etc.) and
       failing tests introduced by this feature. Ensure go generate ./... produces
       no changes to committed generated files.
-    status: pending
+    status: completed
     dependencies:
       - task-004
       - task-006
@@ -145,4 +145,4 @@ tasks:
       - "go test ./... passes with no failures"
       - "go generate ./... produces no diff in generated files"
       - "go build ./... succeeds for all packages"
-    completed_at: null
+    completed_at: "2026-05-05T07:00:00Z"
