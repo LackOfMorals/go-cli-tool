@@ -61,7 +61,7 @@ tasks:
       conversion paths: Message-only result, Presentation result (table/detail),
       validation error from handler, and prerequisite failure blocking dispatch.
       Use stub dispatch.Category and stub presenter.
-    status: pending
+    status: completed
     dependencies:
       - task-003
     acceptance_criteria:
@@ -69,7 +69,7 @@ tasks:
       - "Test for error returned from bridged handler propagates as error"
       - "Test for prerequisite failure returns error before calling handler"
       - "go test ./internal/shell/... passes"
-    completed_at: null
+    completed_at: "2026-05-05T03:00:00Z"
 
   - id: task-005
     title: "Add --shell flag to root command and wire to Overrides.ShellEnabled"

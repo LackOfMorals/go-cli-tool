@@ -75,3 +75,30 @@ Key Decisions:
   aliases via the Aliases field.
 
 Next Task: task-004 (Unit tests for bridge adapter)
+
+================================================================================
+TASK-004: Unit tests for bridge adapter
+Date: 2026-05-05T03:00:00Z
+================================================================================
+
+Summary:
+Created internal/shell/bridge_test.go with 11 test cases covering all acceptance
+criteria and additional rendering paths. Uses a package-level stubPresenter
+implementing presentation.Service and an identityCtxFor helper.
+
+Files Changed:
+- internal/shell/bridge_test.go (created)
+- .plans/tasks-interactive-shell.yml (task-004 status updated to completed)
+
+Key Decisions:
+- Used package shell_test (external test package) to match the convention of all
+  other shell package test files, relying only on exported API.
+- stubPresenter captures lastData and lastFormat fields so tests can assert which
+  presenter method was called with which data — avoids importing mock frameworks.
+- Tests cover: MessageResult, Presentation via Format, FormatOverride via FormatAs,
+  nil-presenter fallback to Message, handler error propagation, prerequisite failure
+  blocking handler, prerequisite pass, no-prerequisite, recursive subcategory
+  bridging, and ctxFor context forwarding.
+- All 11 tests pass; golangci-lint reports 0 issues.
+
+Next Task: task-005 (Add --shell flag to root command)

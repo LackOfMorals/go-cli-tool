@@ -45,3 +45,5 @@ Generated files must be committed. CI fails if they are stale.
 - The shell package already uses `presentation.Service` (interface) — do not reference the concrete struct
 - `golangci-lint run` must pass with zero suppressions
 - `dispatch.Category` private fields (commands, prerequisite) are exposed via `Commands()` and `Prerequisite()` accessors added for the bridge adapter — use these, not reflection
+- Bridge tests live in `package shell_test` (external) like all other shell tests — use only exported API and a local stub presenter; no mock framework needed
+- `stubPresenter` pattern: implement all four `presentation.Service` methods, capture `lastData`/`lastFormat` for assertions, return configurable `returnString`/`returnErr`
