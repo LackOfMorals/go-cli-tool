@@ -1,0 +1,52 @@
+## rename-to-nctl progress log
+
+### task-001 — 2026-05-05
+- Used `git mv cmd/neo4j-cli cmd/nctl` to rename the directory; rename is tracked in git history.
+- `go build ./cmd/nctl` and `go build ./...` both succeed with no changes to Go source files.
+- `go test ./...` passes — all existing tests still pass after the directory rename.
+- No Go source edits were needed: `package main` declarations and import paths are unaffected by a directory rename in this module layout.
+
+### task-002 — 2026-05-05
+- Replaced all three `os.Getenv` calls in `cmd/nctl/app.go`: `NEO4J_CLI_AGENT` → `NCTL_AGENT`, `NEO4J_CLI_RW` → `NCTL_RW`, `NEO4J_CLI_REQUEST_ID` → `NCTL_REQUEST_ID`.
+- Updated the error string from `'neo4j-cli --help'` to `'nctl --help'` in `run()`.
+- Updated the comment on `currentRequestID()` to reference `NCTL_REQUEST_ID`.
+- Updated variable comments for `agentMode`, `allowWrites`, and `requestID`.
+- Updated all three flag description strings (--agent, --rw, --request-id) to reference `NCTL_` env var names.
+- `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
+
+### task-003 — 2026-05-05
+- Changed `v.SetEnvPrefix("CLI")` to `v.SetEnvPrefix("NCTL")` in `newViperConfigLoader()`.
+- Updated `DefaultConfigFilePath()` to return `~/.nctl/config.json`; fallback is `.nctl-config.json`.
+- Updated all `CLI_` references in comments throughout `internal/config/config.go` to `NCTL_` (Neo4jConfig, AuraConfig, AuraInstanceDefaults, CypherConfig, NewConfigService, LoadConfiguration, newViperConfigLoader).
+- Updated `config_test.go`: comment about `~/.neo4j-cli/config.json`, and two `t.Setenv` calls (`CLI_NEO4J_URI` → `NCTL_NEO4J_URI`, `CLI_NEO4J_DATABASE` → `NCTL_NEO4J_DATABASE`).
+- Note: user-facing `CLI_` strings in other packages (prerequisites.go, cloud_service.go, neo4j_repo.go, app.go) are in scope for task-005 and task-006.
+- `go test ./internal/config/...` and `go test ./...` both pass; `golangci-lint run ./internal/config/...` reports 0 issues.
+
+### task-005 — 2026-05-05
+- Changed `Use: "neo4j-cli"` to `Use: "nctl"` in `buildRootCommand()`.
+- Updated Long description to reference `nctl` instead of `neo4j-cli`.
+- Updated `--log-file` flag description from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
+- Updated all `Example` strings in `buildCloudCommand`, `buildCypherCommand`, `buildAdminCommand`, and `buildConfigCommand` to use `nctl` instead of `neo4j-cli`.
+- `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
+- `bin/nctl --help` correctly shows `nctl` as the command name.
+
+### task-006 — 2026-05-05
+- Updated `dispatch/category.go`: error message changed from `'neo4j-cli %s --help'` to `'nctl %s --help'`; doc comment examples updated from `neo4j-cli cloud/cypher` to `nctl cloud/cypher`.
+- Updated `dispatch/dispatch.go`: comments on `AgentMode` and `AllowWrites` fields now reference `NCTL_AGENT` and `NCTL_RW` respectively.
+- Updated `commands/cypher.go`: both MAINTENANCE comments in `globalBoolFlag` and `globalValueFlag` now reference `cmd/nctl/app.go` instead of `cmd/neo4j-cli/app.go`.
+- Updated `tool/tool.go`: `ModeWrite` constant comment now references `NCTL_RW` instead of `NEO4J_CLI_RW`.
+- Updated `shell/interactive.go`: `builtinVersion` returns `"nctl %s"` (was `"neo4j-cli %s"`); `builtinConfig` log file default path updated from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
+- Updated `shell/interactive_test.go`: `TestExecute_Version` assertion updated from `'neo4j-cli'` to `'nctl'` (test was broken by the version string change; fix pulled forward from task-010).
+- `go test ./...` and `golangci-lint run` both pass with zero issues.
+
+### task-004 — 2026-05-05
+- Updated `DefaultLogFilePath()` in `internal/logger/logger.go`: return path changed from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
+- Updated tmpdir fallback from `neo4j-cli.log` to `nctl.log`.
+- Updated doc comment block (Linux/macOS and Windows example paths).
+- Updated `OutputStderr` constant comment shell redirection example from `neo4j-cli 2>neo4j-cli.log` to `nctl 2>nctl.log`.
+- Updated `logger_test.go` test assertion in `TestOpenLogFile_DefaultPath` to check for `"nctl"` instead of `"neo4j-cli"`.
+- `go test ./internal/logger/...` and `go test ./...` both pass; `golangci-lint run ./internal/logger/...` reports 0 issues.
+
+### task-007 — 2026-05-05
+- Updated `.goreleaser.yaml` build entry: `id: neo4j-cli` → `id: nctl`, `main: ./cmd/neo4j-cli` → `main: ./cmd/nctl`, `binary: neo4j-cli` → `binary: nctl`.
+- `goreleaser check` passes; `go build ./cmd/nctl` succeeds.

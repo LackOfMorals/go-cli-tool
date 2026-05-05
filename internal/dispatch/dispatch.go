@@ -102,11 +102,11 @@ type Context struct {
 	Registry  Registry
 	IO        tool.IOHandler
 
-	// AgentMode is true when --agent / NEO4J_CLI_AGENT=true is set. It
+	// AgentMode is true when --agent / NCTL_AGENT=true is set. It
 	// activates non-interactive behaviour, JSON output, and read-only defaults.
 	AgentMode bool
 
-	// AllowWrites is true when --rw / NEO4J_CLI_RW=true is set. It grants
+	// AllowWrites is true when --rw / NCTL_RW=true is set. It grants
 	// permission to execute write operations in agent mode. Has no effect
 	// outside agent mode.
 	AllowWrites bool

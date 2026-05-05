@@ -25,7 +25,7 @@ const (
 
 	// ModeWrite means the tool always modifies state. In agent mode the
 	// dispatcher blocks the call and returns ErrReadOnly before Execute() is
-	// ever called, unless --rw / NEO4J_CLI_RW is also set.
+	// ever called, unless --rw / NCTL_RW is also set.
 	ModeWrite
 
 	// ModeConditional means whether the tool mutates state depends on its

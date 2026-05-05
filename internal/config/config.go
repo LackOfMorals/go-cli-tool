@@ -55,9 +55,9 @@ type Config struct {
 
 // Neo4jConfig holds connection details for a Neo4j database instance.
 //
-// Env vars (CLI_ prefix):
+// Env vars (NCTL_ prefix):
 //
-//	CLI_NEO4J_URI, CLI_NEO4J_USERNAME, CLI_NEO4J_PASSWORD, CLI_NEO4J_DATABASE
+//	NCTL_NEO4J_URI, NCTL_NEO4J_USERNAME, NCTL_NEO4J_PASSWORD, NCTL_NEO4J_DATABASE
 type Neo4jConfig struct {
 	URI      string `mapstructure:"uri"      json:"uri"`
 	Username string `mapstructure:"username" json:"username"`
@@ -67,10 +67,10 @@ type Neo4jConfig struct {
 
 // AuraConfig holds credentials and options for the Neo4j Aura management API.
 //
-// Env vars (CLI_ prefix):
+// Env vars (NCTL_ prefix):
 //
-//	CLI_AURA_CLIENT_ID, CLI_AURA_CLIENT_SECRET, CLI_AURA_TIMEOUT_SECONDS
-//	CLI_AURA_INSTANCE_DEFAULTS_TENANT_ID, CLI_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER, ...
+//	NCTL_AURA_CLIENT_ID, NCTL_AURA_CLIENT_SECRET, NCTL_AURA_TIMEOUT_SECONDS
+//	NCTL_AURA_INSTANCE_DEFAULTS_TENANT_ID, NCTL_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER, ...
 type AuraConfig struct {
 	ClientID         string               `mapstructure:"client_id"         json:"client_id"`
 	ClientSecret     string               `mapstructure:"client_secret"     json:"client_secret"`
@@ -81,7 +81,7 @@ type AuraConfig struct {
 // AuraInstanceDefaults holds defaults for new instance creation.
 // These are merged with per-command arguments, with explicit args taking precedence.
 //
-// Env vars (CLI_ prefix, e.g. CLI_AURA_INSTANCE_DEFAULTS_TENANT_ID):
+// Env vars (NCTL_ prefix, e.g. NCTL_AURA_INSTANCE_DEFAULTS_TENANT_ID):
 type AuraInstanceDefaults struct {
 	TenantID      string `mapstructure:"tenant_id"       json:"tenant_id"`
 	CloudProvider string `mapstructure:"cloud_provider"  json:"cloud_provider"`
@@ -92,13 +92,13 @@ type AuraInstanceDefaults struct {
 }
 
 // DefaultConfigFilePath returns the default path for the CLI configuration
-// file: ~/.neo4j-cli/config.json. Falls back to a local file on error.
+// file: ~/.nctl/config.json. Falls back to a local file on error.
 func DefaultConfigFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".neo4j-cli-config.json"
+		return ".nctl-config.json"
 	}
-	return filepath.Join(home, ".neo4j-cli", "config.json")
+	return filepath.Join(home, ".nctl", "config.json")
 }
 
 type TelemetryConfig struct {
@@ -114,9 +114,9 @@ type ShellConfig struct {
 
 // CypherConfig controls query execution and output behaviour.
 //
-// Env vars (CLI_ prefix):
+// Env vars (NCTL_ prefix):
 //
-//	CLI_CYPHER_SHELL_LIMIT, CLI_CYPHER_EXEC_LIMIT, CLI_CYPHER_OUTPUT_FORMAT
+//	NCTL_CYPHER_SHELL_LIMIT, NCTL_CYPHER_EXEC_LIMIT, NCTL_CYPHER_OUTPUT_FORMAT
 type CypherConfig struct {
 	// ShellLimit is the default LIMIT injected in shell (interactive) mode.
 	ShellLimit int `mapstructure:"shell_limit" json:"shell_limit"`
@@ -144,7 +144,7 @@ type configService struct {
 // NewConfigService returns a Service that resolves configuration with the
 // following precedence (highest → lowest):
 //
-//	explicit Overrides → env vars (CLI_ prefix) → config file → defaults
+//	explicit Overrides → env vars (NCTL_ prefix) → config file → defaults
 func NewConfigService(overrides Overrides) Service {
 	return &configService{
 		overrides: overrides,
@@ -158,7 +158,7 @@ func NewConfigService(overrides Overrides) Service {
 //
 // File loading precedence:
 //  1. Explicit --config-file path (hard error if file is missing)
-//  2. DefaultConfigFilePath() — ~/.neo4j-cli/config.json (silently skipped if absent)
+//  2. DefaultConfigFilePath() — ~/.nctl/config.json (silently skipped if absent)
 func (c *configService) LoadConfiguration() (Config, error) {
 	if c.overrides.ConfigFile != "" {
 		// Explicit path: treat a missing file as an error.
@@ -307,9 +307,9 @@ func newViperConfigLoader() *viperConfigLoader {
 	v.SetDefault("cypher.exec_limit", 100)
 	v.SetDefault("cypher.output_format", "table")
 
-	// Env vars: CLI_NEO4J_URI, CLI_AURA_CLIENT_SECRET, etc.
-	// The replacer maps "." → "_" so "neo4j.uri" → CLI_NEO4J_URI.
-	v.SetEnvPrefix("CLI")
+	// Env vars: NCTL_NEO4J_URI, NCTL_AURA_CLIENT_SECRET, etc.
+	// The replacer maps "." → "_" so "neo4j.uri" → NCTL_NEO4J_URI.
+	v.SetEnvPrefix("NCTL")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 

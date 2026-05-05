@@ -84,8 +84,8 @@ func TestExecute_Version(t *testing.T) {
 	if !strings.Contains(out, "1.2.3") {
 		t.Errorf("expected version in output, got: %q", out)
 	}
-	if !strings.Contains(out, "neo4j-cli") {
-		t.Errorf("expected 'neo4j-cli' in output, got: %q", out)
+	if !strings.Contains(out, "nctl") {
+		t.Errorf("expected 'nctl' in output, got: %q", out)
 	}
 }
 

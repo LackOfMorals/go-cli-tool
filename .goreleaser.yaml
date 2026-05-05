@@ -8,9 +8,9 @@ before:
     - go test ./...
 
 builds:
-  - id: neo4j-cli
-    main: ./cmd/neo4j-cli
-    binary: neo4j-cli
+  - id: nctl
+    main: ./cmd/nctl
+    binary: nctl
     env:
       - CGO_ENABLED=0        # pure Go, no C deps — enables clean cross-compilation
     goos:

@@ -485,7 +485,7 @@ func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
 	if c.LogOutput == "file" {
 		row("Log file", func() string {
 			if c.LogFile == "" {
-				return "(default: ~/.neo4j-cli/neo4j-cli.log)"
+				return "(default: ~/.nctl/nctl.log)"
 			}
 			return c.LogFile
 		}())
@@ -620,7 +620,7 @@ func (s *InteractiveShell) builtinClear(_ []string) (string, error) {
 }
 
 func (s *InteractiveShell) builtinVersion(_ []string) (string, error) {
-	return fmt.Sprintf("neo4j-cli %s", s.version), nil
+	return fmt.Sprintf("nctl %s", s.version), nil
 }
 
 // ---- Tool execution -----------------------------------------------------

@@ -14,7 +14,7 @@ import (
 func loadDefaults(t *testing.T) config.Config {
 	t.Helper()
 	// Point HOME at a temp dir so LoadConfiguration does not pick up
-	// a real ~/.neo4j-cli/config.json that might be present on this machine.
+	// a real ~/.nctl/config.json that might be present on this machine.
 	t.Setenv("HOME", t.TempDir())
 	cfg, err := config.NewConfigService(config.Overrides{}).LoadConfiguration()
 	if err != nil {
@@ -259,7 +259,7 @@ func TestPrecedence_EnvVarOverridesFile(t *testing.T) {
 		"neo4j": map[string]any{"uri": "bolt://filehost:7687"},
 	})
 
-	t.Setenv("CLI_NEO4J_URI", "bolt://envhost:7687")
+	t.Setenv("NCTL_NEO4J_URI", "bolt://envhost:7687")
 
 	cfg, err := config.NewConfigService(config.Overrides{ConfigFile: path}).LoadConfiguration()
 	if err != nil {
@@ -271,7 +271,7 @@ func TestPrecedence_EnvVarOverridesFile(t *testing.T) {
 }
 
 func TestPrecedence_EnvVarOverridesDefault(t *testing.T) {
-	t.Setenv("CLI_NEO4J_DATABASE", "envdb")
+	t.Setenv("NCTL_NEO4J_DATABASE", "envdb")
 
 	cfg, err := config.NewConfigService(config.Overrides{}).LoadConfiguration()
 	if err != nil {

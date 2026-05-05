@@ -14,7 +14,7 @@ go test -run TestName ./internal/...  # single test
 ### BUILD COMMANDS
 ```
 go build ./...
-go build -o bin/neo4j-cli ./cmd/neo4j-cli
+go build -o bin/nctl ./cmd/nctl
 ```
 
 ### LINT COMMANDS
@@ -54,3 +54,10 @@ Generated files must be committed. CI fails if they are stale.
 - First-time banner detection: URI empty-or-equals `"bolt://localhost:7687"` AND password empty — use the package-level `isUnconfigured(*config.Config) bool` helper; do not inline this check in `printWelcome` so it can be tested independently.
 - Tests for unexported shell helpers (e.g. `isUnconfigured`) must be in `package shell` (not `shell_test`); name the file `*_internal_test.go` to distinguish from the external `*_test.go` files in the same directory.
 - In bridge loops that call `cat.Commands()`, snapshot the map once before the loop (`cmds := cat.Commands()`) to avoid O(n) repeated map allocations.
+- Agent-mode env vars are `NCTL_AGENT`, `NCTL_RW`, `NCTL_REQUEST_ID` (renamed from `NEO4J_CLI_*` in task-002).
+- Viper env prefix is now `NCTL` (was `CLI`), so config env vars are `NCTL_NEO4J_URI`, `NCTL_AURA_CLIENT_SECRET`, `NCTL_SHELL_ENABLED`, etc. (renamed in task-003).
+- Default config path is now `~/.nctl/config.json` (was `~/.neo4j-cli/config.json`).
+- Default log file path is now `~/.nctl/nctl.log` (was `~/.neo4j-cli/neo4j-cli.log`); tmpdir fallback is `nctl.log`.
+- Root command `Use` field is `"nctl"`, Long description references `nctl`; all subcommand `Example` strings use `nctl`; `--log-file` flag description references `~/.nctl/nctl.log` (updated in task-005).
+- `builtinVersion` in `shell/interactive.go` returns `"nctl <version>"`; `builtinConfig` log file default shows `~/.nctl/nctl.log` (updated in task-006).
+- When a version string in a source file changes, check if any tests assert on the old string — they will break immediately and must be fixed in the same task (cannot defer to a later task).

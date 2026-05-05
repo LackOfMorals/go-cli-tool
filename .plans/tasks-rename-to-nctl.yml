@@ -11,13 +11,13 @@ tasks:
       rename is tracked in git history. The package declaration inside main.go
       and app.go remains package main — no Go source changes needed in this task.
       Verify go build ./cmd/nctl compiles after the directory move.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "Directory cmd/nctl/ exists; cmd/neo4j-cli/ is gone"
       - "git mv is used so the rename appears in git history"
       - "go build ./cmd/nctl succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-002
     title: "Update env vars in cmd/nctl/app.go to NCTL_ prefix"
@@ -27,7 +27,7 @@ tasks:
       NEO4J_CLI_RW -> NCTL_RW, NEO4J_CLI_REQUEST_ID -> NCTL_REQUEST_ID.
       Also update the 'Run nctl --help' error string and all variable comments
       that reference the old env var names.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -36,7 +36,7 @@ tasks:
       - "os.Getenv(\"NCTL_REQUEST_ID\") replaces NEO4J_CLI_REQUEST_ID"
       - "Flag descriptions reference NCTL_ env var names"
       - "go build ./cmd/nctl succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-003
     title: "Update viper env prefix from CLI to NCTL in internal/config/config.go"
@@ -45,7 +45,7 @@ tasks:
       viperConfigLoader function. Update DefaultConfigFilePath() to return
       ~/.nctl/config.json (and fall back to .nctl-config.json). Update all
       CLI_ comments in the file to NCTL_.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "SetEnvPrefix is called with \"NCTL\""
@@ -53,7 +53,7 @@ tasks:
       - "Fallback path is .nctl-config.json"
       - "All CLI_ references in comments are updated to NCTL_"
       - "go test ./internal/config/... passes"
-    completed_at: null
+    completed_at: "2026-05-05T01:00:00Z"
 
   - id: task-004
     title: "Update default log file path in internal/logger/logger.go"
@@ -61,14 +61,14 @@ tasks:
       Change DefaultLogFilePath() to return ~/.nctl/nctl.log and the tmpdir
       fallback to nctl.log. Update all comments in the file that reference
       neo4j-cli paths or the old log file name.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "DefaultLogFilePath returns a path containing .nctl/nctl.log"
       - "Tmpdir fallback returns nctl.log"
       - "Comments updated to reference nctl"
       - "go test ./internal/logger/... passes"
-    completed_at: null
+    completed_at: "2026-05-05T02:00:00Z"
 
   - id: task-005
     title: "Update Cobra Use field and all Example strings in cmd/nctl/app.go"
@@ -78,7 +78,7 @@ tasks:
       across buildCloudCommand, buildCypherCommand, buildAdminCommand, and
       buildConfigCommand, and the --log-file flag description that references
       ~/.neo4j-cli/neo4j-cli.log.
-    status: pending
+    status: completed
     dependencies:
       - task-002
     acceptance_criteria:
@@ -87,7 +87,7 @@ tasks:
       - "All Example strings use nctl instead of neo4j-cli"
       - "Flag description references ~/.nctl/nctl.log"
       - "go build ./cmd/nctl succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T03:00:00Z"
 
   - id: task-006
     title: "Update neo4j-cli references in internal/ packages"
@@ -98,7 +98,7 @@ tasks:
       internal/commands/cypher.go referencing cmd/neo4j-cli/app.go, the comment
       in internal/tool/tool.go referencing NEO4J_CLI_RW, and the version string
       and config display path in internal/shell/interactive.go.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -107,7 +107,7 @@ tasks:
       - "commands/cypher.go MAINTENANCE comments reference cmd/nctl/app.go"
       - "tool/tool.go comment references NCTL_RW"
       - "shell/interactive.go version string returns 'nctl <version>'"
-    completed_at: null
+    completed_at: "2026-05-05T04:00:00Z"
 
   - id: task-007
     title: "Update .goreleaser.yaml for nctl binary"
@@ -115,7 +115,7 @@ tasks:
       In .goreleaser.yaml update the build entry: id from neo4j-cli to nctl,
       main from ./cmd/neo4j-cli to ./cmd/nctl, and binary from neo4j-cli to
       nctl. No other fields need changing.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -123,7 +123,7 @@ tasks:
       - "main is ./cmd/nctl"
       - "binary is nctl"
       - "goreleaser check (if available) passes, or go build ./cmd/nctl succeeds as proxy"
-    completed_at: null
+    completed_at: "2026-05-05T05:00:00Z"
 
   - id: task-008
     title: "Update README.md to use nctl throughout"
