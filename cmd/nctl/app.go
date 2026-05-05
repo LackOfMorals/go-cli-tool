@@ -167,9 +167,9 @@ func printAgentError(err error, reqID string) {
 
 func buildRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "neo4j-cli",
+		Use:   "nctl",
 		Short: "A CLI for Neo4j",
-		Long: `neo4j-cli is a command-line tool for Neo4j.
+		Long: `nctl is a command-line tool for Neo4j.
 
 Use a subcommand to interact with Neo4j databases and Aura cloud resources, or
 run without arguments to start the interactive shell.`,
@@ -183,7 +183,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error")
 	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
 	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
-	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.neo4j-cli/neo4j-cli.log)")
+	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.nctl/nctl.log)")
 	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var)")
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
@@ -453,12 +453,12 @@ Available sub-commands:
   projects    List and inspect Aura projects (tenants)
 
 Use --format to control output (table, json, pretty-json, graph).`,
-		Example: `  neo4j-cli cloud instances list
-  neo4j-cli cloud instances list --format json
-  neo4j-cli cloud instances get <id>
-  neo4j-cli cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
-  neo4j-cli cloud instances pause <id>
-  neo4j-cli cloud projects list`,
+		Example: `  nctl cloud instances list
+  nctl cloud instances list --format json
+  nctl cloud instances get <id>
+  nctl cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
+  nctl cloud instances pause <id>
+  nctl cloud projects list`,
 		RunE:          runCategory("cloud"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -478,9 +478,9 @@ Query flags (parsed inline, not by cobra):
   --format table|json|pretty-json|graph
                        Override output format for this query
   --limit N            Override the auto-injected row limit (default 25)`,
-		Example: `  neo4j-cli cypher "MATCH (n:Person) RETURN n.name, n.age;"
-  neo4j-cli cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n;"
-  neo4j-cli cypher --format json "MATCH (n) RETURN n;"`,
+		Example: `  nctl cypher "MATCH (n:Person) RETURN n.name, n.age;"
+  nctl cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n;"
+  nctl cypher --format json "MATCH (n) RETURN n;"`,
 		RunE:               runCategory("cypher"),
 		DisableFlagParsing: true, // let parseCypherFlags handle --param/--format/--limit
 		SilenceUsage:       true,
@@ -499,9 +499,9 @@ Available commands:
   show-databases   List all databases and their status
 
 Use --format to control output (table, json, pretty-json, graph).`,
-		Example: `  neo4j-cli admin show-users
-  neo4j-cli admin show-users --format json
-  neo4j-cli admin show-databases`,
+		Example: `  nctl admin show-users
+  nctl admin show-users --format json
+  nctl admin show-databases`,
 		RunE:          runCategory("admin"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -522,12 +522,12 @@ Available commands:
   reset            Wipe the config file and restore all defaults
 
 Use --format to control output for 'config list'.`,
-		Example: `  neo4j-cli config list
-  neo4j-cli config list --format json
-  neo4j-cli config set neo4j.uri bolt://myhost:7687
-  neo4j-cli config set cypher.output_format json
-  neo4j-cli config delete neo4j.password
-  neo4j-cli config reset`,
+		Example: `  nctl config list
+  nctl config list --format json
+  nctl config set neo4j.uri bolt://myhost:7687
+  nctl config set cypher.output_format json
+  nctl config delete neo4j.password
+  nctl config reset`,
 		RunE:          runCategory("config"),
 		SilenceUsage:  true,
 		SilenceErrors: true,

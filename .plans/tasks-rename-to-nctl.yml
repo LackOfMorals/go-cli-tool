@@ -78,7 +78,7 @@ tasks:
       across buildCloudCommand, buildCypherCommand, buildAdminCommand, and
       buildConfigCommand, and the --log-file flag description that references
       ~/.neo4j-cli/neo4j-cli.log.
-    status: pending
+    status: completed
     dependencies:
       - task-002
     acceptance_criteria:
@@ -87,7 +87,7 @@ tasks:
       - "All Example strings use nctl instead of neo4j-cli"
       - "Flag description references ~/.nctl/nctl.log"
       - "go build ./cmd/nctl succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T03:00:00Z"
 
   - id: task-006
     title: "Update neo4j-cli references in internal/ packages"

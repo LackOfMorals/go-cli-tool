@@ -22,6 +22,14 @@
 - Note: user-facing `CLI_` strings in other packages (prerequisites.go, cloud_service.go, neo4j_repo.go, app.go) are in scope for task-005 and task-006.
 - `go test ./internal/config/...` and `go test ./...` both pass; `golangci-lint run ./internal/config/...` reports 0 issues.
 
+### task-005 — 2026-05-05
+- Changed `Use: "neo4j-cli"` to `Use: "nctl"` in `buildRootCommand()`.
+- Updated Long description to reference `nctl` instead of `neo4j-cli`.
+- Updated `--log-file` flag description from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
+- Updated all `Example` strings in `buildCloudCommand`, `buildCypherCommand`, `buildAdminCommand`, and `buildConfigCommand` to use `nctl` instead of `neo4j-cli`.
+- `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
+- `bin/nctl --help` correctly shows `nctl` as the command name.
+
 ### task-004 — 2026-05-05
 - Updated `DefaultLogFilePath()` in `internal/logger/logger.go`: return path changed from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
 - Updated tmpdir fallback from `neo4j-cli.log` to `nctl.log`.

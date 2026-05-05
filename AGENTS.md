@@ -58,3 +58,4 @@ Generated files must be committed. CI fails if they are stale.
 - Viper env prefix is now `NCTL` (was `CLI`), so config env vars are `NCTL_NEO4J_URI`, `NCTL_AURA_CLIENT_SECRET`, `NCTL_SHELL_ENABLED`, etc. (renamed in task-003).
 - Default config path is now `~/.nctl/config.json` (was `~/.neo4j-cli/config.json`).
 - Default log file path is now `~/.nctl/nctl.log` (was `~/.neo4j-cli/neo4j-cli.log`); tmpdir fallback is `nctl.log`.
+- Root command `Use` field is `"nctl"`, Long description references `nctl`; all subcommand `Example` strings use `nctl`; `--log-file` flag description references `~/.nctl/nctl.log` (updated in task-005).
