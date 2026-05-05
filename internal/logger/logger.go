@@ -41,7 +41,7 @@ type LogOutput string
 const (
 	// OutputStderr writes all log records to stderr (default). This keeps
 	// stdout clean for command output and allows shell redirection of logs
-	// independently: neo4j-cli 2>neo4j-cli.log
+	// independently: nctl 2>nctl.log
 	OutputStderr LogOutput = "stderr"
 
 	// OutputStdout writes all log records to stdout. Useful when the caller
@@ -56,14 +56,14 @@ const (
 // DefaultLogFilePath returns the OS-appropriate default log file path when
 // log_output = file and no explicit log_file is configured.
 //
-//	Linux/macOS  ~/.neo4j-cli/neo4j-cli.log
-//	Windows      %USERPROFILE%\.neo4j-cli\neo4j-cli.log
+//	Linux/macOS  ~/.nctl/nctl.log
+//	Windows      %USERPROFILE%\.nctl\nctl.log
 func DefaultLogFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), "neo4j-cli.log")
+		return filepath.Join(os.TempDir(), "nctl.log")
 	}
-	return filepath.Join(home, ".neo4j-cli", "neo4j-cli.log")
+	return filepath.Join(home, ".nctl", "nctl.log")
 }
 
 // Field represents a log field key-value pair

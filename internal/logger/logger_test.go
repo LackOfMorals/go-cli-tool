@@ -209,8 +209,8 @@ func TestOpenLogFile_DefaultPath(t *testing.T) {
 	if p == "" {
 		t.Error("DefaultLogFilePath returned empty string")
 	}
-	if !strings.Contains(p, "neo4j-cli") {
-		t.Errorf("DefaultLogFilePath should contain 'neo4j-cli', got: %s", p)
+	if !strings.Contains(p, "nctl") {
+		t.Errorf("DefaultLogFilePath should contain 'nctl', got: %s", p)
 	}
 }
 

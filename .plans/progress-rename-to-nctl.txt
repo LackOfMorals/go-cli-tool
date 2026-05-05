@@ -21,3 +21,11 @@
 - Updated `config_test.go`: comment about `~/.neo4j-cli/config.json`, and two `t.Setenv` calls (`CLI_NEO4J_URI` → `NCTL_NEO4J_URI`, `CLI_NEO4J_DATABASE` → `NCTL_NEO4J_DATABASE`).
 - Note: user-facing `CLI_` strings in other packages (prerequisites.go, cloud_service.go, neo4j_repo.go, app.go) are in scope for task-005 and task-006.
 - `go test ./internal/config/...` and `go test ./...` both pass; `golangci-lint run ./internal/config/...` reports 0 issues.
+
+### task-004 — 2026-05-05
+- Updated `DefaultLogFilePath()` in `internal/logger/logger.go`: return path changed from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
+- Updated tmpdir fallback from `neo4j-cli.log` to `nctl.log`.
+- Updated doc comment block (Linux/macOS and Windows example paths).
+- Updated `OutputStderr` constant comment shell redirection example from `neo4j-cli 2>neo4j-cli.log` to `nctl 2>nctl.log`.
+- Updated `logger_test.go` test assertion in `TestOpenLogFile_DefaultPath` to check for `"nctl"` instead of `"neo4j-cli"`.
+- `go test ./internal/logger/...` and `go test ./...` both pass; `golangci-lint run ./internal/logger/...` reports 0 issues.
