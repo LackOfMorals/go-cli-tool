@@ -1,7 +1,10 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -11,12 +14,13 @@ import (
 
 // Overrides carries values that were explicitly set by the caller (typically
 // from CLI flags). Only non-zero / non-nil fields are applied, so a flag
-// default can never silently clobber a value from an environment variable.
+// default can never silently clobber a value from the config file.
 //
 // Secrets (Neo4j password, Aura client secret) are intentionally omitted:
-// they must come from environment variables, never from CLI flags that would
-// appear in shell history or `ps` output.
+// they must come from the config file or environment variables, never from
+// CLI flags that would appear in shell history or `ps` output.
 type Overrides struct {
+	ConfigFile  string // non-empty → load and overlay this file
 	LogLevel    string // non-empty → override
 	LogFormat   string // non-empty → override
 	LogOutput   string // non-empty → override (stderr | stdout | file)
@@ -87,6 +91,16 @@ type AuraInstanceDefaults struct {
 	Memory        string `mapstructure:"memory"          json:"memory"`
 }
 
+// DefaultConfigFilePath returns the default path for the CLI configuration
+// file: ~/.neo4j-cli/config.json. Falls back to a local file on error.
+func DefaultConfigFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".neo4j-cli-config.json"
+	}
+	return filepath.Join(home, ".neo4j-cli", "config.json")
+}
+
 type TelemetryConfig struct {
 	MixpanelToken string `mapstructure:"mixpanel_token" json:"mixpanel_token"`
 	Metrics       bool   `mapstructure:"metrics"        json:"metrics"`
@@ -119,9 +133,9 @@ type ToolConfig struct {
 
 // ---- Service ------------------------------------------------------------
 
-// configServiceImpl resolves configuration from env vars and explicit
-// overrides. Config file support is intentionally omitted in this version;
-// all values come from environment variables (CLI_ prefix) or CLI flags.
+// configServiceImpl loads and merges configuration from defaults, a file, and
+// explicit overrides. It no longer depends on Cobra — flag values are
+// extracted by the caller and passed in as an Overrides struct.
 type configServiceImpl struct {
 	overrides Overrides
 	loader    configLoader
@@ -130,7 +144,7 @@ type configServiceImpl struct {
 // NewConfigService returns a Service that resolves configuration with the
 // following precedence (highest → lowest):
 //
-//	explicit Overrides → env vars (CLI_ prefix) → defaults
+//	explicit Overrides → env vars (CLI_ prefix) → config file → defaults
 func NewConfigService(overrides Overrides) Service {
 	return &configServiceImpl{
 		overrides: overrides,
@@ -139,18 +153,40 @@ func NewConfigService(overrides Overrides) Service {
 }
 
 // LoadConfiguration resolves the final Config. Env vars always take
-// precedence over defaults because Viper's AutomaticEnv is active.
+// precedence over file values because Viper's internal priority chain puts
+// env vars above config-file keys regardless of load order.
+//
+// File loading precedence:
+//  1. Explicit --config-file path (hard error if file is missing)
+//  2. DefaultConfigFilePath() — ~/.neo4j-cli/config.json (silently skipped if absent)
 func (c *configServiceImpl) LoadConfiguration() (Config, error) {
+	if c.overrides.ConfigFile != "" {
+		// Explicit path: treat a missing file as an error.
+		if err := c.loader.readFile(c.overrides.ConfigFile); err != nil {
+			return Config{}, fmt.Errorf("read config file %q: %w", c.overrides.ConfigFile, err)
+		}
+	} else {
+		// Auto-load the default path; silently ignore "file not found" so the
+		// first run (before any credentials have been saved) works without error.
+		defPath := DefaultConfigFilePath()
+		if err := c.loader.readFile(defPath); err != nil && !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+			// File exists but is unreadable / malformed — surface the error.
+			return Config{}, fmt.Errorf("read config file %q: %w", defPath, err)
+		}
+	}
+
 	cfg, err := c.loader.unmarshal()
 	if err != nil {
 		return Config{}, err
 	}
+
 	c.applyOverrides(&cfg)
 	return cfg, nil
 }
 
-// applyOverrides applies only the non-zero fields from Overrides, so a
-// CLI flag always wins without a flag default silently overwriting an env var.
+// applyOverrides applies only the non-zero fields from Overrides, so an
+// explicit CLI flag always wins without a flag default silently overwriting
+// a file value.
 func (c *configServiceImpl) applyOverrides(cfg *Config) {
 	o := c.overrides
 	if o.LogLevel != "" {
@@ -186,6 +222,22 @@ func (c *configServiceImpl) applyOverrides(cfg *Config) {
 	if o.AuraTimeout != nil {
 		cfg.Aura.TimeoutSeconds = *o.AuraTimeout
 	}
+}
+
+// SaveConfiguration writes cfg back to the file specified in Overrides.
+// The caller is responsible for supplying a path; use DefaultConfigFilePath()
+// when none is available (e.g. in InteractiveAuraPrerequisite).
+func (c *configServiceImpl) SaveConfiguration(cfg Config) error {
+	if c.overrides.ConfigFile == "" {
+		return fmt.Errorf("no config file path specified (use --config-file)")
+	}
+	// Ensure the parent directory exists so the write never fails on a
+	// freshly provisioned machine.
+	path := c.overrides.ConfigFile
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	return c.loader.save(path, cfg)
 }
 
 // ---- Viper-backed loader ------------------------------------------------
@@ -236,6 +288,14 @@ func newViperConfigLoader() *viperConfigLoader {
 	return &viperConfigLoader{v: v}
 }
 
+// readFile loads a config file into the Viper instance. Because AutomaticEnv
+// is already active, env vars will still win over file values on the next
+// unmarshal call.
+func (l *viperConfigLoader) readFile(path string) error {
+	l.v.SetConfigFile(path)
+	return l.v.ReadInConfig()
+}
+
 func (l *viperConfigLoader) unmarshal() (Config, error) {
 	var cfg Config
 	if err := l.v.Unmarshal(&cfg); err != nil {
@@ -245,4 +305,39 @@ func (l *viperConfigLoader) unmarshal() (Config, error) {
 		cfg.Tools = make(map[string]ToolConfig)
 	}
 	return cfg, nil
+}
+
+func (l *viperConfigLoader) save(path string, cfg Config) error {
+	l.v.Set("log_level", cfg.LogLevel)
+	l.v.Set("log_format", cfg.LogFormat)
+	l.v.Set("log_output", cfg.LogOutput)
+	l.v.Set("log_file", cfg.LogFile)
+	l.v.Set("shell.enabled", cfg.Shell.Enabled)
+	l.v.Set("shell.prompt", cfg.Shell.Prompt)
+	l.v.Set("shell.history_file", cfg.Shell.HistoryFile)
+	l.v.Set("telemetry.metrics", cfg.Telemetry.Metrics)
+	l.v.Set("telemetry.mixpanel_token", cfg.Telemetry.MixpanelToken)
+	l.v.Set("neo4j.uri", cfg.Neo4j.URI)
+	l.v.Set("neo4j.username", cfg.Neo4j.Username)
+	l.v.Set("neo4j.password", cfg.Neo4j.Password)
+	l.v.Set("neo4j.database", cfg.Neo4j.Database)
+	l.v.Set("aura.client_id", cfg.Aura.ClientID)
+	l.v.Set("aura.client_secret", cfg.Aura.ClientSecret)
+	l.v.Set("aura.timeout_seconds", cfg.Aura.TimeoutSeconds)
+	l.v.Set("aura.instance_defaults.tenant_id", cfg.Aura.InstanceDefaults.TenantID)
+	l.v.Set("aura.instance_defaults.cloud_provider", cfg.Aura.InstanceDefaults.CloudProvider)
+	l.v.Set("aura.instance_defaults.region", cfg.Aura.InstanceDefaults.Region)
+	l.v.Set("aura.instance_defaults.type", cfg.Aura.InstanceDefaults.Type)
+	l.v.Set("aura.instance_defaults.version", cfg.Aura.InstanceDefaults.Version)
+	l.v.Set("aura.instance_defaults.memory", cfg.Aura.InstanceDefaults.Memory)
+	l.v.Set("cypher.shell_limit", cfg.Cypher.ShellLimit)
+	l.v.Set("cypher.exec_limit", cfg.Cypher.ExecLimit)
+	l.v.Set("cypher.output_format", cfg.Cypher.OutputFormat)
+	l.v.Set("tools", cfg.Tools)
+
+	l.v.SetConfigFile(path)
+	if err := l.v.WriteConfigAs(path); err != nil {
+		return fmt.Errorf("write config file %q: %w", path, err)
+	}
+	return nil
 }

@@ -137,17 +137,6 @@ func IsAuraURI(uri string) bool {
 // isAura is the internal alias used during construction.
 func isAura(uri string) bool { return IsAuraURI(uri) }
 
-// EmitStartupEvent queues a startup event with all standard base properties.
-func (a *Analytics) EmitStartupEvent() {
-	a.EmitEvent(a.NewStartupEvent())
-}
-
-// EmitCommandEvent queues a command invocation event with the full command
-// path, success flag, and active persistent flags.
-func (a *Analytics) EmitCommandEvent(command string, success bool, flags ActiveFlags) {
-	a.EmitEvent(a.NewCommandEvent(command, success, flags))
-}
-
 // EmitToolEvent records a tool invocation outcome with all standard
 // base properties. It is the preferred way to emit tool events from the
 // shell because it ensures the correct event name and property set.

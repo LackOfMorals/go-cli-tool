@@ -1,6 +1,6 @@
 ---
 name: neo4j-cli
-description: Run Cypher queries against Neo4j databases and manage Neo4j Aura cloud resources (instances, projects, tenants) from the command line. Use when the user asks to query a Neo4j graph, inspect the schema, or list/create/pause/resume/delete an Aura instance or project. Always invoke with `--agent` for JSON output; pair with `--rw` only when a write or mutation is explicitly intended.
+description: Run Cypher queries against Neo4j databases and manage Neo4j Aura cloud resources (instances, projects, tenants) from the command line. Use when the user asks to query a Neo4j graph, inspect the schema, list/create/pause/resume/delete an Aura instance, manage projects, or run admin operations like show-users or show-databases. Always invoke with `--agent` for JSON output; pair with `--rw` only when a write or mutation is explicitly intended.
 ---
 
 # neo4j-cli
@@ -18,6 +18,7 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.
 | `--agent` | bool | false | Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NEO4J_CLI_AGENT=true) |
 | `--aura-client-id` | string | - | Neo4j Aura API client ID |
 | `--aura-timeout` | int | 0 | Aura API request timeout in seconds |
+| `--config-file` | string | - | Path to a JSON configuration file |
 | `--format` | string | - | Output format: table, json, pretty-json, graph |
 | `--log-file` | string | - | Log file path when --log-output=file (default: ~/.neo4j-cli/neo4j-cli.log) |
 | `--log-format` | string | - | Log format: text, json |
@@ -26,10 +27,32 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.
 | `--neo4j-database` | string | - | Neo4j database name |
 | `--neo4j-uri` | string | - | Neo4j bolt URI (e.g. bolt://localhost:7687) |
 | `--neo4j-username` | string | - | Neo4j username |
-| `--no-metrics` | bool | false | Disable sending usage metrics to Neo4j (overrides CLI_TELEMETRY_METRICS env var) |
+| `--no-metrics` | bool | false | Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var) |
 | `--request-id` | string | - | Correlation ID included in every agent-mode JSON response (env: NEO4J_CLI_REQUEST_ID) |
 | `--rw` | bool | false | Permit write/mutating operations in agent mode (env: NEO4J_CLI_RW=true) |
 | `--timeout` | string | - | Maximum time for a command to run, e.g. 30s or 2m (exit code 124 on timeout) |
+
+## admin
+
+Usage: `neo4j-cli admin`
+
+Administrative operations against a Neo4j database
+
+Perform administrative operations against the connected Neo4j database.
+
+Available commands:
+  show-users       List all database users and their roles
+  show-databases   List all databases and their status
+
+Use --format to control output (table, json, pretty-json, graph).
+
+### Examples
+
+```
+neo4j-cli admin show-users
+  neo4j-cli admin show-users --format json
+  neo4j-cli admin show-databases
+```
 
 ## cloud
 
@@ -54,6 +77,34 @@ neo4j-cli cloud instances list
   neo4j-cli cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
   neo4j-cli cloud instances pause <id>
   neo4j-cli cloud projects list
+```
+
+## config
+
+Usage: `neo4j-cli config`
+
+Manage CLI configuration
+
+Manage CLI configuration. Changes made with 'set' and 'delete' are
+persisted to the config file immediately.
+
+Available commands:
+  list             Show all keys, their current values, and descriptions
+  set <key> <val>  Set a configuration value
+  delete <key>     Reset a key to its default
+  reset            Wipe the config file and restore all defaults
+
+Use --format to control output for 'config list'.
+
+### Examples
+
+```
+neo4j-cli config list
+  neo4j-cli config list --format json
+  neo4j-cli config set neo4j.uri bolt://myhost:7687
+  neo4j-cli config set cypher.output_format json
+  neo4j-cli config delete neo4j.password
+  neo4j-cli config reset
 ```
 
 ## cypher

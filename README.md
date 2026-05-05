@@ -1,6 +1,6 @@
 # neo4j-cli
 
-A command-line tool for Neo4j, optimised for use by AI agents and scripts. Connect to a Neo4j database and the Neo4j Aura management API from a single binary — run Cypher queries and manage cloud instances.
+A command-line tool for Neo4j, optimised for use by AI agents and scripts. Connect to a Neo4j database and the Neo4j Aura management API from a single binary — run Cypher queries, manage cloud instances, and perform administrative operations.
 
 ---
 
@@ -40,13 +40,16 @@ go build -o bin/neo4j-cli ./cmd/neo4j-cli
 # Run a subcommand directly
 ./bin/neo4j-cli cypher "MATCH (n:Person) RETURN n.name LIMIT 5"
 ./bin/neo4j-cli cloud instances list
+./bin/neo4j-cli admin show-databases
+./bin/neo4j-cli config list
+
+# Point at a specific config file
+./bin/neo4j-cli --config-file ~/.neo4j-cli/config.json cloud instances list
 
 # Control output format
 ./bin/neo4j-cli cypher --format json "MATCH (n) RETURN n LIMIT 10"
 ./bin/neo4j-cli cloud instances list --format json
 ```
-
-Credentials are supplied via environment variables or CLI flags — see [Configuration](#configuration).
 
 ---
 
@@ -58,6 +61,8 @@ All functionality is exposed as top-level subcommands. Running `neo4j-cli` with 
 |---|---|
 | `cypher [query]` | Execute a Cypher query against the connected database |
 | `cloud` | Manage Neo4j Aura cloud resources |
+| `admin` | Administrative operations against the connected database |
+| `config` | Manage CLI configuration |
 | `skill` | Install, remove, or list the embedded `neo4j-cli` SKILL.md across detected AI agents |
 
 ### cypher
@@ -80,13 +85,13 @@ Flags (placed before the query):
 | `--format table\|json\|pretty-json\|graph` | Override the output format for this query. |
 | `--limit N` | Override the auto-injected row limit. |
 
-> **Requires a Neo4j connection.** Set `CLI_NEO4J_URI`, `CLI_NEO4J_USERNAME`, and `CLI_NEO4J_PASSWORD` before running.
+> **Requires a Neo4j connection.** If credentials are not configured, you are prompted to enter them on first use and they are saved to the config file.
 
 ### cloud
 
 Manages Neo4j Aura cloud resources.
 
-> **Requires Aura credentials.** Set `CLI_AURA_CLIENT_ID` and `CLI_AURA_CLIENT_SECRET` before running.
+> **Requires Aura credentials.** If `aura.client_id` or `aura.client_secret` are not configured, you are prompted to enter them on first use.
 
 ```bash
 neo4j-cli cloud instances list
@@ -103,9 +108,40 @@ neo4j-cli cloud projects list
 neo4j-cli cloud projects get <id>
 ```
 
-`instances create` requires `name` and `tenant`. All other fields fall back to the `CLI_AURA_INSTANCE_DEFAULTS_*` environment variables.
+`instances create` requires `name` and `tenant`. All other fields fall back to `aura.instance_defaults` in the config. Set defaults to avoid repeating them on every invocation:
+
+```bash
+neo4j-cli config set aura.instance_defaults.tenant_id abc-123
+neo4j-cli config set aura.instance_defaults.cloud_provider aws
+neo4j-cli cloud instances create name=my-db
+```
 
 > **Save your password.** When `instances create` succeeds, the initial password is shown exactly once and cannot be recovered.
+
+### admin
+
+Runs administrative commands against the connected database.
+
+> **Requires a Neo4j connection.** Same prerequisite as `cypher`.
+
+```bash
+neo4j-cli admin show-users
+neo4j-cli admin show-databases
+```
+
+### config
+
+Manages CLI configuration. Changes made with `set`, `delete`, and `reset` are persisted to the config file immediately and take effect in the current session.
+
+```bash
+neo4j-cli config list                                # show all keys, values, and descriptions
+neo4j-cli config list --format json
+neo4j-cli config set neo4j.uri bolt://myhost:7687
+neo4j-cli config set cypher.output_format json
+neo4j-cli config set aura.instance_defaults.region us-east-1
+neo4j-cli config delete neo4j.password              # reset a key to its default (prompts)
+neo4j-cli config reset                              # wipe config file, restore all defaults (prompts)
+```
 
 ### skill
 
@@ -130,10 +166,50 @@ neo4j-cli skill remove claude-code                  # remove from a specific age
 Settings are resolved in this order, highest priority first:
 
 ```
-CLI flags  >  environment variables  >  defaults
+CLI flags  >  environment variables  >  config file  >  defaults
 ```
 
-There is no config file. All values are supplied via environment variables or persistent CLI flags, which is the recommended approach for agent and pipeline use.
+### Config file
+
+The default config file path is `~/.neo4j-cli/config.json`. The directory and file are created automatically when credentials are first saved via an interactive prompt. Pass `--config-file <path>` to use a different location.
+
+A full example:
+
+```json
+{
+  "log_level": "info",
+  "log_format": "text",
+  "log_output": "stderr",
+  "log_file": "",
+  "neo4j": {
+    "uri": "bolt://localhost:7687",
+    "username": "neo4j",
+    "password": "secret",
+    "database": "neo4j"
+  },
+  "aura": {
+    "client_id": "your-client-id",
+    "client_secret": "your-client-secret",
+    "timeout_seconds": 30,
+    "instance_defaults": {
+      "tenant_id": "your-tenant-id",
+      "cloud_provider": "gcp",
+      "region": "europe-west1",
+      "type": "enterprise-db",
+      "version": "5",
+      "memory": "8GB"
+    }
+  },
+  "cypher": {
+    "shell_limit": 25,
+    "exec_limit": 100,
+    "output_format": "table"
+  },
+  "telemetry": {
+    "metrics": true
+  }
+}
+```
 
 ### Environment variables
 
@@ -147,10 +223,10 @@ All variables use the `CLI_` prefix. Nested keys use underscores.
 | `CLI_LOG_FILE` | _(empty)_ | Log file path (used when `CLI_LOG_OUTPUT=file`) |
 | `CLI_NEO4J_URI` | `bolt://localhost:7687` | Neo4j bolt URI |
 | `CLI_NEO4J_USERNAME` | `neo4j` | Neo4j username |
-| `CLI_NEO4J_PASSWORD` | _(empty)_ | Neo4j password |
+| `CLI_NEO4J_PASSWORD` | _(empty)_ | Neo4j password — prefer env over config file |
 | `CLI_NEO4J_DATABASE` | `neo4j` | Neo4j database name |
 | `CLI_AURA_CLIENT_ID` | _(empty)_ | Aura API client ID |
-| `CLI_AURA_CLIENT_SECRET` | _(empty)_ | Aura API client secret |
+| `CLI_AURA_CLIENT_SECRET` | _(empty)_ | Aura API client secret — prefer env over config file |
 | `CLI_AURA_TIMEOUT_SECONDS` | `30` | Aura API request timeout |
 | `CLI_AURA_INSTANCE_DEFAULTS_TENANT_ID` | _(empty)_ | Default tenant ID for new instances |
 | `CLI_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER` | `gcp` | Default cloud provider: `aws`, `gcp`, `azure` |
@@ -168,6 +244,7 @@ All variables use the `CLI_` prefix. Nested keys use underscores.
 ### CLI flags
 
 ```
+--config-file string      Path to a JSON configuration file
 --neo4j-uri string        Neo4j bolt URI
 --neo4j-username string   Neo4j username
 --neo4j-database string   Neo4j database name
@@ -185,6 +262,10 @@ All variables use the `CLI_` prefix. Nested keys use underscores.
 --request-id string       Correlation ID for agent-mode JSON responses
 --timeout duration        Maximum command execution time (e.g. 30s)
 ```
+
+### Interactive credential prompts
+
+When Neo4j or Aura credentials are missing, the CLI prompts for them interactively on first use and saves them to the config file. To skip prompts in automated or agent contexts, pre-populate credentials via environment variables or the config file.
 
 ---
 
@@ -208,9 +289,9 @@ neo4j-cli cloud instances list
 | Behaviour | Human mode (default) | Agent mode |
 |---|---|---|
 | Output format | `table` | `json` |
-| Missing credentials | Error message to stderr | Structured JSON error on stdout, exit non-zero |
+| Missing credentials | Interactive prompt | Structured JSON error on stdout, exit non-zero |
 | Errors | Written to stderr | JSON envelope on stdout |
-| Write operations | Allowed | **Blocked** unless `--rw` is also passed |
+| Write operations | Allowed with confirmation prompt | **Blocked** unless `--rw` is also passed |
 
 ### The --rw flag
 
@@ -231,7 +312,8 @@ neo4j-cli --agent --rw cloud instances delete <id>
 | `cypher` | Any read-only query | Queries classified as write by Neo4j EXPLAIN |
 | `cloud instances` | `list`, `get` | `create`, `update`, `pause`, `resume`, `delete` |
 | `cloud projects` | `list`, `get` | _(none currently)_ |
-| `skill` | `list` | `install`, `remove` |
+| `admin` | `show-users`, `show-databases` | _(none currently)_ |
+| `config` | `list` | `set`, `delete`, `reset` |
 
 ### Cypher write detection
 
@@ -266,7 +348,7 @@ Error codes:
 | `READ_ONLY` | Write operation attempted without `--rw` |
 | `WRITE_BLOCKED` | Cypher write detected by EXPLAIN without `--rw` |
 | `MISSING_QUERY` | No cypher statement provided in agent mode |
-| `MISSING_CREDENTIALS` | Required credentials absent |
+| `MISSING_CREDENTIALS` | Required credentials absent (no prompt in agent mode) |
 | `TIMEOUT` | Command exceeded `--timeout` duration |
 | `EXECUTION_ERROR` | Any other failure |
 
@@ -306,25 +388,27 @@ neo4j-cli --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
 ```
 cmd/neo4j-cli/
     main.go             Entry point — calls run() and os.Exit
-    app.go              App struct, startup wiring, category dispatch
+    app.go              App struct, Cobra root command, startup wiring, flag definitions,
+                        subcommand builders (buildCloudCommand, buildCypherCommand, etc.)
 
 internal/
-    config/             Config structs, Viper loader, Overrides (env vars + flags only)
+    config/             Config structs, Viper loader, Overrides, SaveConfiguration
     logger/             Logger interface and slog implementation
-    analytics/          Mixpanel analytics service (startup + command events)
+    analytics/          Mixpanel analytics service
     presentation/       Output formatters (text, JSON, pretty-JSON, table, graph)
     repository/         GraphRepository interface and Neo4j driver implementation
     service/
-        interfaces.go       CypherService, CloudService, SkillService interfaces
+        interfaces.go       CypherService, CloudService, AdminService interfaces
         cypher_service.go
         cloud_service.go
-        skill_service.go
+        admin_service.go
         graph_service.go
     commands/           Category builders (pure wiring — no business logic)
         cypher.go
         cloud.go
-        skill.go
-        prerequisites.go    Neo4jPrerequisite, AuraPrerequisite
+        admin.go
+        config.go           config list/set/delete/reset category
+        prerequisites.go    Neo4jPrerequisite, AuraPrerequisite, interactive variants
     dispatch/           Command routing primitives
         dispatch.go         Registry interface, CommandHandler type, Context struct
         category.go         Category and Command types — Dispatch, Find, SetPrerequisite
@@ -399,9 +483,7 @@ func (t *MyTool) Validate(ctx tool.Context) error {
 }
 
 func (t *MyTool) Configure(params map[string]interface{}) error {
-    if err := t.BaseTool.Configure(params); err != nil {
-        return err
-    }
+    t.BaseTool.Configure(params) // always call through first
     if v, ok := params["prefix"].(string); ok {
         t.prefix = v
     }
@@ -428,32 +510,45 @@ for _, t := range []tool.Tool{
 }
 ```
 
+**Step 4 — (Optional) Configure via config file**
+
+```json
+{
+  "tools": {
+    "mytool": {
+      "enabled": true,
+      "params": {
+        "prefix": "---"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ### Adding a command
 
-A command sits inside an existing category or sub-category. It takes positional arguments and returns a `dispatch.CommandResult`.
+A command sits inside an existing category or sub-category. It takes positional arguments and returns a formatted string.
 
-**Example: adding `cloud instances clone` to the instances sub-category**
+**Example: adding `admin show-indexes` to the `admin` category**
 
-Open `internal/commands/cloud.go` and chain another `AddCommand` call inside `buildInstancesCategory`:
+Open `internal/commands/admin.go` and chain another `AddCommand` call:
 
 ```go
-func buildInstancesCategory(svc service.CloudService) *dispatch.Category {
-    return dispatch.NewCategory("instances", "Manage Aura DB instances").
-        AddCommand(instanceListCmd(svc)).
-        // ...existing commands...
+func BuildAdminCategory(svc service.AdminService) *dispatch.Category {
+    return dispatch.NewCategory("admin", "Administrative operations...").
         AddCommand(&dispatch.Command{
-            Name:         "clone",
-            MutationMode: tool.ModeWrite,
-            Usage:        "clone <id>",
-            Description:  "Clone an existing instance",
-            Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
-                if len(args) == 0 {
-                    return dispatch.CommandResult{}, fmt.Errorf("usage: cloud instances clone <id>")
-                }
-                // call svc...
-                return dispatch.MessageResult(fmt.Sprintf("Instance %s cloned.", args[0])), nil
+            Name:        "show-users",
+            // ... existing command ...
+        }).
+        AddCommand(&dispatch.Command{
+            Name:        "show-indexes",
+            Aliases:     []string{"idx"},
+            Usage:       "show-indexes",
+            Description: "List all indexes in the current database",
+            Handler: func(args []string, ctx dispatch.Context) (string, error) {
+                return svc.ShowIndexes(ctx.Context)
             },
         })
 }
@@ -462,7 +557,31 @@ func buildInstancesCategory(svc service.CloudService) *dispatch.Category {
 Aliases are registered automatically in dispatch and appear in parentheses in `--help` output:
 
 ```bash
-neo4j-cli cloud instances clone <id>
+neo4j-cli admin show-indexes
+neo4j-cli admin idx           # same command
+```
+
+**Example: adding a command to a sub-category**
+
+To add `cloud instances clone <id>`, open `internal/commands/cloud.go` and chain another `AddCommand` in `buildInstancesCategory`:
+
+```go
+func buildInstancesCategory(svc service.CloudService) *dispatch.Category {
+    return dispatch.NewCategory("instances", "Manage Aura DB instances").
+        AddCommand(instanceListCmd(svc)).
+        // ...existing commands...
+        AddCommand(&dispatch.Command{
+            Name:        "clone",
+            Usage:       "clone <id>",
+            Description: "Clone an existing instance",
+            Handler: func(args []string, ctx dispatch.Context) (string, error) {
+                if len(args) == 0 {
+                    return "", fmt.Errorf("usage: cloud instances clone <id>")
+                }
+                return fmt.Sprintf("Instance %s cloned.", args[0]), nil
+            },
+        })
+}
 ```
 
 ---
@@ -478,6 +597,7 @@ In `internal/service/interfaces.go`:
 ```go
 type GDSService interface {
     ListAlgorithms(ctx context.Context) ([]string, error)
+    RunPageRank(ctx context.Context, graphName string) (string, error)
 }
 ```
 
@@ -522,12 +642,12 @@ func BuildGDSCategory(svc service.GDSService) *dispatch.Category {
             Name:        "list-algorithms",
             Usage:       "list-algorithms",
             Description: "List available GDS algorithms",
-            Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+            Handler: func(args []string, ctx dispatch.Context) (string, error) {
                 algos, err := svc.ListAlgorithms(ctx.Context)
                 if err != nil {
-                    return dispatch.CommandResult{}, err
+                    return "", err
                 }
-                return dispatch.MessageResult(strings.Join(algos, "\n")), nil
+                return strings.Join(algos, "\n"), nil
             },
         })
 }
@@ -535,7 +655,7 @@ func BuildGDSCategory(svc service.GDSService) *dispatch.Category {
 
 **Step 4 — Wire it into App**
 
-In `cmd/neo4j-cli/app.go`, add the service field, construct it in `newApp`, register it in `buildCategories`, and add the Cobra subcommand in `internal/cli/tree.go`:
+In `cmd/neo4j-cli/app.go`, add the service field, construct it in `newApp`, and register the category and its Cobra subcommand:
 
 ```go
 // In newApp(), after repo is created:
@@ -543,26 +663,23 @@ gdsSvc := service.NewGDSService(repo)
 
 // In buildCategories():
 "gds": commands.BuildGDSCategory(a.gdsSvc).
-    SetPrerequisite(commands.Neo4jPrerequisite(&a.cfg.Neo4j)),
-```
+    SetPrerequisite(commands.InteractiveNeo4jPrerequisite(&a.cfg.Neo4j, a.cfg, configPath)),
 
-In `internal/cli/tree.go`, add the Cobra subcommand:
+// In buildRootCommand():
+rootCmd.AddCommand(buildGDSCommand())
 
-```go
-rootCmd.AddCommand(buildGDSCommand(opts.RunFactory))
-
-func buildGDSCommand(rf RunFactory) *cobra.Command {
+func buildGDSCommand() *cobra.Command {
     return &cobra.Command{
-        Use:           "gds",
-        Short:         "Graph Data Science operations",
-        RunE:          runEFor(rf, "gds"),
+        Use:   "gds",
+        Short: "Graph Data Science operations",
+        RunE:  runCategory("gds"),
         SilenceUsage:  true,
         SilenceErrors: true,
     }
 }
 ```
 
-Use `Neo4jPrerequisite` for database-connected categories and `AuraPrerequisite` for Aura API categories. Add new prerequisite factories to `internal/commands/prerequisites.go` if neither fits.
+Use `InteractiveNeo4jPrerequisite` for database-connected categories and `InteractiveAuraPrerequisite` for Aura API categories. Add new prerequisite factories to `internal/commands/prerequisites.go` if neither fits.
 
 The category is then available as a direct subcommand:
 
@@ -585,7 +702,7 @@ neo4j-cli gds --help
 
 **Command aliases are first-class** — add short-form names via the `Aliases []string` field on `dispatch.Command`. Aliases are resolved in dispatch and shown in `--help` output. Register the canonical name as `Name`; aliases are supplementary.
 
-**Secrets stay out of flags** — passwords and API secrets must not be CLI flags. Accept them only via environment variables.
+**Secrets stay out of flags** — passwords and API secrets must not be CLI flags. Accept them only via environment variables, the config file, or interactive prompts.
 
 **Errors are the caller's responsibility** — return `fmt.Errorf("context: %w", err)` and let the caller handle it. Don't call `os.Exit` or `log.Fatal` from inside a service or command handler.
 
@@ -603,7 +720,6 @@ One GitHub Actions workflow manages the release process.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| **CI** | Push / pull request | Runs `go generate`, validates generated files are up to date, builds, vets, and tests |
 | **Release** | Push of a `vX.Y.Z` tag | Gates on tests, builds cross-platform binaries via GoReleaser, extracts the changelog section, creates a GitHub Release |
 
 ### Making a release
@@ -635,15 +751,3 @@ changie new
 ```
 
 Choose a kind and write a one-line summary, then commit the generated `.yaml` file alongside your code changes.
-
-### Generated files
-
-Two files are produced by `go generate ./...` and must be committed alongside any change that affects them:
-
-| File | Generator | Regenerate when |
-|---|---|---|
-| `internal/skill/skill.md.gen` | `go run ./cmd/gen-skill` | Cobra command tree changes (new commands, flags, descriptions) |
-| `internal/analytics/mocks/mock_analytics.go` | `mockgen` | `analytics.Service` interface changes |
-| `internal/service/mocks/mock_skill_service.go` | `mockgen` | `service.SkillService` interface changes |
-
-The CI step "Verify generated files are up to date" runs `go generate ./...` and fails if the output differs from what is committed. Always run `go generate ./...` locally and commit the results before pushing.

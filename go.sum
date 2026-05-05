@@ -1,5 +1,5 @@
-github.com/LackOfMorals/aura-client v1.10.0 h1:ecBpNkL/pad9UYL1gTcPLB/tmh7WS7pTpSP9aqIf1BM=
-github.com/LackOfMorals/aura-client v1.10.0/go.mod h1:TXTKV8JTPmmW1Xkpw2ca0e7ORM6KR/cVj/wanpGB0mA=
+github.com/LackOfMorals/aura-client v1.8.2 h1:Rz/kqC+DHvodHnajjFrdsIep+BYgHxcIYhNnk8Kn7XQ=
+github.com/LackOfMorals/aura-client v1.8.2/go.mod h1:TXTKV8JTPmmW1Xkpw2ca0e7ORM6KR/cVj/wanpGB0mA=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

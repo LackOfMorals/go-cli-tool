@@ -3,7 +3,7 @@ module github.com/cli/go-cli-tool
 go 1.24
 
 require (
-	github.com/LackOfMorals/aura-client v1.10.0
+	github.com/LackOfMorals/aura-client v1.8.2
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.7.10

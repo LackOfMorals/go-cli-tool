@@ -32,24 +32,6 @@ type toolEventProperties struct {
 	Success  bool   `json:"success"`
 }
 
-// ActiveFlags captures which agent-relevant persistent flags were set for
-// a given invocation. Sensitive flags (credentials, URIs) are intentionally
-// excluded.
-type ActiveFlags struct {
-	AgentMode    bool   `json:"agent_mode"`
-	AllowWrites  bool   `json:"allow_writes"`
-	OutputFormat string `json:"output_format,omitempty"`
-	TimeoutSet   bool   `json:"timeout_set"`
-}
-
-// commandEventProperties carries the fields for a COMMAND_USED event.
-type commandEventProperties struct {
-	baseProperties
-	Command string `json:"command"`
-	Success bool   `json:"success"`
-	ActiveFlags
-}
-
 // TrackEvent is the envelope sent to Mixpanel for every analytics event.
 type TrackEvent struct {
 	Event      string      `json:"event"`
@@ -72,20 +54,6 @@ func (a *Analytics) NewToolEvent(toolName string, success bool) TrackEvent {
 			baseProperties: a.getBaseProperties(),
 			ToolName:       toolName,
 			Success:        success,
-		},
-	}
-}
-
-// NewCommandEvent records a CLI command invocation with the full command
-// path and the agent-relevant flags that were active.
-func (a *Analytics) NewCommandEvent(command string, success bool, flags ActiveFlags) TrackEvent {
-	return TrackEvent{
-		Event: strings.Join([]string{eventNamePrefix, "COMMAND_USED"}, "_"),
-		Properties: commandEventProperties{
-			baseProperties: a.getBaseProperties(),
-			Command:        command,
-			Success:        success,
-			ActiveFlags:    flags,
 		},
 	}
 }
