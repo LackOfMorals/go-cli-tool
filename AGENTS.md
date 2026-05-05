@@ -59,3 +59,5 @@ Generated files must be committed. CI fails if they are stale.
 - Default config path is now `~/.nctl/config.json` (was `~/.neo4j-cli/config.json`).
 - Default log file path is now `~/.nctl/nctl.log` (was `~/.neo4j-cli/neo4j-cli.log`); tmpdir fallback is `nctl.log`.
 - Root command `Use` field is `"nctl"`, Long description references `nctl`; all subcommand `Example` strings use `nctl`; `--log-file` flag description references `~/.nctl/nctl.log` (updated in task-005).
+- `builtinVersion` in `shell/interactive.go` returns `"nctl <version>"`; `builtinConfig` log file default shows `~/.nctl/nctl.log` (updated in task-006).
+- When a version string in a source file changes, check if any tests assert on the old string — they will break immediately and must be fixed in the same task (cannot defer to a later task).

@@ -30,6 +30,15 @@
 - `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
 - `bin/nctl --help` correctly shows `nctl` as the command name.
 
+### task-006 — 2026-05-05
+- Updated `dispatch/category.go`: error message changed from `'neo4j-cli %s --help'` to `'nctl %s --help'`; doc comment examples updated from `neo4j-cli cloud/cypher` to `nctl cloud/cypher`.
+- Updated `dispatch/dispatch.go`: comments on `AgentMode` and `AllowWrites` fields now reference `NCTL_AGENT` and `NCTL_RW` respectively.
+- Updated `commands/cypher.go`: both MAINTENANCE comments in `globalBoolFlag` and `globalValueFlag` now reference `cmd/nctl/app.go` instead of `cmd/neo4j-cli/app.go`.
+- Updated `tool/tool.go`: `ModeWrite` constant comment now references `NCTL_RW` instead of `NEO4J_CLI_RW`.
+- Updated `shell/interactive.go`: `builtinVersion` returns `"nctl %s"` (was `"neo4j-cli %s"`); `builtinConfig` log file default path updated from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
+- Updated `shell/interactive_test.go`: `TestExecute_Version` assertion updated from `'neo4j-cli'` to `'nctl'` (test was broken by the version string change; fix pulled forward from task-010).
+- `go test ./...` and `golangci-lint run` both pass with zero issues.
+
 ### task-004 — 2026-05-05
 - Updated `DefaultLogFilePath()` in `internal/logger/logger.go`: return path changed from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
 - Updated tmpdir fallback from `neo4j-cli.log` to `nctl.log`.

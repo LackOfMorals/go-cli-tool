@@ -98,7 +98,7 @@ tasks:
       internal/commands/cypher.go referencing cmd/neo4j-cli/app.go, the comment
       in internal/tool/tool.go referencing NEO4J_CLI_RW, and the version string
       and config display path in internal/shell/interactive.go.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -107,7 +107,7 @@ tasks:
       - "commands/cypher.go MAINTENANCE comments reference cmd/nctl/app.go"
       - "tool/tool.go comment references NCTL_RW"
       - "shell/interactive.go version string returns 'nctl <version>'"
-    completed_at: null
+    completed_at: "2026-05-05T04:00:00Z"
 
   - id: task-007
     title: "Update .goreleaser.yaml for nctl binary"
