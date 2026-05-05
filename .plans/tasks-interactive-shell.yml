@@ -11,14 +11,14 @@ tasks:
       presentation.Service (the interface) instead of *presentation.PresentationService
       (the now-unexported concrete type). This is a prerequisite for all other
       tasks since the shell package won't compile until it is fixed.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "Shell interface method signature is SetPresenter(p presentation.Service)"
       - "ShellContext.Presenter field type is presentation.Service"
       - "InteractiveShell.presenter field type is presentation.Service"
       - "go build ./internal/shell/... succeeds with no errors"
-    completed_at: null
+    completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-002
     title: "Change shell.enabled config default from false to true"

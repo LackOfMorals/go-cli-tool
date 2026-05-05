@@ -1,0 +1,23 @@
+================================================================================
+TASK-001: Fix shell package: update presentation.Service references
+Date: 2026-05-05T00:00:00Z
+================================================================================
+
+Summary:
+The shell package already used presentation.Service (the interface) correctly in
+all required places. No code changes were needed — the acceptance criteria were
+already satisfied by the existing implementation. This task was verified and
+closed.
+
+Files Changed:
+- .plans/tasks-interactive-shell.yml (task status updated to completed)
+- .plans/progress-interactive-shell.txt (created)
+
+Key Decisions:
+- The shell package was already correct: shell.go line 36 uses presentation.Service
+  in the Shell interface, line 53 uses it for ShellContext.Presenter, and
+  interactive.go lines 29/64 use it for the concrete field and setter.
+- go build ./internal/shell/... and go test ./internal/shell/... both pass with
+  no changes needed.
+
+Next Task: task-002 (Change shell.enabled config default from false to true)
