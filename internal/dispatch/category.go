@@ -164,6 +164,25 @@ func (c *Category) Subcat(name string) *Category {
 	return c.subcats[name]
 }
 
+// ---- Read-only accessor for bridge adapters ----------------------------
+
+// Commands returns a snapshot map of name → *Command for all registered keys
+// (canonical names and aliases). The returned map is a copy and safe to read
+// from other packages; mutations do not affect the category.
+func (c *Category) Commands() map[string]*Command {
+	out := make(map[string]*Command, len(c.commands))
+	for k, v := range c.commands {
+		out[k] = v
+	}
+	return out
+}
+
+// Prerequisite returns the prerequisite function installed on this category,
+// or nil if none has been set.
+func (c *Category) Prerequisite() func() error {
+	return c.prerequisite
+}
+
 // ---- Dispatch / navigation ----------------------------------------------
 
 // Dispatch routes args through the category tree and calls the matching

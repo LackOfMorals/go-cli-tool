@@ -1,0 +1,148 @@
+feature: interactive-shell
+prd: ./prd-interactive-shell.md
+created_at: 2026-05-05T00:00:00Z
+updated_at: 2026-05-05T00:00:00Z
+
+tasks:
+  - id: task-001
+    title: "Fix shell package: update presentation.Service references"
+    description: |
+      Update internal/shell/shell.go and internal/shell/interactive.go to use
+      presentation.Service (the interface) instead of *presentation.PresentationService
+      (the now-unexported concrete type). This is a prerequisite for all other
+      tasks since the shell package won't compile until it is fixed.
+    status: completed
+    dependencies: []
+    acceptance_criteria:
+      - "Shell interface method signature is SetPresenter(p presentation.Service)"
+      - "ShellContext.Presenter field type is presentation.Service"
+      - "InteractiveShell.presenter field type is presentation.Service"
+      - "go build ./internal/shell/... succeeds with no errors"
+    completed_at: "2026-05-05T00:00:00Z"
+
+  - id: task-002
+    title: "Change shell.enabled config default from false to true"
+    description: |
+      In internal/config/config.go, change the viper default for shell.enabled
+      from false to true so that the shell is opt-in by default. Also update
+      any tests that assert the old default.
+    status: completed
+    dependencies: []
+    acceptance_criteria:
+      - "v.SetDefault(\"shell.enabled\", true) in viperConfigLoader"
+      - "go test ./internal/config/... passes"
+      - "A config with no shell section resolves Shell.Enabled to true"
+    completed_at: "2026-05-05T01:00:00Z"
+
+  - id: task-003
+    title: "Create bridge adapter: BridgeCategory in internal/shell/bridge.go"
+    description: |
+      Create internal/shell/bridge.go within the shell package. Implement
+      BridgeCategory(cat *dispatch.Category, ctxFor func(ShellContext) dispatch.Context) *Category
+      that recursively wraps dispatch.Category trees as shell.Category trees. Each
+      bridged command handler builds a dispatch.Context, calls the dispatch handler,
+      and renders CommandResult to a string (via Presenter.Format for Presentation
+      payloads, or Message as fallback). Subcategory prerequisites are forwarded.
+    status: completed
+    dependencies:
+      - task-001
+    acceptance_criteria:
+      - "BridgeCategory returns a *shell.Category with matching name and description"
+      - "Nested subcategories are bridged recursively"
+      - "A bridged command that returns MessageResult renders the Message string"
+      - "A bridged command that returns a result with Presentation calls presenter.Format"
+      - "go build ./internal/shell/... succeeds"
+    completed_at: "2026-05-05T02:00:00Z"
+
+  - id: task-004
+    title: "Unit tests for bridge adapter"
+    description: |
+      Add internal/shell/bridge_test.go covering the CommandResult-to-string
+      conversion paths: Message-only result, Presentation result (table/detail),
+      validation error from handler, and prerequisite failure blocking dispatch.
+      Use stub dispatch.Category and stub presenter.
+    status: completed
+    dependencies:
+      - task-003
+    acceptance_criteria:
+      - "Test for MessageResult renders Message string correctly"
+      - "Test for error returned from bridged handler propagates as error"
+      - "Test for prerequisite failure returns error before calling handler"
+      - "go test ./internal/shell/... passes"
+    completed_at: "2026-05-05T03:00:00Z"
+
+  - id: task-005
+    title: "Add --shell flag to root command and wire to Overrides.ShellEnabled"
+    description: |
+      In the root command builder (cmd/neo4j-cli/app.go), add a --shell boolean
+      persistent flag alongside the existing --agent flag. After flag parse, set
+      overrides.ShellEnabled only when the flag was explicitly provided (use
+      cobra's Changed() check to distinguish explicit false from default false).
+      CLI_SHELL_ENABLED env var is already handled by viper's AutomaticEnv.
+    status: completed
+    dependencies:
+      - task-002
+    acceptance_criteria:
+      - "--shell flag appears in neo4j-cli --help output"
+      - "neo4j-cli --shell=false with shell.enabled=true in config disables shell"
+      - "CLI_SHELL_ENABLED=false env var disables shell regardless of config file"
+      - "go build ./cmd/neo4j-cli succeeds"
+    completed_at: "2026-05-05T04:00:00Z"
+
+  - id: task-006
+    title: "Add root command RunE that launches the interactive shell"
+    description: |
+      Replace the no-op root command (which currently lets Cobra print help) with
+      a RunE that: skips shell when agentMode is true; falls back to cmd.Help() when
+      Shell.Enabled is false; otherwise creates the App, wires all services into an
+      InteractiveShell, bridges the dispatch categories, and calls shell.Start().
+      The shell must receive logger, config, telemetry, presentation service, tool
+      registry, version string, and bridged categories.
+    status: completed
+    dependencies:
+      - task-003
+      - task-005
+    acceptance_criteria:
+      - "neo4j-cli with no args and default config starts the REPL"
+      - "neo4j-cli --agent (any subcommand) does not launch the shell"
+      - "neo4j-cli --shell=false prints Cobra help and exits cleanly"
+      - "Shell receives all services (logger, config, telemetry, presenter, registry)"
+      - "go build ./cmd/neo4j-cli succeeds"
+    completed_at: "2026-05-05T05:00:00Z"
+
+  - id: task-007
+    title: "Welcome banner for no-config first-time users"
+    description: |
+      In the shell startup path (launchShell or InteractiveShell.Start), detect
+      when no connection config is present (Neo4j.URI is empty or equals the
+      default bolt://localhost:7687 sentinel AND password is empty). When detected,
+      print a welcome banner before entering the read loop explaining the config set
+      commands needed to get started.
+    status: completed
+    dependencies:
+      - task-006
+    acceptance_criteria:
+      - "Running with empty config prints the welcome banner before the prompt"
+      - "Banner includes config set neo4j.uri and config set neo4j.password examples"
+      - "Banner does not appear when valid connection config is present"
+      - "Shell still accepts commands normally after banner is shown"
+    completed_at: "2026-05-05T06:00:00Z"
+
+  - id: task-008
+    title: "Lint and test pass: golangci-lint run and go test ./..."
+    description: |
+      Run golangci-lint run and go test ./... against the completed implementation.
+      Fix any lint issues (unused parameters, errcheck, revive stutter, etc.) and
+      failing tests introduced by this feature. Ensure go generate ./... produces
+      no changes to committed generated files.
+    status: completed
+    dependencies:
+      - task-004
+      - task-006
+      - task-007
+    acceptance_criteria:
+      - "golangci-lint run reports zero issues"
+      - "go test ./... passes with no failures"
+      - "go generate ./... produces no diff in generated files"
+      - "go build ./... succeeds for all packages"
+    completed_at: "2026-05-05T07:00:00Z"

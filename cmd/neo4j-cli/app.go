@@ -23,6 +23,7 @@ import (
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/repository"
 	"github.com/cli/go-cli-tool/internal/service"
+	"github.com/cli/go-cli-tool/internal/shell"
 	"github.com/cli/go-cli-tool/internal/tool"
 	"github.com/cli/go-cli-tool/internal/tools"
 )
@@ -52,6 +53,9 @@ var (
 	auraClientID       string
 	auraTimeoutSeconds int
 	outputFormat       string
+
+	// Shell-mode flags
+	shellFlag bool // --shell (explicit; may be true or false)
 
 	// Agent-mode flags
 	agentMode   bool   // --agent / NEO4J_CLI_AGENT=true
@@ -167,8 +171,9 @@ func buildRootCommand() *cobra.Command {
 		Short: "A CLI for Neo4j",
 		Long: `neo4j-cli is a command-line tool for Neo4j.
 
-Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
-		// No RunE: cobra prints help when called with no subcommand.
+Use a subcommand to interact with Neo4j databases and Aura cloud resources, or
+run without arguments to start the interactive shell.`,
+		RunE:          launchShell,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -186,6 +191,9 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
 	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
 	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
+
+	// Shell-mode flag
+	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: CLI_SHELL_ENABLED=false to disable)")
 
 	// Agent-mode flags
 	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NEO4J_CLI_AGENT=true)")
@@ -212,6 +220,71 @@ func runCategory(name string) func(cmd *cobra.Command, args []string) error {
 		defer app.close()
 		return app.dispatchCategory(name, args)
 	}
+}
+
+// launchShell is the RunE for the root command when no subcommand is provided.
+// It starts the interactive REPL unless agent mode is active or the shell is
+// explicitly disabled, in which case it falls back to cobra's help output.
+func launchShell(cmd *cobra.Command, _ []string) error {
+	// Agent mode: the root command should not interfere with subcommand dispatch.
+	// Cobra calls RunE on the root when no subcommand matches — returning an
+	// error here would produce a confusing error message, so print help instead.
+	if agentMode {
+		return cmd.Help()
+	}
+
+	app, err := newApp(cmd, nil)
+	if err != nil {
+		return fmt.Errorf("startup: %w", err)
+	}
+	defer app.close()
+
+	// Shell disabled via config, env var, or --shell=false flag.
+	if !app.cfg.Shell.Enabled {
+		return cmd.Help()
+	}
+
+	return startShell(app)
+}
+
+// startShell wires all app services into a new InteractiveShell, bridges the
+// dispatch categories, and runs the REPL until the user exits.
+func startShell(app *App) error {
+	s := shell.NewInteractiveShell()
+	s.SetLogger(app.log)
+	s.SetConfig(*app.cfg)
+	s.SetTelemetry(app.analytic)
+	s.SetPresenter(app.presentation)
+	s.SetRegistry(app.registry)
+	s.SetVersion(Version)
+
+	// Build dispatch categories using non-interactive prerequisites so
+	// missing credentials prompt the user inside the shell REPL rather
+	// than blocking before it starts.
+	cats := app.buildCategories()
+
+	// Bridge each dispatch category into a shell category. The ctxFor
+	// function converts the per-command shell.Context into the
+	// dispatch.Context expected by the underlying handlers.
+	shellCats := make(map[string]*shell.Category, len(cats))
+	for name, cat := range cats {
+		shellCats[name] = shell.BridgeCategory(cat, func(ctx shell.Context) dispatch.Context {
+			return dispatch.Context{
+				Context:     ctx.Context,
+				Config:      ctx.Config,
+				Logger:      ctx.Logger,
+				Telemetry:   ctx.Telemetry,
+				Presenter:   ctx.Presenter,
+				Registry:    ctx.Registry,
+				IO:          ctx.IO,
+				AgentMode:   false,
+				AllowWrites: true,
+			}
+		})
+	}
+	s.SetCategories(shellCats)
+
+	return s.Start()
 }
 
 // isJSONMode reports whether the current invocation should produce JSON envelope
@@ -481,6 +554,10 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 	}
 	if f.Changed("log-file") {
 		o.LogFile, _ = f.GetString("log-file")
+	}
+	if f.Changed("shell") {
+		v := shellFlag
+		o.ShellEnabled = &v
 	}
 	if f.Changed("no-metrics") {
 		v := !noMetrics // --no-metrics disables; --no-metrics=false re-enables

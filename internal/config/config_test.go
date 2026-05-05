@@ -74,6 +74,13 @@ func TestDefaults_Neo4jDatabase(t *testing.T) {
 	}
 }
 
+func TestDefaults_ShellEnabled(t *testing.T) {
+	cfg := loadDefaults(t)
+	if !cfg.Shell.Enabled {
+		t.Error("Shell.Enabled should default to true")
+	}
+}
+
 func TestDefaults_MetricsEnabled(t *testing.T) {
 	cfg := loadDefaults(t)
 	if !cfg.Telemetry.Metrics {
