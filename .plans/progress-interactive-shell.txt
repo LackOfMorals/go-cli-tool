@@ -21,3 +21,26 @@ Key Decisions:
   no changes needed.
 
 Next Task: task-002 (Change shell.enabled config default from false to true)
+
+================================================================================
+TASK-002: Change shell.enabled config default from false to true
+Date: 2026-05-05T01:00:00Z
+================================================================================
+
+Summary:
+Changed the viper default for shell.enabled from false to true in
+internal/config/config.go. Added TestDefaults_ShellEnabled test to
+config_test.go to assert the new default. All existing tests continue to pass
+and golangci-lint reports zero issues.
+
+Files Changed:
+- internal/config/config.go (changed v.SetDefault("shell.enabled", false) to true on line 285)
+- internal/config/config_test.go (added TestDefaults_ShellEnabled test)
+
+Key Decisions:
+- No existing test was asserting shell.enabled defaulted to false, so only an
+  addition was needed (no test removal).
+- Added a positive assertion test (TestDefaults_ShellEnabled) to lock in the
+  new true default, following the pattern of TestDefaults_MetricsEnabled.
+
+Next Task: task-003 (Create bridge adapter: BridgeCategory in internal/shell/bridge.go)

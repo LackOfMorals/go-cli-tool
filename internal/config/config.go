@@ -282,7 +282,7 @@ func newViperConfigLoader() *viperConfigLoader {
 	v.SetDefault("log_format", "text")
 	v.SetDefault("log_output", "stderr")
 	v.SetDefault("log_file", "")
-	v.SetDefault("shell.enabled", false)
+	v.SetDefault("shell.enabled", true)
 	v.SetDefault("shell.prompt", "neo4j> ")
 	v.SetDefault("shell.history_file", ".neo4j_history")
 	v.SetDefault("telemetry.metrics", true)

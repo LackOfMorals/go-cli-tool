@@ -26,13 +26,13 @@ tasks:
       In internal/config/config.go, change the viper default for shell.enabled
       from false to true so that the shell is opt-in by default. Also update
       any tests that assert the old default.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "v.SetDefault(\"shell.enabled\", true) in viperConfigLoader"
       - "go test ./internal/config/... passes"
       - "A config with no shell section resolves Shell.Enabled to true"
-    completed_at: null
+    completed_at: "2026-05-05T01:00:00Z"
 
   - id: task-003
     title: "Create bridge adapter: BridgeCategory in internal/shell/bridge.go"
