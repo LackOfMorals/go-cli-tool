@@ -36,7 +36,7 @@ func instanceListCmd(svc service.CloudService) *dispatch.Command {
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "List all Aura instances",
-		Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			instances, err := svc.Instances().List(ctx.Context)
 			if err != nil {
 				return dispatch.CommandResult{}, err
@@ -306,7 +306,7 @@ func buildProjectsCategory(svc service.CloudService) *dispatch.Category {
 			Aliases:     []string{"ls"},
 			Usage:       "list",
 			Description: "List all projects",
-			Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+			Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 				projects, err := svc.Projects().List(ctx.Context)
 				if err != nil {
 					return dispatch.CommandResult{}, err

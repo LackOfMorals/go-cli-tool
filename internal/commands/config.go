@@ -319,7 +319,7 @@ func configListCmd(cfg *config.Config) *dispatch.Command {
 		Aliases:     []string{"ls"},
 		Usage:       "list",
 		Description: "Show all configuration keys, their current values, and descriptions",
-		Handler: func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			cols := []string{"Key", "Value", "Description"}
 			rows := make([][]interface{}, 0, len(configRegistry))
 			items := make([]map[string]interface{}, 0, len(configRegistry))
@@ -345,7 +345,7 @@ func configSetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 		Name:        "set",
 		Usage:       "set <key> <value>",
 		Description: "Set a configuration value and persist it to the config file",
-		Handler: func(args []string, _ dispatch.Context) (dispatch.CommandResult, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			if len(args) < 2 {
 				return dispatch.CommandResult{}, fmt.Errorf(
 					"usage: config set <key> <value>\n\nAvailable keys (run 'config list' for descriptions):\n%s",
@@ -460,7 +460,7 @@ func configResetCmd(cfg *config.Config, cfgPath string) *dispatch.Command {
 		MutationMode: tool.ModeWrite,
 		Usage:        "reset",
 		Description:  "Delete the config file and restore all defaults (prompts for confirmation outside agent mode)",
-		Handler: func(_ []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
+		Handler: func(args []string, ctx dispatch.Context) (dispatch.CommandResult, error) {
 			path := cfgPath
 			if path == "" {
 				path = config.DefaultConfigFilePath()

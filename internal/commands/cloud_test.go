@@ -108,7 +108,7 @@ func (m *mockIO) Read() (string, error) {
 func (m *mockIO) Write(format string, args ...interface{}) {
 	m.written = append(m.written, fmt.Sprintf(format, args...))
 }
-func (m *mockIO) WriteError(_ error) {}
+func (m *mockIO) WriteError(err error) {}
 func (m *mockIO) WriteLine(line string) {
 	m.written = append(m.written, line)
 }

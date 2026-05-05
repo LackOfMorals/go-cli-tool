@@ -116,7 +116,7 @@ func toRecordSet(r *neo4j.EagerResult) *RecordSet {
 	}
 	qt := ""
 	if r.Summary != nil {
-		qt = r.Summary.QueryType().String()
+		qt = fmt.Sprintf("%s", r.Summary.QueryType())
 	}
 	return &RecordSet{Columns: r.Keys, Rows: rows, QueryType: qt}
 }

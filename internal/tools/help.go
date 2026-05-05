@@ -84,7 +84,7 @@ func (t *HelpTool) getToolHelp(toolName string) (string, error) {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s (v%s)\n", found.Name(), found.Version())
+	b.WriteString(fmt.Sprintf("%s (v%s)\n", found.Name(), found.Version()))
 	b.WriteString(strings.Repeat("=", len(found.Name())+10))
 	b.WriteString("\n\nDescription:\n")
 	b.WriteString("-------------\n")
@@ -95,7 +95,7 @@ func (t *HelpTool) getToolHelp(toolName string) (string, error) {
 		b.WriteString("Default Parameters:\n")
 		b.WriteString("-------------------\n")
 		for key, value := range defaults {
-			fmt.Fprintf(&b, "  %s: %v\n", key, value)
+			b.WriteString(fmt.Sprintf("  %s: %v\n", key, value))
 		}
 	}
 

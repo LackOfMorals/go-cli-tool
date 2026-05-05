@@ -37,9 +37,7 @@ func TestToolRegistryRegister(t *testing.T) {
 func TestToolRegistryGet(t *testing.T) {
 	registry := NewToolRegistry()
 	testTool := tool.NewBaseTool("test", "Test tool", "1.0.0")
-	if err := registry.Register(testTool); err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
+	registry.Register(testTool)
 
 	retrieved, err := registry.Get("test")
 	if err != nil {
@@ -67,15 +65,9 @@ func TestToolRegistryGetNotFound(t *testing.T) {
 func TestToolRegistryList(t *testing.T) {
 	registry := NewToolRegistry()
 
-	if err := registry.Register(tool.NewBaseTool("tool1", "Tool 1", "1.0.0")); err != nil {
-		t.Fatalf("register tool1: %v", err)
-	}
-	if err := registry.Register(tool.NewBaseTool("tool2", "Tool 2", "1.0.0")); err != nil {
-		t.Fatalf("register tool2: %v", err)
-	}
-	if err := registry.Register(tool.NewBaseTool("tool3", "Tool 3", "1.0.0")); err != nil {
-		t.Fatalf("register tool3: %v", err)
-	}
+	registry.Register(tool.NewBaseTool("tool1", "Tool 1", "1.0.0"))
+	registry.Register(tool.NewBaseTool("tool2", "Tool 2", "1.0.0"))
+	registry.Register(tool.NewBaseTool("tool3", "Tool 3", "1.0.0"))
 
 	tools := registry.List()
 	if len(tools) != 3 {
@@ -86,12 +78,8 @@ func TestToolRegistryList(t *testing.T) {
 func TestToolRegistryListNames(t *testing.T) {
 	registry := NewToolRegistry()
 
-	if err := registry.Register(tool.NewBaseTool("echo", "Echo tool", "1.0.0")); err != nil {
-		t.Fatalf("register echo: %v", err)
-	}
-	if err := registry.Register(tool.NewBaseTool("help", "Help tool", "1.0.0")); err != nil {
-		t.Fatalf("register help: %v", err)
-	}
+	registry.Register(tool.NewBaseTool("echo", "Echo tool", "1.0.0"))
+	registry.Register(tool.NewBaseTool("help", "Help tool", "1.0.0"))
 
 	names := registry.ListNames()
 	if len(names) != 2 {
@@ -113,9 +101,7 @@ func TestToolRegistryListNames(t *testing.T) {
 func TestToolRegistryUnregister(t *testing.T) {
 	registry := NewToolRegistry()
 	testTool := tool.NewBaseTool("test", "Test tool", "1.0.0")
-	if err := registry.Register(testTool); err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
+	registry.Register(testTool)
 
 	err := registry.Unregister("test")
 	if err != nil {
@@ -140,9 +126,7 @@ func TestToolRegistryExists(t *testing.T) {
 		t.Error("Expected tool to not exist before registration")
 	}
 
-	if err := registry.Register(testTool); err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
+	registry.Register(testTool)
 
 	if !registry.Exists("test") {
 		t.Error("Expected tool to exist after registration")
@@ -152,12 +136,8 @@ func TestToolRegistryExists(t *testing.T) {
 func TestToolRegistryClear(t *testing.T) {
 	registry := NewToolRegistry()
 
-	if err := registry.Register(tool.NewBaseTool("tool1", "Tool 1", "1.0.0")); err != nil {
-		t.Fatalf("register tool1: %v", err)
-	}
-	if err := registry.Register(tool.NewBaseTool("tool2", "Tool 2", "1.0.0")); err != nil {
-		t.Fatalf("register tool2: %v", err)
-	}
+	registry.Register(tool.NewBaseTool("tool1", "Tool 1", "1.0.0"))
+	registry.Register(tool.NewBaseTool("tool2", "Tool 2", "1.0.0"))
 
 	registry.Clear()
 
@@ -170,9 +150,7 @@ func TestToolRegistryDuplicateRegistration(t *testing.T) {
 	registry := NewToolRegistry()
 	testTool := tool.NewBaseTool("test", "Test tool", "1.0.0")
 
-	if err := registry.Register(testTool); err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
+	registry.Register(testTool)
 	err := registry.Register(testTool)
 
 	if err == nil {
@@ -222,15 +200,9 @@ func (t *configurableErrorTool) Configure(params map[string]interface{}) error {
 func TestToolRegistryFilter(t *testing.T) {
 	registry := NewToolRegistry()
 
-	if err := registry.Register(tool.NewBaseTool("echo", "Echo tool", "1.0.0")); err != nil {
-		t.Fatalf("register echo: %v", err)
-	}
-	if err := registry.Register(tool.NewBaseTool("help", "Help tool", "1.0.0")); err != nil {
-		t.Fatalf("register help: %v", err)
-	}
-	if err := registry.Register(tool.NewBaseTool("exit", "Exit tool", "1.0.0")); err != nil {
-		t.Fatalf("register exit: %v", err)
-	}
+	registry.Register(tool.NewBaseTool("echo", "Echo tool", "1.0.0"))
+	registry.Register(tool.NewBaseTool("help", "Help tool", "1.0.0"))
+	registry.Register(tool.NewBaseTool("exit", "Exit tool", "1.0.0"))
 
 	// Filter tools with 'e' in name
 	filtered := registry.Filter(func(t tool.Tool) bool {

@@ -133,10 +133,10 @@ type ToolConfig struct {
 
 // ---- Service ------------------------------------------------------------
 
-// configServiceImpl loads and merges configuration from defaults, a file, and
+// ConfigService loads and merges configuration from defaults, a file, and
 // explicit overrides. It no longer depends on Cobra — flag values are
 // extracted by the caller and passed in as an Overrides struct.
-type configServiceImpl struct {
+type ConfigService struct {
 	overrides Overrides
 	loader    configLoader
 }
@@ -146,7 +146,7 @@ type configServiceImpl struct {
 //
 //	explicit Overrides → env vars (CLI_ prefix) → config file → defaults
 func NewConfigService(overrides Overrides) Service {
-	return &configServiceImpl{
+	return &ConfigService{
 		overrides: overrides,
 		loader:    newViperConfigLoader(),
 	}
@@ -159,7 +159,7 @@ func NewConfigService(overrides Overrides) Service {
 // File loading precedence:
 //  1. Explicit --config-file path (hard error if file is missing)
 //  2. DefaultConfigFilePath() — ~/.neo4j-cli/config.json (silently skipped if absent)
-func (c *configServiceImpl) LoadConfiguration() (Config, error) {
+func (c *ConfigService) LoadConfiguration() (Config, error) {
 	if c.overrides.ConfigFile != "" {
 		// Explicit path: treat a missing file as an error.
 		if err := c.loader.readFile(c.overrides.ConfigFile); err != nil {
@@ -187,7 +187,7 @@ func (c *configServiceImpl) LoadConfiguration() (Config, error) {
 // applyOverrides applies only the non-zero fields from Overrides, so an
 // explicit CLI flag always wins without a flag default silently overwriting
 // a file value.
-func (c *configServiceImpl) applyOverrides(cfg *Config) {
+func (c *ConfigService) applyOverrides(cfg *Config) {
 	o := c.overrides
 	if o.LogLevel != "" {
 		cfg.LogLevel = o.LogLevel
@@ -227,7 +227,7 @@ func (c *configServiceImpl) applyOverrides(cfg *Config) {
 // SaveConfiguration writes cfg back to the file specified in Overrides.
 // The caller is responsible for supplying a path; use DefaultConfigFilePath()
 // when none is available (e.g. in InteractiveAuraPrerequisite).
-func (c *configServiceImpl) SaveConfiguration(cfg Config) error {
+func (c *ConfigService) SaveConfiguration(cfg Config) error {
 	if c.overrides.ConfigFile == "" {
 		return fmt.Errorf("no config file path specified (use --config-file)")
 	}

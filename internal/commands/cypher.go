@@ -120,7 +120,9 @@ func BuildCypherCategory(svc service.CypherService) *dispatch.Category {
 
 			// Items: QueryRow is map[string]interface{}, so result.Rows satisfies directly.
 			items := make([]map[string]interface{}, len(result.Rows))
-			copy(items, result.Rows)
+			for i, row := range result.Rows {
+				items[i] = row
+			}
 
 			return dispatch.CommandResult{
 				Presentation:   queryResultToTableData(result),

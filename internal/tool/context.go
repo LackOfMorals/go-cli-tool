@@ -24,7 +24,7 @@ type Context struct {
 	Config     map[string]interface{}
 	Logger     logger.Service // typed — tools can call ctx.Logger.Info(...) directly
 	IO         IOHandler
-	Presenter  presentation.Service
+	Presenter  *presentation.PresentationService
 	WorkingDir string
 }
 
@@ -52,7 +52,7 @@ func workingDir() string {
 func (c *Context) WithContext(ctx context.Context) *Context { c.Context = ctx; return c }
 func (c *Context) WithArgs(args []string) *Context          { c.Args = args; return c }
 func (c *Context) WithIO(io IOHandler) *Context             { c.IO = io; return c }
-func (c *Context) WithPresenter(p presentation.Service) *Context {
+func (c *Context) WithPresenter(p *presentation.PresentationService) *Context {
 	c.Presenter = p
 	return c
 }

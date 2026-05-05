@@ -63,7 +63,6 @@ All functionality is exposed as top-level subcommands. Running `neo4j-cli` with 
 | `cloud` | Manage Neo4j Aura cloud resources |
 | `admin` | Administrative operations against the connected database |
 | `config` | Manage CLI configuration |
-| `skill` | Install, remove, or list the embedded `neo4j-cli` SKILL.md across detected AI agents |
 
 ### cypher
 
@@ -142,22 +141,6 @@ neo4j-cli config set aura.instance_defaults.region us-east-1
 neo4j-cli config delete neo4j.password              # reset a key to its default (prompts)
 neo4j-cli config reset                              # wipe config file, restore all defaults (prompts)
 ```
-
-### skill
-
-Installs, removes, or lists the embedded `neo4j-cli` SKILL.md for AI agents (Claude Code, Cursor, Windsurf, Copilot, Gemini CLI, Cline, Codex, Pi, OpenCode, Junie). The SKILL.md is generated at build time from this CLI's command tree so agents always see current usage.
-
-```bash
-neo4j-cli skill list                                # show all known agents and install status
-neo4j-cli skill install                             # install to every detected agent
-neo4j-cli skill install claude-code                 # install to a specific agent
-neo4j-cli skill remove                              # remove from every agent that has it
-neo4j-cli skill remove claude-code                  # remove from a specific agent
-```
-
-`install` writes `<agent-skills-dir>/neo4j-cli/SKILL.md`, replacing any existing file or symlink at that path. `list` is read-only; `install` and `remove` are write operations and require `--rw` in agent mode.
-
-> **No prerequisite.** This command only touches local agent skill directories — no Neo4j or Aura credentials needed.
 
 ---
 

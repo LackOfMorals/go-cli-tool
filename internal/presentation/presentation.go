@@ -44,9 +44,9 @@ func (f OutputFormat) IsValid() bool {
 
 // ---- PresentationService ------------------------------------------------
 
-// presentationService is the default Service implementation.
+// PresentationService is the default Service implementation.
 // All exported methods are safe for concurrent use.
-type presentationService struct {
+type PresentationService struct {
 	mu         sync.RWMutex
 	format     OutputFormat
 	formatters map[OutputFormat]OutputFormatter
@@ -55,7 +55,7 @@ type presentationService struct {
 
 // NewPresentationService builds a service with all built-in formatters
 // registered. format is the default; use FormatAs for per-call overrides.
-func NewPresentationService(format OutputFormat, log logger.Service) (Service, error) {
+func NewPresentationService(format OutputFormat, log logger.Service) (*PresentationService, error) {
 	if log == nil {
 		return nil, fmt.Errorf("logger is required")
 	}
@@ -63,7 +63,7 @@ func NewPresentationService(format OutputFormat, log logger.Service) (Service, e
 		return nil, fmt.Errorf("invalid output format: %q", format)
 	}
 
-	s := &presentationService{
+	s := &PresentationService{
 		format:     format,
 		formatters: make(map[OutputFormat]OutputFormatter),
 		logger:     log,
@@ -78,7 +78,7 @@ func NewPresentationService(format OutputFormat, log logger.Service) (Service, e
 	return s, nil
 }
 
-func (s *presentationService) RegisterFormatter(format OutputFormat, formatter OutputFormatter) error {
+func (s *PresentationService) RegisterFormatter(format OutputFormat, formatter OutputFormatter) error {
 	if formatter == nil {
 		return fmt.Errorf("formatter for %q cannot be nil", format)
 	}
@@ -88,7 +88,7 @@ func (s *presentationService) RegisterFormatter(format OutputFormat, formatter O
 	return nil
 }
 
-func (s *presentationService) SetFormat(format OutputFormat) error {
+func (s *PresentationService) SetFormat(format OutputFormat) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.formatters[format]; !ok {
@@ -99,7 +99,7 @@ func (s *presentationService) SetFormat(format OutputFormat) error {
 }
 
 // Format renders data using the current default format.
-func (s *presentationService) Format(data any) (string, error) {
+func (s *PresentationService) Format(data any) (string, error) {
 	s.mu.RLock()
 	formatter, ok := s.formatters[s.format]
 	var fallback OutputFormatter
@@ -122,7 +122,7 @@ func (s *presentationService) Format(data any) (string, error) {
 
 // FormatAs renders data using a specific format regardless of the default.
 // Use this for per-query format overrides (e.g. cypher --format graph).
-func (s *presentationService) FormatAs(data any, format OutputFormat) (string, error) {
+func (s *PresentationService) FormatAs(data any, format OutputFormat) (string, error) {
 	s.mu.RLock()
 	formatter, ok := s.formatters[format]
 	s.mu.RUnlock()
