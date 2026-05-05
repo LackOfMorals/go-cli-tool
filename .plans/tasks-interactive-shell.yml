@@ -98,7 +98,7 @@ tasks:
       InteractiveShell, bridges the dispatch categories, and calls shell.Start().
       The shell must receive logger, config, telemetry, presentation service, tool
       registry, version string, and bridged categories.
-    status: pending
+    status: completed
     dependencies:
       - task-003
       - task-005
@@ -108,7 +108,7 @@ tasks:
       - "neo4j-cli --shell=false prints Cobra help and exits cleanly"
       - "Shell receives all services (logger, config, telemetry, presenter, registry)"
       - "go build ./cmd/neo4j-cli succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T05:00:00Z"
 
   - id: task-007
     title: "Welcome banner for no-config first-time users"

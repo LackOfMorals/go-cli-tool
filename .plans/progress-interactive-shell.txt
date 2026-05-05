@@ -129,3 +129,31 @@ Key Decisions:
   wiring is verified by the build + help output check.
 
 Next Task: task-006 (Add root command RunE that launches the interactive shell)
+
+================================================================================
+TASK-006: Add root command RunE that launches the interactive shell
+Date: 2026-05-05T05:00:00Z
+================================================================================
+
+Summary:
+Added RunE to the root Cobra command that launches the interactive REPL when
+no subcommand is given. Two functions were added to app.go: launchShell (the
+RunE handler) and startShell (wiring logic). The shell import was added to
+app.go. Agent mode or Shell.Enabled=false causes fallback to cmd.Help().
+
+Files Changed:
+- cmd/neo4j-cli/app.go (added shell import, RunE on root command, launchShell,
+  startShell functions)
+
+Key Decisions:
+- launchShell checks agentMode first (returns cmd.Help()) so agent callers
+  using the root command without a subcommand get help, not a REPL.
+- startShell uses app.buildCategories() (which uses interactive prerequisites
+  in non-agent mode) so missing credentials prompt inside the REPL.
+- ctxFor closure in BridgeCategory sets AgentMode=false and AllowWrites=true
+  since the interactive shell is always a human session — write operations
+  should not be blocked.
+- The root command Long description was updated to mention the interactive shell.
+- golangci-lint reports 0 issues; go test ./... passes with all packages green.
+
+Next Task: task-007 (Welcome banner for no-config first-time users)

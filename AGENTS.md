@@ -49,3 +49,5 @@ Generated files must be committed. CI fails if they are stale.
 - `stubPresenter` pattern: implement all four `presentation.Service` methods, capture `lastData`/`lastFormat` for assertions, return configurable `returnString`/`returnErr`
 - When adding a bool flag that maps to `*bool` in Overrides, set the flag default to match the viper default and use `cmd.Flags().Changed("flag-name")` to only apply the override when explicitly set — this prevents the flag default from silently clobbering config-file or env-var values
 - `CLI_SHELL_ENABLED` env var is handled automatically by viper's AutomaticEnv via the `shell.enabled` → `CLI_SHELL_ENABLED` key remapping (prefix CLI, `.` → `_`)
+- Root command `RunE` for the shell: check `agentMode` first (fall back to `cmd.Help()`), then check `cfg.Shell.Enabled` (fall back to `cmd.Help()`), then call `startShell`. Split into two functions (`launchShell` + `startShell`) for testability.
+- `shell.BridgeCategory` ctxFor closure: set `AgentMode=false` and `AllowWrites=true` for the interactive shell — human sessions are not agent sessions and write operations should not be blocked.
