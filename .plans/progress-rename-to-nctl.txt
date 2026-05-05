@@ -1,0 +1,7 @@
+## rename-to-nctl progress log
+
+### task-001 — 2026-05-05
+- Used `git mv cmd/neo4j-cli cmd/nctl` to rename the directory; rename is tracked in git history.
+- `go build ./cmd/nctl` and `go build ./...` both succeed with no changes to Go source files.
+- `go test ./...` passes — all existing tests still pass after the directory rename.
+- No Go source edits were needed: `package main` declarations and import paths are unaffected by a directory rename in this module layout.

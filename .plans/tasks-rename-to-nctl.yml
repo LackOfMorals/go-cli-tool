@@ -11,13 +11,13 @@ tasks:
       rename is tracked in git history. The package declaration inside main.go
       and app.go remains package main — no Go source changes needed in this task.
       Verify go build ./cmd/nctl compiles after the directory move.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "Directory cmd/nctl/ exists; cmd/neo4j-cli/ is gone"
       - "git mv is used so the rename appears in git history"
       - "go build ./cmd/nctl succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-002
     title: "Update env vars in cmd/nctl/app.go to NCTL_ prefix"
