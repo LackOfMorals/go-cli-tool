@@ -44,3 +44,34 @@ Key Decisions:
   new true default, following the pattern of TestDefaults_MetricsEnabled.
 
 Next Task: task-003 (Create bridge adapter: BridgeCategory in internal/shell/bridge.go)
+
+================================================================================
+TASK-003: Create bridge adapter: BridgeCategory in internal/shell/bridge.go
+Date: 2026-05-05T02:00:00Z
+================================================================================
+
+Summary:
+Created internal/shell/bridge.go implementing BridgeCategory, which recursively
+wraps a dispatch.Category tree as a shell.Category tree. Also added two
+read-only accessor methods (Commands, Prerequisite) to dispatch.Category so the
+bridge can read private fields without violating encapsulation.
+
+Files Changed:
+- internal/shell/bridge.go (created — BridgeCategory, renderResult, dispatchPrerequisite)
+- internal/dispatch/category.go (added Commands() and Prerequisite() accessors)
+- .plans/tasks-interactive-shell.yml (task-003 status updated to completed)
+
+Key Decisions:
+- dispatch.Category had no exported accessors for `commands` or `prerequisite`.
+  Added Commands() (returns a copy of the map) and Prerequisite() rather than
+  using reflection or moving bridge logic into the dispatch package, keeping the
+  dependency direction correct (shell → dispatch, not dispatch → shell).
+- renderResult checks result.FormatOverride and uses FormatAs when set, matching
+  how the CLI dispatcher selects per-query formats (e.g. --format graph).
+- dispatchPrerequisite is a thin named function (not inlined) for clarity and
+  testability.
+- The bridge only iterates CommandNames() (canonical names), not AllCommandNames(),
+  to avoid registering alias keys as first-class commands — AddCommand handles
+  aliases via the Aliases field.
+
+Next Task: task-004 (Unit tests for bridge adapter)

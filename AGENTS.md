@@ -44,3 +44,4 @@ Generated files must be committed. CI fails if they are stale.
 - `go generate ./...` must be re-run and committed when the Cobra tree or mocked interfaces change
 - The shell package already uses `presentation.Service` (interface) — do not reference the concrete struct
 - `golangci-lint run` must pass with zero suppressions
+- `dispatch.Category` private fields (commands, prerequisite) are exposed via `Commands()` and `Prerequisite()` accessors added for the bridge adapter — use these, not reflection

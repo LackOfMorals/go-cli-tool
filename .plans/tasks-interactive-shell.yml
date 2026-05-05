@@ -43,7 +43,7 @@ tasks:
       bridged command handler builds a dispatch.Context, calls the dispatch handler,
       and renders CommandResult to a string (via Presenter.Format for Presentation
       payloads, or Message as fallback). Subcategory prerequisites are forwarded.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -52,7 +52,7 @@ tasks:
       - "A bridged command that returns MessageResult renders the Message string"
       - "A bridged command that returns a result with Presentation calls presenter.Format"
       - "go build ./internal/shell/... succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T02:00:00Z"
 
   - id: task-004
     title: "Unit tests for bridge adapter"
