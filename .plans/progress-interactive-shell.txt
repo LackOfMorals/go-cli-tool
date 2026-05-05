@@ -102,3 +102,30 @@ Key Decisions:
 - All 11 tests pass; golangci-lint reports 0 issues.
 
 Next Task: task-005 (Add --shell flag to root command)
+
+================================================================================
+TASK-005: Add --shell flag to root command and wire to Overrides.ShellEnabled
+Date: 2026-05-05T04:00:00Z
+================================================================================
+
+Summary:
+Added a --shell persistent boolean flag to the root Cobra command in
+cmd/neo4j-cli/app.go. The flag is wired to Overrides.ShellEnabled only when
+it was explicitly set by the user (cobra's Changed() check), so the flag
+default never silently clobbers config-file or env-var values.
+CLI_SHELL_ENABLED env var continues to be handled automatically by viper's
+AutomaticEnv (key remapping: shell.enabled → CLI_SHELL_ENABLED).
+
+Files Changed:
+- cmd/neo4j-cli/app.go (added shellFlag var, --shell persistent flag, Changed("shell") override)
+
+Key Decisions:
+- Flag default is `true` to match the viper default (task-002). This way
+  `--shell` without a value is a no-op (same as the config default), and only
+  `--shell=false` produces an override.
+- Used the same Changed() guard pattern as `--no-metrics` and `--aura-timeout`
+  so the flag default never overwrites config/env values.
+- No new tests needed: config.applyOverrides already has coverage; the flag
+  wiring is verified by the build + help output check.
+
+Next Task: task-006 (Add root command RunE that launches the interactive shell)

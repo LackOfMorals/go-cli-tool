@@ -79,7 +79,7 @@ tasks:
       overrides.ShellEnabled only when the flag was explicitly provided (use
       cobra's Changed() check to distinguish explicit false from default false).
       CLI_SHELL_ENABLED env var is already handled by viper's AutomaticEnv.
-    status: pending
+    status: completed
     dependencies:
       - task-002
     acceptance_criteria:
@@ -87,7 +87,7 @@ tasks:
       - "neo4j-cli --shell=false with shell.enabled=true in config disables shell"
       - "CLI_SHELL_ENABLED=false env var disables shell regardless of config file"
       - "go build ./cmd/neo4j-cli succeeds"
-    completed_at: null
+    completed_at: "2026-05-05T04:00:00Z"
 
   - id: task-006
     title: "Add root command RunE that launches the interactive shell"

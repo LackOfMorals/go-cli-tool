@@ -53,6 +53,9 @@ var (
 	auraTimeoutSeconds int
 	outputFormat       string
 
+	// Shell-mode flags
+	shellFlag bool // --shell (explicit; may be true or false)
+
 	// Agent-mode flags
 	agentMode   bool   // --agent / NEO4J_CLI_AGENT=true
 	allowWrites bool   // --rw / NEO4J_CLI_RW=true
@@ -186,6 +189,9 @@ Use a subcommand to interact with Neo4j databases and Aura cloud resources.`,
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
 	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
 	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
+
+	// Shell-mode flag
+	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: CLI_SHELL_ENABLED=false to disable)")
 
 	// Agent-mode flags
 	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NEO4J_CLI_AGENT=true)")
@@ -481,6 +487,10 @@ func overridesFromCmd(cmd *cobra.Command) config.Overrides {
 	}
 	if f.Changed("log-file") {
 		o.LogFile, _ = f.GetString("log-file")
+	}
+	if f.Changed("shell") {
+		v := shellFlag
+		o.ShellEnabled = &v
 	}
 	if f.Changed("no-metrics") {
 		v := !noMetrics // --no-metrics disables; --no-metrics=false re-enables
