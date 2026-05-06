@@ -1,2 +1,0 @@
-kind: Added
-body: 'Running `neo4j-cli` with no subcommand now launches an interactive REPL (enabled by default); the shell can be disabled with `--shell=false`, `CLI_SHELL_ENABLED=false`, or `shell.enabled: false` in the config file, and is automatically suppressed in `--agent` mode'
