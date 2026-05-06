@@ -1,6 +1,6 @@
 version: 2
 
-project_name: neo4j-mcp-canary
+project_name: nctl
 
 before:
   hooks:
