@@ -8,7 +8,8 @@ tasks:
     title: "Add github.com/toon-format/toon-go dependency"
     description: |
       Add the toon-go module to go.mod and go.sum. Verify the public API surface (package name, top-level Marshal/Encode function, supported value types) by writing a small throwaway main or doc comment, then settle on a pinned version (latest stable tag at time of work). No production code uses the library yet — this task only lands the dependency cleanly so subsequent tasks can import it.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies: []
     acceptance_criteria:
       - "go.mod and go.sum include github.com/toon-format/toon-go pinned to a specific stable version"

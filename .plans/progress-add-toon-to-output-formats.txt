@@ -1,0 +1,33 @@
+================================================================================
+TASK-001: Add github.com/toon-format/toon-go dependency
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Landed the github.com/toon-format/toon-go module as a direct dependency in
+go.mod / go.sum and added a placeholder file in internal/presentation/ that
+keeps the import pinned across `go mod tidy` runs and records the planned API
+usage for the upcoming TOONFormatter (task-004).
+
+Files Changed:
+- go.mod (modified: added direct require for toon-go)
+- go.sum (modified: added toon-go checksum entries)
+- internal/presentation/toon.go (created: doc-only file with blank import +
+  planned-usage comment; will be replaced by TOONFormatter in task-004)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip)
+
+Key Decisions:
+- Pinned to v0.0.0-20251202084852-7ca0e27c4e8c. Upstream has no tagged
+  releases; this is the latest commit on main as resolved by the Go module
+  proxy.
+- Planned encoder entry point: toon.MarshalString(v) — string-returning sibling
+  of toon.Marshal, mirrors how JSONFormatter calls json.Marshal.
+- Library defaults only for v1: no toon.WithIndent / toon.WithArrayDelimiter /
+  toon.WithLengthMarkers tuning planned.
+- Error wrapping convention: fmt.Errorf("encode TOON: %w", err) for parity with
+  JSONFormatter's "marshal JSON: %w".
+- Blank import wrapped in `import ( ... )` block with a justifying comment to
+  satisfy revive's blank-imports lint rule (a top-level `import _ "..."` line
+  with a separate comment block above does not count as "justified").
+
+Next Task: task-002 (Add OutputFormatTOON constant and update IsValid)

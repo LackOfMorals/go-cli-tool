@@ -13,6 +13,7 @@ require (
 	github.com/neo4j/neo4j-go-driver/v6 v6.0.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
+	github.com/toon-format/toon-go v0.0.0-20251202084852-7ca0e27c4e8c
 	go.uber.org/mock v0.6.0
 )
 
