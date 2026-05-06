@@ -132,7 +132,7 @@ tasks:
       command (go build -o bin/nctl ./cmd/nctl), all usage examples, and path
       references (~/.nctl/). The overall structure and content of the README
       is unchanged — only the binary name and paths are updated.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "README.md title is nctl (or equivalent)"
@@ -140,7 +140,7 @@ tasks:
       - "All usage examples reference nctl"
       - "Path references show ~/.nctl/"
       - "grep -c neo4j-cli README.md returns 0"
-    completed_at: null
+    completed_at: "2026-05-06T00:00:00Z"
 
   - id: task-009
     title: "Update CLAUDE.md build command"

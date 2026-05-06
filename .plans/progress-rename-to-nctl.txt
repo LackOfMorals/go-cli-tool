@@ -50,3 +50,31 @@
 ### task-007 — 2026-05-05
 - Updated `.goreleaser.yaml` build entry: `id: neo4j-cli` → `id: nctl`, `main: ./cmd/neo4j-cli` → `main: ./cmd/nctl`, `binary: neo4j-cli` → `binary: nctl`.
 - `goreleaser check` passes; `go build ./cmd/nctl` succeeds.
+
+================================================================================
+TASK-008: Update README.md to use nctl throughout
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+README.md was already partially staged on the branch with `neo4j-cli` → `nctl`
+replacements applied to title, build command, usage examples and path
+references. Verified the staged changes met the original acceptance criteria
+(grep -c neo4j-cli returns 0) and additionally updated stale env var
+references that the original task scope did not cover but were left
+inconsistent with task-002/task-003: `NEO4J_CLI_AGENT/RW/REQUEST_ID` →
+`NCTL_*`, and the entire `CLI_*` env var table (LOG_*, NEO4J_*, AURA_*,
+CYPHER_*, TELEMETRY_*) → `NCTL_*`. Also added `toon` to the documented
+`NCTL_CYPHER_OUTPUT_FORMAT` value list to match current code.
+
+Files Changed:
+- README.md (binary name, paths, env var prefix, output format list)
+
+Key Decisions:
+- Extended the task scope to also rename `NEO4J_CLI_*` and `CLI_*` env var
+  references in README. Without this the README would document env vars that
+  no longer work, contradicting tasks 002/003.
+- Did NOT touch `.claude/settings.json` or `.plans/prd-change-command-prefix.md`
+  (untracked files belonging to a different feature, per orchestrator note).
+
+Next Task: task-009 (Update CLAUDE.md build command)
