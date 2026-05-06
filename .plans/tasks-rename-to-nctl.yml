@@ -149,13 +149,13 @@ tasks:
       'go build -o bin/neo4j-cli ./cmd/neo4j-cli' to
       'go build -o bin/nctl ./cmd/nctl'. Check for any other neo4j-cli
       references in the file and update them.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
       - "Build command in CLAUDE.md references bin/nctl and ./cmd/nctl"
       - "No remaining neo4j-cli references in CLAUDE.md"
-    completed_at: null
+    completed_at: "2026-05-06T21:30:00Z"
 
   - id: task-010
     title: "Fix test assertions that check for neo4j-cli strings"

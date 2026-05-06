@@ -78,3 +78,28 @@ Key Decisions:
   (untracked files belonging to a different feature, per orchestrator note).
 
 Next Task: task-009 (Update CLAUDE.md build command)
+
+================================================================================
+TASK-009: Update CLAUDE.md build command
+Date: 2026-05-06T21:30:00Z
+================================================================================
+
+Summary:
+Verified CLAUDE.md is already updated to reference nctl throughout — the file
+was rewritten in commit 44eb860 ("nctl rename") which landed on main before
+this finish-up loop began. Both target lines (build command and architecture
+description of binary location) already use nctl/cmd/nctl. No code changes
+required. Confirmed via `grep -n "neo4j-cli\|NEO4J_CLI\|CLI_" CLAUDE.md` — no
+matches. `go build ./...` and `go test ./...` both pass.
+
+Files Changed:
+- .plans/tasks-rename-to-nctl.yml (mark task-009 completed)
+- .plans/progress-rename-to-nctl.txt (this entry)
+
+Key Decisions:
+- Did not re-edit CLAUDE.md because it was already correct on disk; followed
+  the orchestrator instruction to "verify rather than blindly redo".
+- Did NOT touch `.claude/settings.json` or `.plans/prd-change-command-prefix.md`
+  (untracked files belonging to a different feature, per orchestrator note).
+
+Next Task: task-010 (Fix test assertions that check for neo4j-cli strings)
