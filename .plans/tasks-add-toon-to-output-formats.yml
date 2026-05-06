@@ -105,7 +105,8 @@ tasks:
     title: "Default to TOON in agent mode when no override is set"
     description: |
       In the app startup wiring (app.go's buildCategories / NewPresentationService call site), choose OutputFormatTOON as the default format passed to NewPresentationService when (a) the binary is running in agent mode and (b) the user has not set cypher.output_format in their config. Otherwise keep today's default. The --format flag is already a per-call override via FormatAs and needs no change. Add a focused unit test that drives the selection logic with the three relevant input combinations (agent + no config → toon; agent + config set → config wins; non-agent → today's default).
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-005
     acceptance_criteria:

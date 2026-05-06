@@ -298,6 +298,26 @@ func isJSONMode() bool {
 	return agentMode && outputFormat == ""
 }
 
+// resolveDefaultPresentationFormat picks the default OutputFormat to install
+// on the presentation service at startup. Precedence:
+//
+//  1. cypher.output_format from config, when set to a recognised value
+//  2. OutputFormatTOON when running in agent mode (machine-friendly default)
+//  3. OutputFormatTable (today's human-mode default)
+//
+// Per-call overrides (--format flag, FormatAs) bypass this default entirely.
+func resolveDefaultPresentationFormat(cfg *config.Config, agent bool) presentation.OutputFormat {
+	if cfg != nil {
+		if f := presentation.OutputFormat(cfg.Cypher.OutputFormat); f.IsValid() {
+			return f
+		}
+	}
+	if agent {
+		return presentation.OutputFormatTOON
+	}
+	return presentation.OutputFormatTable
+}
+
 // resolveHumanFormat returns the output format to use for human-mode rendering,
 // preferring a per-result override, then the --format flag, then a default.
 func resolveHumanFormat(override presentation.OutputFormat) presentation.OutputFormat {
@@ -623,10 +643,11 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		an.Disable()
 	}
 
-	// 4. Presentation service — always start in table mode for a CLI.
+	// 4. Presentation service — pick a default that respects agent mode and
+	// any explicit cypher.output_format the user has set in their config.
 	// Commands use FormatAs for per-query overrides; the session default
 	// can be changed with `set cypher-format <format>`.
-	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
+	pres, err := presentation.NewPresentationService(resolveDefaultPresentationFormat(&cfg, agentMode), log)
 	if err != nil {
 		return nil, fmt.Errorf("init presentation: %w", err)
 	}

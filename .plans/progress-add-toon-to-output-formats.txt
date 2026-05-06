@@ -283,3 +283,60 @@ Key Decisions:
   verification step is the right place to clean those up if desired.
 
 Next Task: task-008 (Default to TOON in agent mode when no override is set)
+
+================================================================================
+TASK-008: Default to TOON in agent mode when no override is set
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Made the presentation service's startup default format agent-mode-aware. The
+NewPresentationService call site in cmd/nctl/app.go now chooses TOON when
+the binary is running in agent mode AND the user has not explicitly set
+cypher.output_format; an explicit config value always wins, and outside
+agent mode the default stays as today (table). Detection of "user has not
+set cypher.output_format" required dropping viper's hardcoded "table"
+default for that key — all read sites already handled the empty case.
+
+Files Changed:
+- internal/config/config.go (modified: viper default for
+  cypher.output_format dropped from "table" to ""; doc comment on the
+  CypherConfig.OutputFormat field updated to call out empty-means-unset
+  semantics and list every valid value)
+- cmd/nctl/app.go (modified: added resolveDefaultPresentationFormat helper
+  with config-wins → agent-toon → table precedence; newApp now calls it
+  instead of passing presentation.OutputFormatTable directly to
+  NewPresentationService)
+- cmd/nctl/app_test.go (created: 6 test functions covering agent-no-config,
+  agent-config-set across all valid formats, non-agent-no-config,
+  non-agent-config-set, invalid-config-fallback, and nil-config defensive
+  behaviour)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Viper default for cypher.output_format changed from "table" to "" so the
+  startup code can distinguish "user set table" from "user did not set
+  anything". Verified all read sites — cypher.go line 102-106,
+  shell/interactive.go lines 510/547 — already fall back to "table" on
+  empty, so this is behaviour-preserving for non-agent users.
+- configRegistry's Default: "table" for cypher.output_format (in
+  internal/commands/config.go) is left untouched; it controls what
+  `nctl config delete cypher.output_format` resets to, which is a
+  different concept from "what is the runtime default if unset".
+- resolveDefaultPresentationFormat takes (cfg *config.Config, agent bool)
+  so it can be tested without mutating the package-level agentMode var.
+  newApp passes the package var through; the test file constructs Config
+  values directly.
+- Helper falls through to the agent/non-agent default when an INVALID
+  cypher.output_format value is in the config (rather than propagating
+  it to NewPresentationService where it would error at startup). This
+  is defensive — the config Set already rejects invalid values, but a
+  hand-edited config file could still slip something through.
+- Pre-existing gofmt drift in internal/config/config.go (Overrides
+  struct field alignment around lines 22-29) is left untouched per the
+  convention established in tasks 004/005/007.
+- Tests live in package main (cmd/nctl/app_test.go) — same package as
+  the helper — because the helper is unexported. Existing cmd/nctl had
+  no tests; this is the first.
+
+Next Task: task-009 (Regenerate skill.md.gen and any other generated artefacts)
