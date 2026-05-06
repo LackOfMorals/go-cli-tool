@@ -7,18 +7,18 @@
 - No Go source edits were needed: `package main` declarations and import paths are unaffected by a directory rename in this module layout.
 
 ### task-002 — 2026-05-05
-- Replaced all three `os.Getenv` calls in `cmd/nctl/app.go`: `NEO4J_CLI_AGENT` → `NCTL_AGENT`, `NEO4J_CLI_RW` → `NCTL_RW`, `NEO4J_CLI_REQUEST_ID` → `NCTL_REQUEST_ID`.
+- Replaced all three `os.Getenv` calls in `cmd/nctl/app.go`: `NEO4J_CLI_AGENT` → `LOM_AGENT`, `NEO4J_CLI_RW` → `LOM_RW`, `NEO4J_CLI_REQUEST_ID` → `LOM_REQUEST_ID`.
 - Updated the error string from `'neo4j-cli --help'` to `'nctl --help'` in `run()`.
-- Updated the comment on `currentRequestID()` to reference `NCTL_REQUEST_ID`.
+- Updated the comment on `currentRequestID()` to reference `LOM_REQUEST_ID`.
 - Updated variable comments for `agentMode`, `allowWrites`, and `requestID`.
-- Updated all three flag description strings (--agent, --rw, --request-id) to reference `NCTL_` env var names.
+- Updated all three flag description strings (--agent, --rw, --request-id) to reference `LOM_` env var names.
 - `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
 
 ### task-003 — 2026-05-05
 - Changed `v.SetEnvPrefix("CLI")` to `v.SetEnvPrefix("NCTL")` in `newViperConfigLoader()`.
 - Updated `DefaultConfigFilePath()` to return `~/.nctl/config.json`; fallback is `.nctl-config.json`.
-- Updated all `CLI_` references in comments throughout `internal/config/config.go` to `NCTL_` (Neo4jConfig, AuraConfig, AuraInstanceDefaults, CypherConfig, NewConfigService, LoadConfiguration, newViperConfigLoader).
-- Updated `config_test.go`: comment about `~/.neo4j-cli/config.json`, and two `t.Setenv` calls (`CLI_NEO4J_URI` → `NCTL_NEO4J_URI`, `CLI_NEO4J_DATABASE` → `NCTL_NEO4J_DATABASE`).
+- Updated all `CLI_` references in comments throughout `internal/config/config.go` to `LOM_` (Neo4jConfig, AuraConfig, AuraInstanceDefaults, CypherConfig, NewConfigService, LoadConfiguration, newViperConfigLoader).
+- Updated `config_test.go`: comment about `~/.neo4j-cli/config.json`, and two `t.Setenv` calls (`CLI_NEO4J_URI` → `LOM_NEO4J_URI`, `CLI_NEO4J_DATABASE` → `LOM_NEO4J_DATABASE`).
 - Note: user-facing `CLI_` strings in other packages (prerequisites.go, cloud_service.go, neo4j_repo.go, app.go) are in scope for task-005 and task-006.
 - `go test ./internal/config/...` and `go test ./...` both pass; `golangci-lint run ./internal/config/...` reports 0 issues.
 
@@ -32,9 +32,9 @@
 
 ### task-006 — 2026-05-05
 - Updated `dispatch/category.go`: error message changed from `'neo4j-cli %s --help'` to `'nctl %s --help'`; doc comment examples updated from `neo4j-cli cloud/cypher` to `nctl cloud/cypher`.
-- Updated `dispatch/dispatch.go`: comments on `AgentMode` and `AllowWrites` fields now reference `NCTL_AGENT` and `NCTL_RW` respectively.
+- Updated `dispatch/dispatch.go`: comments on `AgentMode` and `AllowWrites` fields now reference `LOM_AGENT` and `LOM_RW` respectively.
 - Updated `commands/cypher.go`: both MAINTENANCE comments in `globalBoolFlag` and `globalValueFlag` now reference `cmd/nctl/app.go` instead of `cmd/neo4j-cli/app.go`.
-- Updated `tool/tool.go`: `ModeWrite` constant comment now references `NCTL_RW` instead of `NEO4J_CLI_RW`.
+- Updated `tool/tool.go`: `ModeWrite` constant comment now references `LOM_RW` instead of `NEO4J_CLI_RW`.
 - Updated `shell/interactive.go`: `builtinVersion` returns `"nctl %s"` (was `"neo4j-cli %s"`); `builtinConfig` log file default path updated from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
 - Updated `shell/interactive_test.go`: `TestExecute_Version` assertion updated from `'neo4j-cli'` to `'nctl'` (test was broken by the version string change; fix pulled forward from task-010).
 - `go test ./...` and `golangci-lint run` both pass with zero issues.
@@ -63,9 +63,9 @@ references. Verified the staged changes met the original acceptance criteria
 (grep -c neo4j-cli returns 0) and additionally updated stale env var
 references that the original task scope did not cover but were left
 inconsistent with task-002/task-003: `NEO4J_CLI_AGENT/RW/REQUEST_ID` →
-`NCTL_*`, and the entire `CLI_*` env var table (LOG_*, NEO4J_*, AURA_*,
-CYPHER_*, TELEMETRY_*) → `NCTL_*`. Also added `toon` to the documented
-`NCTL_CYPHER_OUTPUT_FORMAT` value list to match current code.
+`LOM_*`, and the entire `CLI_*` env var table (LOG_*, NEO4J_*, AURA_*,
+CYPHER_*, TELEMETRY_*) → `LOM_*`. Also added `toon` to the documented
+`LOM_CYPHER_OUTPUT_FORMAT` value list to match current code.
 
 Files Changed:
 - README.md (binary name, paths, env var prefix, output format list)
@@ -148,19 +148,19 @@ the earlier tasks deliberately deferred (task-003 explicitly noted these were
 "in scope for task-005 and task-006" but they had not yet been done). After
 this task, `grep -rn 'neo4j-cli\|NEO4J_CLI_\|CLI_' --include='*.go' .` returns
 zero matches across the repo. Also fixed AGENTS.md line 51 (`CLI_SHELL_ENABLED`
-→ `NCTL_SHELL_ENABLED`) which was a stale doc note.
+→ `LOM_SHELL_ENABLED`) which was a stale doc note.
 
 Files Changed:
 - cmd/nctl/app.go: --no-metrics flag desc (CLI_TELEMETRY_METRICS →
-  NCTL_TELEMETRY_METRICS), --shell flag desc (CLI_SHELL_ENABLED →
-  NCTL_SHELL_ENABLED), Mixpanel token comment.
+  LOM_TELEMETRY_METRICS), --shell flag desc (CLI_SHELL_ENABLED →
+  LOM_SHELL_ENABLED), Mixpanel token comment.
 - internal/repository/neo4j_repo.go: two error messages
-  (CLI_NEO4J_URI/USERNAME → NCTL_).
+  (CLI_NEO4J_URI/USERNAME → LOM_).
 - internal/commands/prerequisites.go: two interactive Tip prints
-  (CLI_AURA_*/CLI_NEO4J_* → NCTL_).
+  (CLI_AURA_*/CLI_NEO4J_* → LOM_).
 - internal/service/cloud_service.go: aura credentials error message
-  (CLI_AURA_* → NCTL_).
-- AGENTS.md: line 51 CLI_SHELL_ENABLED → NCTL_SHELL_ENABLED.
+  (CLI_AURA_* → LOM_).
+- AGENTS.md: line 51 CLI_SHELL_ENABLED → LOM_SHELL_ENABLED.
 - .plans/tasks-rename-to-nctl.yml: marked task-011 completed.
 - .plans/progress-rename-to-nctl.txt: this entry.
 

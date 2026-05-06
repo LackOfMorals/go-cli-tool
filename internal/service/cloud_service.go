@@ -49,7 +49,7 @@ func (s *CloudServiceImpl) ensureClient() (*aura.AuraAPIClient, error) {
 	if s.cfg.ClientID == "" || s.cfg.ClientSecret == "" {
 		return nil, fmt.Errorf(
 			"aura API credentials not configured — " +
-				"set NCTL_AURA_CLIENT_ID and NCTL_AURA_CLIENT_SECRET " +
+				"set LOM_AURA_CLIENT_ID and LOM_AURA_CLIENT_SECRET " +
 				"or aura.client_id / aura.client_secret in your config file",
 		)
 	}

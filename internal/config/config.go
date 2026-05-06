@@ -55,9 +55,9 @@ type Config struct {
 
 // Neo4jConfig holds connection details for a Neo4j database instance.
 //
-// Env vars (NCTL_ prefix):
+// Env vars (LOM_ prefix):
 //
-//	NCTL_NEO4J_URI, NCTL_NEO4J_USERNAME, NCTL_NEO4J_PASSWORD, NCTL_NEO4J_DATABASE
+//	LOM_NEO4J_URI, LOM_NEO4J_USERNAME, LOM_NEO4J_PASSWORD, LOM_NEO4J_DATABASE
 type Neo4jConfig struct {
 	URI      string `mapstructure:"uri"      json:"uri"`
 	Username string `mapstructure:"username" json:"username"`
@@ -67,10 +67,10 @@ type Neo4jConfig struct {
 
 // AuraConfig holds credentials and options for the Neo4j Aura management API.
 //
-// Env vars (NCTL_ prefix):
+// Env vars (LOM_ prefix):
 //
-//	NCTL_AURA_CLIENT_ID, NCTL_AURA_CLIENT_SECRET, NCTL_AURA_TIMEOUT_SECONDS
-//	NCTL_AURA_INSTANCE_DEFAULTS_TENANT_ID, NCTL_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER, ...
+//	LOM_AURA_CLIENT_ID, LOM_AURA_CLIENT_SECRET, LOM_AURA_TIMEOUT_SECONDS
+//	LOM_AURA_INSTANCE_DEFAULTS_TENANT_ID, LOM_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER, ...
 type AuraConfig struct {
 	ClientID         string               `mapstructure:"client_id"         json:"client_id"`
 	ClientSecret     string               `mapstructure:"client_secret"     json:"client_secret"`
@@ -81,7 +81,7 @@ type AuraConfig struct {
 // AuraInstanceDefaults holds defaults for new instance creation.
 // These are merged with per-command arguments, with explicit args taking precedence.
 //
-// Env vars (NCTL_ prefix, e.g. NCTL_AURA_INSTANCE_DEFAULTS_TENANT_ID):
+// Env vars (LOM_ prefix, e.g. LOM_AURA_INSTANCE_DEFAULTS_TENANT_ID):
 type AuraInstanceDefaults struct {
 	TenantID      string `mapstructure:"tenant_id"       json:"tenant_id"`
 	CloudProvider string `mapstructure:"cloud_provider"  json:"cloud_provider"`
@@ -114,9 +114,9 @@ type ShellConfig struct {
 
 // CypherConfig controls query execution and output behaviour.
 //
-// Env vars (NCTL_ prefix):
+// Env vars (LOM_ prefix):
 //
-//	NCTL_CYPHER_SHELL_LIMIT, NCTL_CYPHER_EXEC_LIMIT, NCTL_CYPHER_OUTPUT_FORMAT
+//	LOM_CYPHER_SHELL_LIMIT, LOM_CYPHER_EXEC_LIMIT, LOM_CYPHER_OUTPUT_FORMAT
 type CypherConfig struct {
 	// ShellLimit is the default LIMIT injected in shell (interactive) mode.
 	ShellLimit int `mapstructure:"shell_limit" json:"shell_limit"`
@@ -146,7 +146,7 @@ type configService struct {
 // NewConfigService returns a Service that resolves configuration with the
 // following precedence (highest → lowest):
 //
-//	explicit Overrides → env vars (NCTL_ prefix) → config file → defaults
+//	explicit Overrides → env vars (LOM_ prefix) → config file → defaults
 func NewConfigService(overrides Overrides) Service {
 	return &configService{
 		overrides: overrides,
@@ -314,8 +314,8 @@ func newViperConfigLoader() *viperConfigLoader {
 	// when the value is empty.
 	v.SetDefault("cypher.output_format", "")
 
-	// Env vars: NCTL_NEO4J_URI, NCTL_AURA_CLIENT_SECRET, etc.
-	// The replacer maps "." → "_" so "neo4j.uri" → NCTL_NEO4J_URI.
+	// Env vars: LOM_NEO4J_URI, LOM_AURA_CLIENT_SECRET, etc.
+	// The replacer maps "." → "_" so "neo4j.uri" → LOM_NEO4J_URI.
 	v.SetEnvPrefix("NCTL")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()

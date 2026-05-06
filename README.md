@@ -1,6 +1,6 @@
 # nctl
 
-A command-line tool for Neo4j, optimised for use by AI agents and scripts. Connect to a Neo4j database and the Neo4j Aura management API from a single binary — run Cypher queries, manage cloud instances, and perform administrative operations.
+A command-line tool for Neo4j with an interactive shell that can be used by people and by AI agents. Connect to a Neo4j database and the Neo4j Aura management API from a single binary — run Cypher queries, manage cloud instances, and perform administrative operations.
 
 ---
 
@@ -197,33 +197,33 @@ A full example:
 
 ### Environment variables
 
-All variables use the `NCTL_` prefix. Nested keys use underscores.
+All variables use the `LOM_` prefix. Nested keys use underscores.
 
 | Variable | Default | Description |
 |---|---|---|
-| `NCTL_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `NCTL_LOG_FORMAT` | `text` | Log format: `text`, `json` |
-| `NCTL_LOG_OUTPUT` | `stderr` | Log destination: `stderr`, `stdout`, `file` |
-| `NCTL_LOG_FILE` | _(empty)_ | Log file path (used when `NCTL_LOG_OUTPUT=file`) |
-| `NCTL_NEO4J_URI` | `bolt://localhost:7687` | Neo4j bolt URI |
-| `NCTL_NEO4J_USERNAME` | `neo4j` | Neo4j username |
-| `NCTL_NEO4J_PASSWORD` | _(empty)_ | Neo4j password — prefer env over config file |
-| `NCTL_NEO4J_DATABASE` | `neo4j` | Neo4j database name |
-| `NCTL_AURA_CLIENT_ID` | _(empty)_ | Aura API client ID |
-| `NCTL_AURA_CLIENT_SECRET` | _(empty)_ | Aura API client secret — prefer env over config file |
-| `NCTL_AURA_TIMEOUT_SECONDS` | `30` | Aura API request timeout |
-| `NCTL_AURA_INSTANCE_DEFAULTS_TENANT_ID` | _(empty)_ | Default tenant ID for new instances |
-| `NCTL_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER` | `gcp` | Default cloud provider: `aws`, `gcp`, `azure` |
-| `NCTL_AURA_INSTANCE_DEFAULTS_REGION` | `europe-west1` | Default region for new instances |
-| `NCTL_AURA_INSTANCE_DEFAULTS_TYPE` | `enterprise-db` | Default instance type |
-| `NCTL_AURA_INSTANCE_DEFAULTS_VERSION` | `5` | Default Neo4j version |
-| `NCTL_AURA_INSTANCE_DEFAULTS_MEMORY` | `8GB` | Default instance memory |
-| `NCTL_CYPHER_SHELL_LIMIT` | `25` | Default LIMIT injected into cypher queries |
-| `NCTL_CYPHER_EXEC_LIMIT` | `100` | Default LIMIT in non-interactive mode |
-| `NCTL_CYPHER_OUTPUT_FORMAT` | `table` | Default output format: `table`, `json`, `pretty-json`, `graph`, `toon` |
-| `NCTL_TELEMETRY_METRICS` | `true` | Send anonymous usage metrics to Neo4j |
+| `LOM_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `LOM_LOG_FORMAT` | `text` | Log format: `text`, `json` |
+| `LOM_LOG_OUTPUT` | `stderr` | Log destination: `stderr`, `stdout`, `file` |
+| `LOM_LOG_FILE` | _(empty)_ | Log file path (used when `LOM_LOG_OUTPUT=file`) |
+| `LOM_NEO4J_URI` | `bolt://localhost:7687` | Neo4j bolt URI |
+| `LOM_NEO4J_USERNAME` | `neo4j` | Neo4j username |
+| `LOM_NEO4J_PASSWORD` | _(empty)_ | Neo4j password — prefer env over config file |
+| `LOM_NEO4J_DATABASE` | `neo4j` | Neo4j database name |
+| `LOM_AURA_CLIENT_ID` | _(empty)_ | Aura API client ID |
+| `LOM_AURA_CLIENT_SECRET` | _(empty)_ | Aura API client secret — prefer env over config file |
+| `LOM_AURA_TIMEOUT_SECONDS` | `30` | Aura API request timeout |
+| `LOM_AURA_INSTANCE_DEFAULTS_TENANT_ID` | _(empty)_ | Default tenant ID for new instances |
+| `LOM_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER` | `gcp` | Default cloud provider: `aws`, `gcp`, `azure` |
+| `LOM_AURA_INSTANCE_DEFAULTS_REGION` | `europe-west1` | Default region for new instances |
+| `LOM_AURA_INSTANCE_DEFAULTS_TYPE` | `enterprise-db` | Default instance type |
+| `LOM_AURA_INSTANCE_DEFAULTS_VERSION` | `5` | Default Neo4j version |
+| `LOM_AURA_INSTANCE_DEFAULTS_MEMORY` | `8GB` | Default instance memory |
+| `LOM_CYPHER_SHELL_LIMIT` | `25` | Default LIMIT injected into cypher queries |
+| `LOM_CYPHER_EXEC_LIMIT` | `100` | Default LIMIT in non-interactive mode |
+| `LOM_CYPHER_OUTPUT_FORMAT` | `table` | Default output format: `table`, `json`, `pretty-json`, `graph`, `toon` |
+| `LOM_TELEMETRY_METRICS` | `true` | Send anonymous usage metrics to Neo4j |
 
-> **Security note:** `NCTL_NEO4J_PASSWORD` and `NCTL_AURA_CLIENT_SECRET` are intentionally not available as CLI flags. Passing secrets as flags exposes them in shell history and `ps` output.
+> **Security note:** `LOM_NEO4J_PASSWORD` and `LOM_AURA_CLIENT_SECRET` are intentionally not available as CLI flags. Passing secrets as flags exposes them in shell history and `ps` output.
 
 ### CLI flags
 
@@ -255,7 +255,7 @@ When Neo4j or Aura credentials are missing, the CLI prompts for them interactive
 
 ## Agent mode
 
-The CLI is designed to be driven by AI agents, CI pipelines, and orchestration tools. Use `--agent` (or `NCTL_AGENT=true`) to activate a safe, machine-readable operating mode.
+The CLI is designed to be driven by AI agents, CI pipelines, and orchestration tools. Use `--agent` (or `LOM_AGENT=true`) to activate a safe, machine-readable operating mode.
 
 ### Activating agent mode
 
@@ -264,7 +264,7 @@ The CLI is designed to be driven by AI agents, CI pipelines, and orchestration t
 nctl --agent cloud instances list
 
 # Via environment variable (recommended for pipelines — all invocations inherit it)
-export NCTL_AGENT=true
+export LOM_AGENT=true
 nctl cloud instances list
 ```
 
@@ -279,7 +279,7 @@ nctl cloud instances list
 
 ### The --rw flag
 
-In agent mode, all operations that modify state are blocked by default. Pass `--rw` (or `NCTL_RW=true`) to explicitly permit mutations:
+In agent mode, all operations that modify state are blocked by default. Pass `--rw` (or `LOM_RW=true`) to explicitly permit mutations:
 
 ```bash
 # Blocked — returns READ_ONLY error
@@ -341,7 +341,7 @@ Error codes:
 ```
 --request-id string   Correlation ID included in JSON responses.
                       Auto-generated (UUID) if not supplied.
-                      Env: NCTL_REQUEST_ID
+                      Env: LOM_REQUEST_ID
 
 --timeout duration    Maximum time for a command to run (e.g. 30s, 2m).
                       Exit code 1 + TIMEOUT error on expiry.
@@ -350,11 +350,11 @@ Error codes:
 ### Recommended orchestrator setup
 
 ```bash
-export NCTL_AGENT=true
-export NCTL_REQUEST_ID="pipeline-run-${RUN_ID}"  # inject your trace ID
-export NCTL_NEO4J_URI="bolt+s://your-instance.databases.neo4j.io"
-export NCTL_NEO4J_USERNAME="neo4j"
-export NCTL_NEO4J_PASSWORD="${NEO4J_PASSWORD}"
+export LOM_AGENT=true
+export LOM_REQUEST_ID="pipeline-run-${RUN_ID}"  # inject your trace ID
+export LOM_NEO4J_URI="bolt+s://your-instance.databases.neo4j.io"
+export LOM_NEO4J_USERNAME="neo4j"
+export LOM_NEO4J_PASSWORD="${NEO4J_PASSWORD}"
 
 # Read operations work with no further flags
 nctl cypher "MATCH (n:Person) RETURN count(n)"

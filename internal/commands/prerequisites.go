@@ -76,7 +76,7 @@ func InteractiveAuraPrerequisite(aura *config.AuraConfig, full *config.Config, c
 		}
 
 		fmt.Fprintln(os.Stderr, "\nNeo4j Aura API credentials are required.")
-		fmt.Fprintln(os.Stderr, "Tip: set NCTL_AURA_CLIENT_ID / NCTL_AURA_CLIENT_SECRET to skip this prompt.")
+		fmt.Fprintln(os.Stderr, "Tip: set LOM_AURA_CLIENT_ID / LOM_AURA_CLIENT_SECRET to skip this prompt.")
 		fmt.Fprintln(os.Stderr, "")
 
 		fmt.Fprint(os.Stderr, "Aura Client ID: ")
@@ -142,7 +142,7 @@ func InteractiveNeo4jPrerequisite(neo4j *config.Neo4jConfig, fullCfg *config.Con
 		}
 
 		fmt.Fprintln(os.Stderr, "\nNeo4j connection details are required.")
-		fmt.Fprintln(os.Stderr, "Tip: set NCTL_NEO4J_URI, NCTL_NEO4J_USERNAME, NCTL_NEO4J_PASSWORD, NCTL_NEO4J_DATABASE to skip this prompt.")
+		fmt.Fprintln(os.Stderr, "Tip: set LOM_NEO4J_URI, LOM_NEO4J_USERNAME, LOM_NEO4J_PASSWORD, LOM_NEO4J_DATABASE to skip this prompt.")
 		fmt.Fprintln(os.Stderr)
 
 		// promptField prints "Label [default]: " and returns whatever the user

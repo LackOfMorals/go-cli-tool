@@ -58,9 +58,9 @@ var (
 	shellFlag bool // --shell (explicit; may be true or false)
 
 	// Agent-mode flags
-	agentMode   bool   // --agent / NCTL_AGENT=true
-	allowWrites bool   // --rw / NCTL_RW=true
-	requestID   string // --request-id / NCTL_REQUEST_ID
+	agentMode   bool   // --agent / LOM_AGENT=true
+	allowWrites bool   // --rw / LOM_RW=true
+	requestID   string // --request-id / LOM_REQUEST_ID
 	timeoutStr  string // --timeout (e.g. "30s")
 )
 
@@ -95,13 +95,13 @@ func run() int {
 	}
 
 	// Honour env vars too; either source winning is correct.
-	if os.Getenv("NCTL_AGENT") == "true" {
+	if os.Getenv("LOM_AGENT") == "true" {
 		agentMode = true
 	}
-	if os.Getenv("NCTL_RW") == "true" {
+	if os.Getenv("LOM_RW") == "true" {
 		allowWrites = true
 	}
-	if v := os.Getenv("NCTL_REQUEST_ID"); v != "" {
+	if v := os.Getenv("LOM_REQUEST_ID"); v != "" {
 		requestID = v
 	}
 
@@ -127,7 +127,7 @@ func run() int {
 }
 
 // currentRequestID returns the active request ID, generating one if the user
-// did not supply --request-id or NCTL_REQUEST_ID.
+// did not supply --request-id or LOM_REQUEST_ID.
 func currentRequestID() string {
 	if requestID != "" {
 		return requestID
@@ -184,7 +184,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
 	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
 	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.nctl/nctl.log)")
-	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and NCTL_TELEMETRY_METRICS env var)")
+	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and LOM_TELEMETRY_METRICS env var)")
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
 	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
@@ -193,12 +193,12 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph, toon")
 
 	// Shell-mode flag
-	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: NCTL_SHELL_ENABLED=false to disable)")
+	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: LOM_SHELL_ENABLED=false to disable)")
 
 	// Agent-mode flags
-	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NCTL_AGENT=true)")
-	pf.BoolVar(&allowWrites, "rw", false, "Permit write/mutating operations in agent mode (env: NCTL_RW=true)")
-	pf.StringVar(&requestID, "request-id", "", "Correlation ID included in every agent-mode JSON response (env: NCTL_REQUEST_ID)")
+	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: LOM_AGENT=true)")
+	pf.BoolVar(&allowWrites, "rw", false, "Permit write/mutating operations in agent mode (env: LOM_RW=true)")
+	pf.StringVar(&requestID, "request-id", "", "Correlation ID included in every agent-mode JSON response (env: LOM_REQUEST_ID)")
 	pf.StringVar(&timeoutStr, "timeout", "", "Maximum time for a command to run, e.g. 30s or 2m (exit code 124 on timeout)")
 
 	rootCmd.AddCommand(buildCloudCommand())
@@ -632,7 +632,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		logWriter,
 	)
 
-	// 3. Analytics — prefer a token from config/env (NCTL_TELEMETRY_MIXPANEL_TOKEN)
+	// 3. Analytics — prefer a token from config/env (LOM_TELEMETRY_MIXPANEL_TOKEN)
 	// so the hardcoded default can be overridden without a rebuild.
 	token := mixPanelToken
 	if cfg.Telemetry.MixpanelToken != "" {

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(golangci-lint run *)",
+      "Bash(git -C * status)",
+      "Bash(git -C * status *)",
+      "Bash(git -C * log)",
+      "Bash(git -C * log *)",
+      "Bash(git -C * diff)",
+      "Bash(git -C * diff *)"
+    ]
+  }
+}

@@ -259,7 +259,7 @@ func TestPrecedence_EnvVarOverridesFile(t *testing.T) {
 		"neo4j": map[string]any{"uri": "bolt://filehost:7687"},
 	})
 
-	t.Setenv("NCTL_NEO4J_URI", "bolt://envhost:7687")
+	t.Setenv("LOM_NEO4J_URI", "bolt://envhost:7687")
 
 	cfg, err := config.NewConfigService(config.Overrides{ConfigFile: path}).LoadConfiguration()
 	if err != nil {
@@ -271,7 +271,7 @@ func TestPrecedence_EnvVarOverridesFile(t *testing.T) {
 }
 
 func TestPrecedence_EnvVarOverridesDefault(t *testing.T) {
-	t.Setenv("NCTL_NEO4J_DATABASE", "envdb")
+	t.Setenv("LOM_NEO4J_DATABASE", "envdb")
 
 	cfg, err := config.NewConfigService(config.Overrides{}).LoadConfiguration()
 	if err != nil {

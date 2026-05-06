@@ -1,6 +1,6 @@
 version: 2
 
-project_name: nctl
+project_name: lom
 
 before:
   hooks:
@@ -8,9 +8,9 @@ before:
     - go test ./...
 
 builds:
-  - id: nctl
-    main: ./cmd/nctl
-    binary: nctl
+  - id: lom
+    main: ./cmd/lom
+    binary: lom
     env:
       - CGO_ENABLED=0        # pure Go, no C deps — enables clean cross-compilation
     goos:
@@ -23,17 +23,21 @@ builds:
     # Exclude combos you don't want (e.g. Windows ARM)
     ignore:
       - goos: windows
-        goarch: arm64
+        formats: 
+        -zip
     ldflags:
       - -X "main.Version={{.Tag}}"
 
 archives:
   - id: default
     name_template: >-
-      {{ .ProjectName }}_
+      {{ .Binary }}_
       {{- .Version }}_
-      {{- .Os }}_
-      {{- .Arch }}
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     # .zip for Windows, .tar.gz for everything else
     format_overrides:
       - goos: windows

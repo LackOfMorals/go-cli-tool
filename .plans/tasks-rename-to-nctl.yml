@@ -20,21 +20,21 @@ tasks:
     completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-002
-    title: "Update env vars in cmd/nctl/app.go to NCTL_ prefix"
+    title: "Update env vars in cmd/nctl/app.go to LOM_ prefix"
     description: |
       Replace all three os.Getenv calls and their corresponding flag description
-      strings in cmd/nctl/app.go: NEO4J_CLI_AGENT -> NCTL_AGENT,
-      NEO4J_CLI_RW -> NCTL_RW, NEO4J_CLI_REQUEST_ID -> NCTL_REQUEST_ID.
+      strings in cmd/nctl/app.go: NEO4J_CLI_AGENT -> LOM_AGENT,
+      NEO4J_CLI_RW -> LOM_RW, NEO4J_CLI_REQUEST_ID -> LOM_REQUEST_ID.
       Also update the 'Run nctl --help' error string and all variable comments
       that reference the old env var names.
     status: completed
     dependencies:
       - task-001
     acceptance_criteria:
-      - "os.Getenv(\"NCTL_AGENT\") replaces NEO4J_CLI_AGENT"
-      - "os.Getenv(\"NCTL_RW\") replaces NEO4J_CLI_RW"
-      - "os.Getenv(\"NCTL_REQUEST_ID\") replaces NEO4J_CLI_REQUEST_ID"
-      - "Flag descriptions reference NCTL_ env var names"
+      - "os.Getenv(\"LOM_AGENT\") replaces NEO4J_CLI_AGENT"
+      - "os.Getenv(\"LOM_RW\") replaces NEO4J_CLI_RW"
+      - "os.Getenv(\"LOM_REQUEST_ID\") replaces NEO4J_CLI_REQUEST_ID"
+      - "Flag descriptions reference LOM_ env var names"
       - "go build ./cmd/nctl succeeds"
     completed_at: "2026-05-05T00:00:00Z"
 
@@ -44,14 +44,14 @@ tasks:
       Change v.SetEnvPrefix(\"CLI\") to v.SetEnvPrefix(\"NCTL\") in the
       viperConfigLoader function. Update DefaultConfigFilePath() to return
       ~/.nctl/config.json (and fall back to .nctl-config.json). Update all
-      CLI_ comments in the file to NCTL_.
+      CLI_ comments in the file to LOM_.
     status: completed
     dependencies: []
     acceptance_criteria:
       - "SetEnvPrefix is called with \"NCTL\""
       - "DefaultConfigFilePath returns a path containing .nctl"
       - "Fallback path is .nctl-config.json"
-      - "All CLI_ references in comments are updated to NCTL_"
+      - "All CLI_ references in comments are updated to LOM_"
       - "go test ./internal/config/... passes"
     completed_at: "2026-05-05T01:00:00Z"
 
@@ -103,9 +103,9 @@ tasks:
       - task-001
     acceptance_criteria:
       - "dispatch/category.go error message references 'nctl'"
-      - "dispatch/dispatch.go comments reference NCTL_ env vars"
+      - "dispatch/dispatch.go comments reference LOM_ env vars"
       - "commands/cypher.go MAINTENANCE comments reference cmd/nctl/app.go"
-      - "tool/tool.go comment references NCTL_RW"
+      - "tool/tool.go comment references LOM_RW"
       - "shell/interactive.go version string returns 'nctl <version>'"
     completed_at: "2026-05-05T04:00:00Z"
 
