@@ -1,2 +1,0 @@
-kind: Fixed
-body: '`admin show-users` and `admin show-databases` now correctly parse results from Neo4j; both commands were previously always returning an error due to unimplemented result parsing'
