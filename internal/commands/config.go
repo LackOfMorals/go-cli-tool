@@ -245,15 +245,15 @@ var configRegistry = []configItemDef{
 	},
 	{
 		Key: "cypher.output_format", Section: "Cypher", Default: "table",
-		Description: "Default output format: table, json, pretty-json, graph",
+		Description: "Default output format: table, json, pretty-json, graph, toon",
 		Get:         func(c config.Config) string { return c.Cypher.OutputFormat },
 		Set: func(c *config.Config, v string) error {
 			switch v {
-			case "table", "json", "pretty-json", "graph":
+			case "table", "json", "pretty-json", "graph", "toon":
 				c.Cypher.OutputFormat = v
 				return nil
 			}
-			return fmt.Errorf("must be one of: table, json, pretty-json, graph")
+			return fmt.Errorf("must be one of: table, json, pretty-json, graph, toon")
 		},
 	},
 }

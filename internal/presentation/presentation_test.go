@@ -172,6 +172,61 @@ func TestFormat_Graph_NodeRendersBox(t *testing.T) {
 	}
 }
 
+// ---- Format: TOON -------------------------------------------------------
+
+func TestFormat_TOON_Tabular(t *testing.T) {
+	svc := newTestService(t, presentation.OutputFormatTOON)
+	out, err := svc.Format(sampleTableData())
+	if err != nil {
+		t.Fatalf("Format: %v", err)
+	}
+	for _, want := range []string{"name", "age", "Alice", "Bob"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("TOON output should contain %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestFormat_TOON_DetailData(t *testing.T) {
+	svc := newTestService(t, presentation.OutputFormatTOON)
+	detail := presentation.NewDetailData("Instance", []presentation.DetailField{
+		{Label: "ID", Value: "abc-123"},
+		{Label: "Name", Value: "prod-db"},
+	})
+	out, err := svc.Format(detail)
+	if err != nil {
+		t.Fatalf("Format: %v", err)
+	}
+	if !strings.Contains(out, "abc-123") {
+		t.Errorf("TOON output should contain ID value, got: %q", out)
+	}
+	if !strings.Contains(out, "prod-db") {
+		t.Errorf("TOON output should contain name value, got: %q", out)
+	}
+}
+
+func TestFormat_TOON_Scalar(t *testing.T) {
+	svc := newTestService(t, presentation.OutputFormatTOON)
+	out, err := svc.Format("hello")
+	if err != nil {
+		t.Fatalf("Format: %v", err)
+	}
+	if !strings.Contains(out, "hello") {
+		t.Errorf("TOON output should contain scalar string, got: %q", out)
+	}
+}
+
+func TestFormatAs_TOON(t *testing.T) {
+	svc := newTestService(t, presentation.OutputFormatTable)
+	out, err := svc.FormatAs(sampleTableData(), presentation.OutputFormatTOON)
+	if err != nil {
+		t.Fatalf("FormatAs(TOON): %v", err)
+	}
+	if !strings.Contains(out, "Alice") {
+		t.Errorf("FormatAs(TOON) should produce TOON output, got: %q", out)
+	}
+}
+
 // ---- FormatAs -----------------------------------------------------------
 
 func TestFormatAs_OverridesDefault(t *testing.T) {

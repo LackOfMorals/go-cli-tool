@@ -1,0 +1,2 @@
+kind: Added
+body: 'TOON (Token-Oriented Object Notation) is now available as an output format alongside `text`, `json`, `pretty-json`, `table`, and `graph`; select it per-call with `--format toon`, persist it via `cypher.output_format: toon` in the config file, and note that agent mode (`--agent`) now defaults to `toon` for token-efficient output when no format flag or config value is set'

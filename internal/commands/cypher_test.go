@@ -350,6 +350,51 @@ func TestCypherCategory_FormatFlag_OverridesConfig(t *testing.T) {
 	}
 }
 
+func TestCypherCategory_FormatFlag_TOON(t *testing.T) {
+	svc := &mockCypherService{result: singleRowResult("name", "Charlie")}
+	cat := commands.BuildCypherCategory(svc)
+	ctx := cypherCtx(t)
+	ctx.Config.Cypher.OutputFormat = "table" // config says table
+
+	result, err := cat.Dispatch([]string{"--format", "toon", "MATCH", "(n)", "RETURN", "n"}, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.FormatOverride != presentation.OutputFormatTOON {
+		t.Errorf("expected FormatOverride=%q; got: %q",
+			presentation.OutputFormatTOON, result.FormatOverride)
+	}
+	out, fmtErr := ctx.Presenter.FormatAs(result.Presentation, result.FormatOverride)
+	if fmtErr != nil {
+		t.Fatalf("FormatAs error: %v", fmtErr)
+	}
+	// TOON output for a single row should at least mention the column name and value.
+	for _, want := range []string{"name", "Charlie"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("toon output should contain %q:\n%s", want, out)
+		}
+	}
+	// Distinguish from table output, which uses box-drawing characters.
+	if strings.Contains(out, "│") {
+		t.Errorf("expected toon output, got table output:\n%s", out)
+	}
+}
+
+func TestCypherCategory_FormatFlag_TOON_CaseInsensitive(t *testing.T) {
+	svc := &mockCypherService{result: singleRowResult("name", "Charlie")}
+	cat := commands.BuildCypherCategory(svc)
+	ctx := cypherCtx(t)
+
+	result, err := cat.Dispatch([]string{"--format", "TOON", "MATCH", "(n)", "RETURN", "n"}, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.FormatOverride != presentation.OutputFormatTOON {
+		t.Errorf("expected FormatOverride=%q (lower-cased); got: %q",
+			presentation.OutputFormatTOON, result.FormatOverride)
+	}
+}
+
 func TestCypherCategory_NoResults_ReturnsMessage(t *testing.T) {
 	svc := &mockCypherService{result: service.QueryResult{}}
 	cat := commands.BuildCypherCategory(svc)

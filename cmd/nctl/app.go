@@ -190,7 +190,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
 	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
-	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
+	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph, toon")
 
 	// Shell-mode flag
 	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: CLI_SHELL_ENABLED=false to disable)")
@@ -298,6 +298,26 @@ func isJSONMode() bool {
 	return agentMode && outputFormat == ""
 }
 
+// resolveDefaultPresentationFormat picks the default OutputFormat to install
+// on the presentation service at startup. Precedence:
+//
+//  1. cypher.output_format from config, when set to a recognised value
+//  2. OutputFormatTOON when running in agent mode (machine-friendly default)
+//  3. OutputFormatTable (today's human-mode default)
+//
+// Per-call overrides (--format flag, FormatAs) bypass this default entirely.
+func resolveDefaultPresentationFormat(cfg *config.Config, agent bool) presentation.OutputFormat {
+	if cfg != nil {
+		if f := presentation.OutputFormat(cfg.Cypher.OutputFormat); f.IsValid() {
+			return f
+		}
+	}
+	if agent {
+		return presentation.OutputFormatTOON
+	}
+	return presentation.OutputFormatTable
+}
+
 // resolveHumanFormat returns the output format to use for human-mode rendering,
 // preferring a per-result override, then the --format flag, then a default.
 func resolveHumanFormat(override presentation.OutputFormat) presentation.OutputFormat {
@@ -384,7 +404,7 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	if outputFormat != "" {
 		f := presentation.OutputFormat(outputFormat)
 		if !f.IsValid() {
-			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph", outputFormat)
+			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph, toon", outputFormat)
 		}
 	}
 
@@ -452,7 +472,7 @@ Available sub-commands:
   instances   Create, list, get, update, pause, resume, and delete Aura DB instances
   projects    List and inspect Aura projects (tenants)
 
-Use --format to control output (table, json, pretty-json, graph).`,
+Use --format to control output (table, json, pretty-json, graph, toon).`,
 		Example: `  nctl cloud instances list
   nctl cloud instances list --format json
   nctl cloud instances get <id>
@@ -475,7 +495,7 @@ Supply the query directly on the command line.
 
 Query flags (parsed inline, not by cobra):
   --param key=value    Add a query parameter (repeatable; auto-typed)
-  --format table|json|pretty-json|graph
+  --format table|json|pretty-json|graph|toon
                        Override output format for this query
   --limit N            Override the auto-injected row limit (default 25)`,
 		Example: `  nctl cypher "MATCH (n:Person) RETURN n.name, n.age;"
@@ -498,7 +518,7 @@ Available commands:
   show-users       List all database users and their roles
   show-databases   List all databases and their status
 
-Use --format to control output (table, json, pretty-json, graph).`,
+Use --format to control output (table, json, pretty-json, graph, toon).`,
 		Example: `  nctl admin show-users
   nctl admin show-users --format json
   nctl admin show-databases`,
@@ -623,10 +643,11 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		an.Disable()
 	}
 
-	// 4. Presentation service — always start in table mode for a CLI.
+	// 4. Presentation service — pick a default that respects agent mode and
+	// any explicit cypher.output_format the user has set in their config.
 	// Commands use FormatAs for per-query overrides; the session default
 	// can be changed with `set cypher-format <format>`.
-	pres, err := presentation.NewPresentationService(presentation.OutputFormatTable, log)
+	pres, err := presentation.NewPresentationService(resolveDefaultPresentationFormat(&cfg, agentMode), log)
 	if err != nil {
 		return nil, fmt.Errorf("init presentation: %w", err)
 	}

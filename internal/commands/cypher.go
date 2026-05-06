@@ -23,13 +23,14 @@ var limitPattern = regexp.MustCompile(`(?i)\bLIMIT\s+\d+`)
 //	neo4j> cypher --param name=Alice MATCH (n:Person {name:$name}) RETURN n
 //	neo4j> cypher --format graph MATCH (n)-[r]->(m) RETURN n,r,m
 //	neo4j> cypher --format json MATCH (n) RETURN n
+//	neo4j> cypher --format toon MATCH (n) RETURN n
 //	neo4j> cypher --limit 50 MATCH (n) RETURN n
 //
 // Flags:
 //
 //	--param key=value            Add a query parameter (repeatable).
 //	                             Values are auto-typed: int, float, bool, string.
-//	--format table|graph|json|pretty-json
+//	--format table|graph|json|pretty-json|toon
 //	                             Override the output format for this query.
 //	                             Defaults to cypher.output_format in config.
 //	--limit N                    Override the auto-injected row limit.

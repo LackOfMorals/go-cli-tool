@@ -122,7 +122,9 @@ type CypherConfig struct {
 	ShellLimit int `mapstructure:"shell_limit" json:"shell_limit"`
 	// ExecLimit is the default LIMIT injected in non-interactive (--exec) mode.
 	ExecLimit int `mapstructure:"exec_limit" json:"exec_limit"`
-	// OutputFormat controls result rendering: "table" (default) or "graph".
+	// OutputFormat controls result rendering: "table", "graph", "json",
+	// "pretty-json", or "toon". Empty means "not explicitly set" — callers
+	// pick a default (table in human mode, toon in agent mode).
 	OutputFormat string `mapstructure:"output_format" json:"output_format"`
 }
 
@@ -305,7 +307,12 @@ func newViperConfigLoader() *viperConfigLoader {
 
 	v.SetDefault("cypher.shell_limit", 25)
 	v.SetDefault("cypher.exec_limit", 100)
-	v.SetDefault("cypher.output_format", "table")
+	// cypher.output_format intentionally has no viper default so callers
+	// can detect "user has not explicitly set it" and pick an appropriate
+	// runtime default (table in human mode, toon in agent mode). All read
+	// sites (cypher.go, shell/interactive.go) already fall back to "table"
+	// when the value is empty.
+	v.SetDefault("cypher.output_format", "")
 
 	// Env vars: NCTL_NEO4J_URI, NCTL_AURA_CLIENT_SECRET, etc.
 	// The replacer maps "." → "_" so "neo4j.uri" → NCTL_NEO4J_URI.

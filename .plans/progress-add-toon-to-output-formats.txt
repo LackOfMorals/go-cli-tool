@@ -1,0 +1,436 @@
+================================================================================
+TASK-001: Add github.com/toon-format/toon-go dependency
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Landed the github.com/toon-format/toon-go module as a direct dependency in
+go.mod / go.sum and added a placeholder file in internal/presentation/ that
+keeps the import pinned across `go mod tidy` runs and records the planned API
+usage for the upcoming TOONFormatter (task-004).
+
+Files Changed:
+- go.mod (modified: added direct require for toon-go)
+- go.sum (modified: added toon-go checksum entries)
+- internal/presentation/toon.go (created: doc-only file with blank import +
+  planned-usage comment; will be replaced by TOONFormatter in task-004)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip)
+
+Key Decisions:
+- Pinned to v0.0.0-20251202084852-7ca0e27c4e8c. Upstream has no tagged
+  releases; this is the latest commit on main as resolved by the Go module
+  proxy.
+- Planned encoder entry point: toon.MarshalString(v) — string-returning sibling
+  of toon.Marshal, mirrors how JSONFormatter calls json.Marshal.
+- Library defaults only for v1: no toon.WithIndent / toon.WithArrayDelimiter /
+  toon.WithLengthMarkers tuning planned.
+- Error wrapping convention: fmt.Errorf("encode TOON: %w", err) for parity with
+  JSONFormatter's "marshal JSON: %w".
+- Blank import wrapped in `import ( ... )` block with a justifying comment to
+  satisfy revive's blank-imports lint rule (a top-level `import _ "..."` line
+  with a separate comment block above does not count as "justified").
+
+Next Task: task-002 (Add OutputFormatTOON constant and update IsValid)
+================================================================================
+TASK-002: Add OutputFormatTOON constant and update IsValid
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Added the OutputFormatTOON = "toon" constant to the presentation package's
+OutputFormat enumeration and extended OutputFormat.IsValid() to recognise it.
+Foundational change only — no formatter is registered yet (task-005 will wire
+TOONFormatter into NewPresentationService).
+
+Files Changed:
+- internal/presentation/presentation.go (modified: added OutputFormatTOON
+  constant and added it to the IsValid switch)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Constant value is the lower-case string "toon", matching the existing
+  pattern (e.g. "json", "pretty-json", "graph").
+- No existing test enumerates valid formats by listing constants, so no test
+  updates were required. presentation_test.go continues to pass unchanged.
+- IsValid() switch was extended to include OutputFormatTOON; nothing else
+  in IsValid's contract changed.
+
+Next Task: task-003 (Implement normalizeForTOON helper with tests)
+================================================================================
+TASK-003: Implement normalizeForTOON helper with tests
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Replaced the placeholder doc-only internal/presentation/toon.go with a pure
+helper, normalizeForTOON, that recursively rewrites Neo4j entity maps into
+encoder-friendly shapes ahead of the TOONFormatter (task-004). Added focused
+unit tests in internal/presentation/toon_internal_test.go covering node maps,
+relationship maps, plain maps, nested entities, slices of nodes, slices of
+typed maps ([]map[string]any), scalars, and immutability of the input.
+
+Files Changed:
+- internal/presentation/toon.go (rewritten: now exposes the unexported
+  normalizeForTOON helper plus normalizeMap/normalizeNode/normalizeRel /
+  normalizeLabels/entityPropsNormalized internals; blank import for
+  toon-go retained until task-004 lands the real import)
+- internal/presentation/toon_internal_test.go (created: 8 test functions
+  exercising all helper code paths, lives in package presentation so it
+  can call the unexported helper)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Helper is unexported (normalizeForTOON, lower-case n) because it is an
+  internal implementation detail of the upcoming TOONFormatter; tests
+  live in the *_internal_test.go file per AGENTS.md convention.
+- Used `any` rather than `interface{}` throughout the new file for
+  consistency with newer-style Go and brevity. Existing code in this
+  package mixes both — both are valid.
+- Labels are coerced to []any (not []string) so the TOON encoder always
+  sees a homogeneous-shape array regardless of whether the upstream
+  driver provided []string or []any.
+- []map[string]any inputs are explicitly handled (they don't match the
+  []any case in the type switch) — some callers in the codebase produce
+  this shape directly. Test TestNormalizeForTOON_SliceOfMapsTyped locks
+  this behaviour down.
+- The helper does not mutate its input — it always allocates a new map
+  / slice. TestNormalizeForTOON_DoesNotMutateInput asserts this and
+  documents the contract for downstream callers.
+- All keys starting with "_" are stripped (not just _labels/_type/_id) —
+  this future-proofs against new Neo4j sentinel keys (e.g. _start, _end
+  on relationships) appearing in repository.convertValue output.
+- Blank import of toon-go retained with an updated comment that calls
+  out task-004 as the deletion point. Without it, `go mod tidy` would
+  remove the dependency before task-004 needs it.
+
+Next Task: task-004 (Implement TOONFormatter using toon-go)
+================================================================================
+TASK-004: Implement TOONFormatter using toon-go
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Replaced the placeholder blank import in internal/presentation/toon.go with a
+real toon-go import and added the TOONFormatter type alongside the existing
+normalizeForTOON helper. The formatter satisfies presentation.OutputFormatter
+and serialises Tabular (via tabularToJSONSlice), *DetailData (via
+detailToJSONMap), strings, and arbitrary scalars. All values are routed
+through normalizeForTOON before encoding so Neo4j entity maps emit cleanly
+without underscore-prefixed sentinel keys. Encoder errors are wrapped with
+fmt.Errorf("encode TOON: %w", err). Added a focused external-package test
+file (toon_test.go) covering the documented input shapes plus a concurrency
+smoke test.
+
+Files Changed:
+- internal/presentation/toon.go (modified: replaced blank import with real
+  toon import + fmt; added TOONFormatter struct and Format method;
+  consolidated the file-level doc comment to cover both helper and formatter)
+- internal/presentation/toon_test.go (created: 7 test functions exercising
+  Tabular multi-row, empty Tabular, *DetailData, scalar string, scalar int,
+  Tabular with node cells, Tabular with relationship cells, and concurrent
+  use of a single TOONFormatter instance)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Format dispatch mirrors JSONFormatter exactly (Tabular → slice of row
+  maps, *DetailData → flat map, default → pass-through). This keeps the
+  TOON output structurally aligned with the JSON output for the same
+  inputs, which is the natural mental model for users switching between
+  the two formats.
+- Tests live in the external presentation_test package (toon_test.go),
+  not the *_internal_test.go file — the formatter is exported so tests
+  use only the exported API, matching the rest of presentation_test.go.
+- The TOONFormatter is not yet registered in NewPresentationService —
+  that is task-005, deliberately split so the formatter and its
+  registration are reviewable independently. Acceptance criterion
+  "TOONFormatter satisfies presentation.OutputFormatter and is exported"
+  is verified by tests calling Format directly on a &TOONFormatter{} —
+  if the interface contract were broken, the file would not compile.
+- Pre-existing gofmt drift in internal/presentation/data.go (an
+  unrelated alignment issue around DetailData fields) was deliberately
+  not touched in this task to keep the diff scoped.
+
+Next Task: task-005 (Register TOONFormatter in NewPresentationService)
+================================================================================
+TASK-005: Register TOONFormatter in NewPresentationService
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Wired TOONFormatter into the built-in formatters table inside
+NewPresentationService alongside the existing five formatters. Callers can
+now use presenter.FormatAs(data, OutputFormatTOON) and (once parsed via the
+cypher command in task-006) --format toon end-to-end. Added four
+integration-style tests covering Tabular, *DetailData, scalar, and FormatAs
+override paths through the service.
+
+Files Changed:
+- internal/presentation/presentation.go (modified: added single
+  RegisterFormatter call for OutputFormatTOON → &TOONFormatter{} alongside
+  the existing five)
+- internal/presentation/presentation_test.go (modified: added four tests
+  covering TOON output via the service for Tabular, *DetailData, scalar
+  string, and FormatAs override)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Tests live in the existing presentation_test.go (external package) since
+  they exercise the service end-to-end. The TOONFormatter unit tests in
+  toon_test.go (task-004) remain focused on the formatter in isolation;
+  the new tests verify the registration path.
+- Used substring assertions (strings.Contains) rather than exact-output
+  matches so the tests survive any incidental formatting changes in the
+  toon-go encoder. The acceptance criterion is "returns TOON output", not
+  byte-for-byte equality.
+- No changes to existing formatter registrations; existing five-format
+  test coverage continues to pass unchanged.
+- Pre-existing gofmt drift in internal/presentation/data.go is left
+  untouched (carried over from task-004).
+
+Next Task: task-006 (Accept --format toon in cypher command and update help text)
+================================================================================
+TASK-006: Accept --format toon in cypher command and update help text
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Updated the cypher command's help text to advertise toon as a valid value for
+--format and added focused tests verifying that --format toon (and its
+case-insensitive form --format TOON) routes to the registered TOONFormatter.
+The parsing path already lower-cased input and presentation.OutputFormatTOON
+was already accepted by IsValid (task-002) and registered (task-005), so no
+changes were needed in the dispatch logic itself — only help text and tests.
+
+Files Changed:
+- internal/commands/cypher.go (modified: package doc comment now lists toon
+  alongside table|graph|json|pretty-json and adds a toon usage example)
+- cmd/nctl/app.go (modified: cypher cobra Long description now lists toon
+  in the --format value enumeration)
+- internal/commands/cypher_test.go (modified: added
+  TestCypherCategory_FormatFlag_TOON and
+  TestCypherCategory_FormatFlag_TOON_CaseInsensitive)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Help text was updated in two spots: the package-level doc comment in
+  internal/commands/cypher.go (developer-facing) and the cobra Long
+  description in cmd/nctl/app.go (the source of `nctl help cypher`).
+  Smoke-tested via `nctl help cypher` to confirm the user-facing string.
+- The global persistent --format flag description in cmd/nctl/app.go
+  (line ~193) and the validation error message (line ~387) still list
+  "table, json, pretty-json, graph". These are out of scope for task-006
+  (which is specifically the cypher command); IsValid() already accepts
+  toon so cypher --format toon works end-to-end. Task-010's verification
+  step is the right place to clean those up if desired.
+- No new flag parsing or routing code: the existing `strings.ToLower`
+  on line 244/246 already handles --format TOON. The
+  TestCypherCategory_FormatFlag_TOON_CaseInsensitive test locks this
+  behaviour down so future refactors can't silently regress it.
+- Test pattern mirrors TestCypherCategory_FormatFlag_OverridesConfig:
+  drive Dispatch with --format toon, assert FormatOverride matches
+  OutputFormatTOON, then run the result through the presenter to
+  confirm end-to-end output is structurally distinct from the table
+  format (no box-drawing │ character).
+
+Next Task: task-007 (Allow toon for cypher.output_format config)
+================================================================================
+TASK-007: Allow toon for cypher.output_format config
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Added "toon" to the allow-list, error message, and description of the
+cypher.output_format entry in the configRegistry inside
+internal/commands/config.go. After this task, `nctl config set
+cypher.output_format toon` succeeds, persists to disk, and round-trips
+through the loader so subsequent runs honour the value. No changes were
+needed to internal/config/config.go because validateConfig() does not
+validate cypher.output_format (only log_level / log_format / log_output
+are validated there) — the only allow-list lives in the configRegistry.
+
+Files Changed:
+- internal/commands/config.go (modified: added "toon" to the case switch,
+  the error message, and the user-facing description for the
+  cypher.output_format registry entry)
+- internal/commands/config_test.go (created: three tests covering the
+  toon-accepted path with end-to-end round-trip via the file loader, the
+  invalid-value rejection path, and the description-listing-toon path)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- internal/config/config.go required no changes — the file's
+  validateConfig() function only validates log_level / log_format /
+  log_output. The cypher.output_format allow-list is concentrated in
+  the configRegistry's Set function in internal/commands/config.go.
+- New test file is internal/commands/config_test.go (external package
+  presentation), reusing the existing mockIO from cloud_test.go and
+  building the category via commands.BuildConfigCategory + Dispatch
+  to mirror how the rest of the commands package is tested.
+- The round-trip test writes through the real config service to a
+  t.TempDir() file then reloads it through NewConfigService —
+  this exercises the full save → unmarshal → validate path so any
+  future addition of validation in internal/config/config.go that
+  rejected toon would surface here.
+- Pre-existing gofmt drift in internal/commands/config.go (map literal
+  alignment around line 446 in configDeleteCmd) is left untouched —
+  the task scope is the configRegistry entry, and golangci-lint does
+  not flag this drift. Carried over from earlier tasks per the same
+  convention used in tasks 004 and 005.
+- The global persistent --format flag description in cmd/nctl/app.go
+  (lines ~193, ~387) still lists "table, json, pretty-json, graph".
+  These are out of scope for task-007 (which is the config key
+  validation specifically) and out of scope for task-006. Task-010's
+  verification step is the right place to clean those up if desired.
+
+Next Task: task-008 (Default to TOON in agent mode when no override is set)
+
+================================================================================
+TASK-008: Default to TOON in agent mode when no override is set
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Made the presentation service's startup default format agent-mode-aware. The
+NewPresentationService call site in cmd/nctl/app.go now chooses TOON when
+the binary is running in agent mode AND the user has not explicitly set
+cypher.output_format; an explicit config value always wins, and outside
+agent mode the default stays as today (table). Detection of "user has not
+set cypher.output_format" required dropping viper's hardcoded "table"
+default for that key — all read sites already handled the empty case.
+
+Files Changed:
+- internal/config/config.go (modified: viper default for
+  cypher.output_format dropped from "table" to ""; doc comment on the
+  CypherConfig.OutputFormat field updated to call out empty-means-unset
+  semantics and list every valid value)
+- cmd/nctl/app.go (modified: added resolveDefaultPresentationFormat helper
+  with config-wins → agent-toon → table precedence; newApp now calls it
+  instead of passing presentation.OutputFormatTable directly to
+  NewPresentationService)
+- cmd/nctl/app_test.go (created: 6 test functions covering agent-no-config,
+  agent-config-set across all valid formats, non-agent-no-config,
+  non-agent-config-set, invalid-config-fallback, and nil-config defensive
+  behaviour)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Viper default for cypher.output_format changed from "table" to "" so the
+  startup code can distinguish "user set table" from "user did not set
+  anything". Verified all read sites — cypher.go line 102-106,
+  shell/interactive.go lines 510/547 — already fall back to "table" on
+  empty, so this is behaviour-preserving for non-agent users.
+- configRegistry's Default: "table" for cypher.output_format (in
+  internal/commands/config.go) is left untouched; it controls what
+  `nctl config delete cypher.output_format` resets to, which is a
+  different concept from "what is the runtime default if unset".
+- resolveDefaultPresentationFormat takes (cfg *config.Config, agent bool)
+  so it can be tested without mutating the package-level agentMode var.
+  newApp passes the package var through; the test file constructs Config
+  values directly.
+- Helper falls through to the agent/non-agent default when an INVALID
+  cypher.output_format value is in the config (rather than propagating
+  it to NewPresentationService where it would error at startup). This
+  is defensive — the config Set already rejects invalid values, but a
+  hand-edited config file could still slip something through.
+- Pre-existing gofmt drift in internal/config/config.go (Overrides
+  struct field alignment around lines 22-29) is left untouched per the
+  convention established in tasks 004/005/007.
+- Tests live in package main (cmd/nctl/app_test.go) — same package as
+  the helper — because the helper is unexported. Existing cmd/nctl had
+  no tests; this is the first.
+
+Next Task: task-009 (Regenerate skill.md.gen and any other generated artefacts)
+
+================================================================================
+TASK-009: Regenerate skill.md.gen and any other generated artefacts
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Ran the local-CI generate pass (go generate ./...) to ensure no generated
+artefact is stale on the branch. Result: zero diff. The only go:generate
+directive in this repo is for internal/analytics/mocks/mock_analytics.go,
+and the analytics.Service / HTTPClient interfaces were not touched by this
+feature. Project does NOT have an internal/skill/skill.md.gen file —
+CLAUDE.md mentions it but is out of sync with the actual layout of the
+nctl repo (likely inherited from a parent template). No code changes;
+verification pass only.
+
+Files Changed:
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+- .plans/progress-add-toon-to-output-formats.txt (this entry)
+- AGENTS.md (note added under Gotchas calling out the skill.md.gen
+  CLAUDE.md / actual-layout mismatch so future agents do not waste a
+  round trip looking for the file)
+
+Key Decisions:
+- mockgen v0.6.0 was already on PATH (~/go/bin/mockgen) so no install
+  step was needed. Verified via `mockgen -version` before running
+  go generate.
+- Did not create internal/skill/skill.md.gen as a "missing" file —
+  CLAUDE.md describes a file that does not exist in this codebase, and
+  generating one would require introducing a generator for it. That's
+  out of scope for this task and the feature.
+- Confirmed final loop passes: go build ./..., go test ./...,
+  golangci-lint run all clean; go generate ./... produces no diff.
+
+Next Task: task-010 (Final verification: build, test, lint, generate-clean)
+================================================================================
+TASK-010: Final verification: build, test, lint, generate-clean
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Ran the full local CI loop on the branch (go build ./..., go test ./...,
+golangci-lint run, go generate ./...). All four pass cleanly with zero diff
+from go generate. Verified the changie fragment
+.changes/unreleased/added-toon-output-format.yaml is present, parses as
+valid YAML (kind: Added, body string), and accurately describes the shipped
+behaviour. Smoke-tested the freshly built binary: --format help text and
+invalid-format error message both list `toon`; nctl help cypher Long
+description lists `toon`. While doing the smoke test, picked up the small
+UX fixup that the earlier tasks (006, 007) deferred: four user-facing
+strings in cmd/nctl/app.go still listed only "table, json, pretty-json,
+graph". Updated all four to "table, json, pretty-json, graph, toon" so
+the help text, the invalid-format error, and the cloud/admin Long
+descriptions match the cypher Long description and the config registry's
+allow-list. Verified no test references the old global error string.
+
+Files Changed:
+- cmd/nctl/app.go (modified: four user-visible strings now list toon —
+  global --format flag help (line 193), invalid-format error message
+  (line 407), buildCloudCommand Long description (line 475),
+  buildAdminCommand Long description (line 521))
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+- .plans/progress-add-toon-to-output-formats.txt (this entry)
+- AGENTS.md (note added under Gotchas about the now-consistent
+  --format help text across the four occurrences in cmd/nctl/app.go)
+
+Key Decisions:
+- Picked up the deferred UX consistency fix from tasks 006/007 here
+  rather than punting it to a follow-up PR. It is a pure string change,
+  has no behaviour impact (IsValid already accepted toon since
+  task-002), and fits the spirit of "any small fixups uncovered" in
+  task-010's acceptance criteria.
+- Used the canonical ordering "table, json, pretty-json, graph, toon"
+  to match what task-007 established in
+  internal/commands/config.go (the config registry's accepted-values
+  list and error message).
+- Did not touch the existing TestConfigCategory_SetCypherOutputFormat
+  test in internal/commands/config_test.go that asserts the
+  toon-inclusive form — its assertion already matches the updated
+  app.go strings, so no test changes were needed.
+- Smoke test of cypher --format toon against a live Neo4j was not
+  performed (no DB available in this environment); coverage is
+  provided by TestCypherCategory_FormatFlag_TOON and
+  TestFormatAs_TOON which exercise the dispatch + presentation paths
+  end-to-end via the registered TOONFormatter.
+- Final verification snapshot:
+    go build ./...        — clean
+    go test ./... -count=1 — clean (cmd/nctl 0.985s, commands 0.902s,
+                            presentation 0.382s)
+    golangci-lint run     — 0 issues
+    go generate ./...     — no diff
+- Branch is now in a state ready for /hone:finalize / PR creation.
+
+Next Task: All tasks complete
