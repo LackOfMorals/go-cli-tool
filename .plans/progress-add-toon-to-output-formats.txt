@@ -31,3 +31,28 @@ Key Decisions:
   with a separate comment block above does not count as "justified").
 
 Next Task: task-002 (Add OutputFormatTOON constant and update IsValid)
+================================================================================
+TASK-002: Add OutputFormatTOON constant and update IsValid
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Added the OutputFormatTOON = "toon" constant to the presentation package's
+OutputFormat enumeration and extended OutputFormat.IsValid() to recognise it.
+Foundational change only — no formatter is registered yet (task-005 will wire
+TOONFormatter into NewPresentationService).
+
+Files Changed:
+- internal/presentation/presentation.go (modified: added OutputFormatTOON
+  constant and added it to the IsValid switch)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Constant value is the lower-case string "toon", matching the existing
+  pattern (e.g. "json", "pretty-json", "graph").
+- No existing test enumerates valid formats by listing constants, so no test
+  updates were required. presentation_test.go continues to pass unchanged.
+- IsValid() switch was extended to include OutputFormatTOON; nothing else
+  in IsValid's contract changed.
+
+Next Task: task-003 (Implement normalizeForTOON helper with tests)

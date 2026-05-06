@@ -30,13 +30,14 @@ const (
 	OutputFormatPrettyJSON OutputFormat = "pretty-json"
 	OutputFormatTable      OutputFormat = "table"
 	OutputFormatGraph      OutputFormat = "graph"
+	OutputFormatTOON       OutputFormat = "toon"
 )
 
 // IsValid reports whether f is one of the recognised formats.
 func (f OutputFormat) IsValid() bool {
 	switch f {
 	case OutputFormatText, OutputFormatJSON, OutputFormatPrettyJSON,
-		OutputFormatTable, OutputFormatGraph:
+		OutputFormatTable, OutputFormatGraph, OutputFormatTOON:
 		return true
 	}
 	return false

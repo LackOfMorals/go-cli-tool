@@ -21,7 +21,8 @@ tasks:
     title: "Add OutputFormatTOON constant and update IsValid"
     description: |
       In internal/presentation/presentation.go, add OutputFormatTOON = "toon" alongside the existing OutputFormat constants and extend OutputFormat.IsValid() to recognise it. This is a foundational change with no behaviour beyond making the value valid; later tasks register the actual formatter and wire help text.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies: []
     acceptance_criteria:
       - "OutputFormatTOON OutputFormat = \"toon\" exists in internal/presentation/presentation.go"
