@@ -103,3 +103,36 @@ Key Decisions:
   (untracked files belonging to a different feature, per orchestrator note).
 
 Next Task: task-010 (Fix test assertions that check for neo4j-cli strings)
+
+================================================================================
+TASK-010: Fix test assertions that check for neo4j-cli strings
+Date: 2026-05-06T22:00:00Z
+================================================================================
+
+Summary:
+The three explicit assertion locations called out in the task were already
+fixed in earlier commits (44eb860 "nctl rename" carried interactive_test.go
+and logger_test.go assertions; config_test.go's comment was updated as part
+of task-003). Verified via Read of all three locations — each already asserts
+'nctl' instead of 'neo4j-cli'. The only remaining `neo4j-cli` token in any
+*_test.go file was a non-load-bearing temp-file basename in
+internal/logger/logger_test.go:185 (TestOpenLogFile_CreatesFileAndDirectory),
+which I changed from "neo4j-cli.log" to "nctl.log" for codebase-wide
+consistency. `go test ./...`, `go build ./...`, and `golangci-lint run` all
+pass with zero issues.
+
+Files Changed:
+- internal/logger/logger_test.go (rename test temp-file basename)
+- .plans/tasks-rename-to-nctl.yml (mark task-010 completed)
+- .plans/progress-rename-to-nctl.txt (this entry)
+
+Key Decisions:
+- Verified rather than blindly redid the assertion edits — the orchestrator
+  note "verify rather than blindly redo" applied since the original PR was
+  already merged.
+- Extended the cleanup slightly to cover the temp-file basename so the entire
+  internal/logger test file is free of `neo4j-cli` tokens.
+- Did NOT touch `.claude/settings.json` or `.plans/prd-change-command-prefix.md`
+  (untracked files belonging to a different feature, per orchestrator note).
+
+Next Task: task-011 (Final lint and completeness check)

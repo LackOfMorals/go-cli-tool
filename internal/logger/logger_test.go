@@ -182,7 +182,7 @@ func TestWithFields_AttrsAppearInOutput(t *testing.T) {
 
 func TestOpenLogFile_CreatesFileAndDirectory(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "subdir", "neo4j-cli.log")
+	path := filepath.Join(dir, "subdir", "nctl.log")
 
 	f, err := OpenLogFile(path)
 	if err != nil {

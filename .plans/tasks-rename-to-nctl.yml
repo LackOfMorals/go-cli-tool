@@ -164,7 +164,7 @@ tasks:
       version output), logger_test.go:212-213 (assert 'nctl' in log path),
       and config_test.go:17 (update comment about config path). Run go test
       ./... to confirm all tests pass.
-    status: pending
+    status: completed
     dependencies:
       - task-003
       - task-004
@@ -174,7 +174,7 @@ tasks:
       - "interactive_test.go asserts 'nctl' in version output"
       - "logger_test.go asserts 'nctl' in DefaultLogFilePath result"
       - "go test ./... passes with no failures"
-    completed_at: null
+    completed_at: "2026-05-06T22:00:00Z"
 
   - id: task-011
     title: "Final lint and completeness check"
