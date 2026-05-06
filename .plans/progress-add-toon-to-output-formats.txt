@@ -340,3 +340,38 @@ Key Decisions:
   no tests; this is the first.
 
 Next Task: task-009 (Regenerate skill.md.gen and any other generated artefacts)
+
+================================================================================
+TASK-009: Regenerate skill.md.gen and any other generated artefacts
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Ran the local-CI generate pass (go generate ./...) to ensure no generated
+artefact is stale on the branch. Result: zero diff. The only go:generate
+directive in this repo is for internal/analytics/mocks/mock_analytics.go,
+and the analytics.Service / HTTPClient interfaces were not touched by this
+feature. Project does NOT have an internal/skill/skill.md.gen file —
+CLAUDE.md mentions it but is out of sync with the actual layout of the
+nctl repo (likely inherited from a parent template). No code changes;
+verification pass only.
+
+Files Changed:
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+- .plans/progress-add-toon-to-output-formats.txt (this entry)
+- AGENTS.md (note added under Gotchas calling out the skill.md.gen
+  CLAUDE.md / actual-layout mismatch so future agents do not waste a
+  round trip looking for the file)
+
+Key Decisions:
+- mockgen v0.6.0 was already on PATH (~/go/bin/mockgen) so no install
+  step was needed. Verified via `mockgen -version` before running
+  go generate.
+- Did not create internal/skill/skill.md.gen as a "missing" file —
+  CLAUDE.md describes a file that does not exist in this codebase, and
+  generating one would require introducing a generator for it. That's
+  out of scope for this task and the feature.
+- Confirmed final loop passes: go build ./..., go test ./...,
+  golangci-lint run all clean; go generate ./... produces no diff.
+
+Next Task: task-010 (Final verification: build, test, lint, generate-clean)

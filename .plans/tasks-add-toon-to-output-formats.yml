@@ -119,7 +119,8 @@ tasks:
     title: "Regenerate skill.md.gen and any other generated artefacts"
     description: |
       Per CLAUDE.md, run go install go.uber.org/mock/mockgen@v0.6.0 if needed, then go generate ./... and commit the regenerated files. Expect changes to internal/skill/skill.md.gen to reflect the updated cypher --format help text. CI fails if any generated file is stale, so this task ensures the diff is captured. No source-code changes belong in this task — only generated output.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-006
       - task-007
