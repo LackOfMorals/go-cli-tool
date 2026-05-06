@@ -48,7 +48,8 @@ tasks:
     title: "Implement TOONFormatter using toon-go"
     description: |
       Add a TOONFormatter type in the presentation package that satisfies OutputFormatter. Format must handle Tabular (rows/cols → slice of row maps, matching JSONFormatter's tabularToJSONSlice behaviour), *DetailData (label/value object), strings, and arbitrary scalars. Before delegating to toon-go's encoder, route the value through normalizeForTOON so entity maps emit cleanly. Wrap any encoder error as fmt.Errorf("encode TOON: %w", err) for parity with the JSON formatter.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-001
       - task-003

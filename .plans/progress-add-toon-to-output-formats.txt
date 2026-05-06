@@ -104,3 +104,50 @@ Key Decisions:
   remove the dependency before task-004 needs it.
 
 Next Task: task-004 (Implement TOONFormatter using toon-go)
+================================================================================
+TASK-004: Implement TOONFormatter using toon-go
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Replaced the placeholder blank import in internal/presentation/toon.go with a
+real toon-go import and added the TOONFormatter type alongside the existing
+normalizeForTOON helper. The formatter satisfies presentation.OutputFormatter
+and serialises Tabular (via tabularToJSONSlice), *DetailData (via
+detailToJSONMap), strings, and arbitrary scalars. All values are routed
+through normalizeForTOON before encoding so Neo4j entity maps emit cleanly
+without underscore-prefixed sentinel keys. Encoder errors are wrapped with
+fmt.Errorf("encode TOON: %w", err). Added a focused external-package test
+file (toon_test.go) covering the documented input shapes plus a concurrency
+smoke test.
+
+Files Changed:
+- internal/presentation/toon.go (modified: replaced blank import with real
+  toon import + fmt; added TOONFormatter struct and Format method;
+  consolidated the file-level doc comment to cover both helper and formatter)
+- internal/presentation/toon_test.go (created: 7 test functions exercising
+  Tabular multi-row, empty Tabular, *DetailData, scalar string, scalar int,
+  Tabular with node cells, Tabular with relationship cells, and concurrent
+  use of a single TOONFormatter instance)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Format dispatch mirrors JSONFormatter exactly (Tabular → slice of row
+  maps, *DetailData → flat map, default → pass-through). This keeps the
+  TOON output structurally aligned with the JSON output for the same
+  inputs, which is the natural mental model for users switching between
+  the two formats.
+- Tests live in the external presentation_test package (toon_test.go),
+  not the *_internal_test.go file — the formatter is exported so tests
+  use only the exported API, matching the rest of presentation_test.go.
+- The TOONFormatter is not yet registered in NewPresentationService —
+  that is task-005, deliberately split so the formatter and its
+  registration are reviewable independently. Acceptance criterion
+  "TOONFormatter satisfies presentation.OutputFormatter and is exported"
+  is verified by tests calling Format directly on a &TOONFormatter{} —
+  if the interface contract were broken, the file would not compile.
+- Pre-existing gofmt drift in internal/presentation/data.go (an
+  unrelated alignment issue around DetailData fields) was deliberately
+  not touched in this task to keep the diff scoped.
+
+Next Task: task-005 (Register TOONFormatter in NewPresentationService)

@@ -1,36 +1,27 @@
 package presentation
 
-// This file currently provides the normalizeForTOON helper used by the
-// upcoming TOONFormatter (task-004). The helper rewrites Neo4j entity maps
-// (those produced by repository.convertValue, identified by the sentinel
-// keys "_labels" and "_type") into a clean, encoder-friendly shape:
-//
-//	node     {labels: [...], properties: {...}}
-//	rel      {type: "...",   properties: {...}}
-//
-// All underscore-prefixed sentinel keys (_labels, _type, _id, ...) are
-// stripped from the encoded output. Plain maps and slices are recursed
-// into; everything else passes through unchanged.
-//
-// The helper is pure (no I/O, no state) and safe for concurrent use.
-//
-// Planned encoder usage (see tasks-add-toon-to-output-formats.yml task-004):
-//   - Top-level encoder: toon.MarshalString(v) — returns the TOON document
-//     as a string, mirroring how JSONFormatter calls json.Marshal.
-//   - Options: library defaults (Core Profile, comma delimiter, two-space
-//     indent). No non-default toon.WithIndent / toon.WithArrayDelimiter /
-//     toon.WithLengthMarkers tuning is planned for v1.
-//   - Errors are wrapped as fmt.Errorf("encode TOON: %w", err) for parity
-//     with JSONFormatter's "marshal JSON: %w".
+// This file provides:
+//   - normalizeForTOON: a pure helper that rewrites Neo4j entity maps into
+//     an encoder-friendly shape before delegating to the toon-go encoder.
+//     Nodes (identified by the "_labels" sentinel) become
+//     {labels: [...], properties: {...}}; relationships ("_type") become
+//     {type: "...", properties: {...}}; all underscore-prefixed sentinel
+//     keys (_labels, _type, _id, ...) are stripped from the output. Plain
+//     maps and slices are recursed into; everything else passes through
+//     unchanged. The helper is pure (no I/O, no state) and safe for
+//     concurrent use.
+//   - TOONFormatter: an OutputFormatter that serialises Tabular,
+//     *DetailData, strings and arbitrary scalars as TOON documents using
+//     toon-go's library defaults (Core Profile, comma delimiter,
+//     two-space indent). Encoder errors are wrapped as
+//     fmt.Errorf("encode TOON: %w", err) for parity with the JSON
+//     formatter's "marshal JSON: %w" prefix.
 
 import (
+	"fmt"
 	"strings"
 
-	// Blank import: keeps github.com/toon-format/toon-go pinned in go.mod /
-	// go.sum across `go mod tidy` runs until task-004 lands the real import
-	// (and the TOONFormatter that calls toon.MarshalString). Once that
-	// happens this blank import line should be removed.
-	_ "github.com/toon-format/toon-go"
+	"github.com/toon-format/toon-go"
 )
 
 // normalizeForTOON recursively rewrites a value so it encodes cleanly as
@@ -126,4 +117,43 @@ func entityPropsNormalized(m map[string]any) map[string]any {
 		props[k] = normalizeForTOON(val)
 	}
 	return props
+}
+
+// ---- TOONFormatter ------------------------------------------------------
+
+// TOONFormatter serialises data as a TOON document using the toon-go
+// encoder with library defaults (Core Profile, comma delimiter, two-space
+// indent).
+//
+// Tabular data is converted to a slice of row maps (mirroring the
+// behaviour of JSONFormatter's tabularToJSONSlice). *DetailData is
+// converted to a flat map keyed by field label. Strings and arbitrary
+// scalars are passed through to the encoder unchanged. All values are
+// routed through normalizeForTOON beforehand so Neo4j entity maps emit
+// cleanly without their underscore-prefixed sentinel keys.
+//
+// TOONFormatter has no mutable state and is safe for concurrent use,
+// matching the contract of the other built-in formatters.
+type TOONFormatter struct{}
+
+// Format renders data as a TOON document.
+func (f *TOONFormatter) Format(data any) (string, error) {
+	var v any
+
+	switch d := data.(type) {
+	case Tabular:
+		v = tabularToJSONSlice(d)
+	case *DetailData:
+		v = detailToJSONMap(d)
+	default:
+		v = data
+	}
+
+	v = normalizeForTOON(v)
+
+	out, err := toon.MarshalString(v)
+	if err != nil {
+		return "", fmt.Errorf("encode TOON: %w", err)
+	}
+	return out, nil
 }
