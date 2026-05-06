@@ -233,3 +233,53 @@ Key Decisions:
   format (no box-drawing │ character).
 
 Next Task: task-007 (Allow toon for cypher.output_format config)
+================================================================================
+TASK-007: Allow toon for cypher.output_format config
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Added "toon" to the allow-list, error message, and description of the
+cypher.output_format entry in the configRegistry inside
+internal/commands/config.go. After this task, `nctl config set
+cypher.output_format toon` succeeds, persists to disk, and round-trips
+through the loader so subsequent runs honour the value. No changes were
+needed to internal/config/config.go because validateConfig() does not
+validate cypher.output_format (only log_level / log_format / log_output
+are validated there) — the only allow-list lives in the configRegistry.
+
+Files Changed:
+- internal/commands/config.go (modified: added "toon" to the case switch,
+  the error message, and the user-facing description for the
+  cypher.output_format registry entry)
+- internal/commands/config_test.go (created: three tests covering the
+  toon-accepted path with end-to-end round-trip via the file loader, the
+  invalid-value rejection path, and the description-listing-toon path)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- internal/config/config.go required no changes — the file's
+  validateConfig() function only validates log_level / log_format /
+  log_output. The cypher.output_format allow-list is concentrated in
+  the configRegistry's Set function in internal/commands/config.go.
+- New test file is internal/commands/config_test.go (external package
+  presentation), reusing the existing mockIO from cloud_test.go and
+  building the category via commands.BuildConfigCategory + Dispatch
+  to mirror how the rest of the commands package is tested.
+- The round-trip test writes through the real config service to a
+  t.TempDir() file then reloads it through NewConfigService —
+  this exercises the full save → unmarshal → validate path so any
+  future addition of validation in internal/config/config.go that
+  rejected toon would surface here.
+- Pre-existing gofmt drift in internal/commands/config.go (map literal
+  alignment around line 446 in configDeleteCmd) is left untouched —
+  the task scope is the configRegistry entry, and golangci-lint does
+  not flag this drift. Carried over from earlier tasks per the same
+  convention used in tasks 004 and 005.
+- The global persistent --format flag description in cmd/nctl/app.go
+  (lines ~193, ~387) still lists "table, json, pretty-json, graph".
+  These are out of scope for task-007 (which is the config key
+  validation specifically) and out of scope for task-006. Task-010's
+  verification step is the right place to clean those up if desired.
+
+Next Task: task-008 (Default to TOON in agent mode when no override is set)
