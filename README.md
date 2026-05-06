@@ -1,4 +1,4 @@
-# nctl
+# lom
 
 A command-line tool for Neo4j with an interactive shell that can be used by people and by AI agents. Connect to a Neo4j database and the Neo4j Aura management API from a single binary — run Cypher queries, manage cloud instances, and perform administrative operations.
 
@@ -31,32 +31,32 @@ A command-line tool for Neo4j with an interactive shell that can be used by peop
 ```bash
 git clone <repo-url>
 cd go-cli-tool
-go build -o bin/nctl ./cmd/nctl
+go build -o bin/lom ./cmd/lom
 ```
 
 ### Run
 
 ```bash
 # Run a subcommand directly
-./bin/nctl cypher "MATCH (n:Person) RETURN n.name LIMIT 5"
-./bin/nctl cloud instances list
-./bin/nctl admin show-databases
-./bin/nctl config list
+./bin/lom cypher "MATCH (n:Person) RETURN n.name LIMIT 5"
+./bin/lom cloud instances list
+./bin/lom admin show-databases
+./bin/lom config list
 
 # Point at a specific config file
-./bin/nctl --config-file ~/.nctl/config.json cloud instances list
+./bin/lom --config-file ~/.lom/config.json cloud instances list
 
 # Control output format
-./bin/nctl cypher --format json "MATCH (n) RETURN n LIMIT 10"
-./bin/nctl cloud instances list --format json
-./bin/nctl cloud instances list --format toon
+./bin/lom cypher --format json "MATCH (n) RETURN n LIMIT 10"
+./bin/lom cloud instances list --format json
+./bin/lom cloud instances list --format toon
 ```
 
 ---
 
 ## Commands
 
-All functionality is exposed as top-level subcommands. Running `nctl` with no arguments prints help.
+All functionality is exposed as top-level subcommands. Running `lom` with no arguments prints help.
 
 | Subcommand | Description |
 |---|---|
@@ -70,11 +70,11 @@ All functionality is exposed as top-level subcommands. Running `nctl` with no ar
 Executes a Cypher query against the connected database.
 
 ```bash
-nctl cypher "MATCH (n) RETURN n LIMIT 5"
-nctl cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n"
-nctl cypher --format json "MATCH (n) RETURN n"
-nctl cypher --format toon "MATCH (n)-[r]->(m) RETURN n,r,m"
-nctl cypher --limit 100 "MATCH (n) RETURN n"
+lom cypher "MATCH (n) RETURN n LIMIT 5"
+lom cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n"
+lom cypher --format json "MATCH (n) RETURN n"
+lom cypher --format toon "MATCH (n)-[r]->(m) RETURN n,r,m"
+lom cypher --limit 100 "MATCH (n) RETURN n"
 ```
 
 Flags (placed before the query):
@@ -94,26 +94,26 @@ Manages Neo4j Aura cloud resources.
 > **Requires Aura credentials.** If `aura.client_id` or `aura.client_secret` are not configured, you are prompted to enter them on first use.
 
 ```bash
-nctl cloud instances list
-nctl cloud instances ls                                                  # alias
-nctl cloud instances get <id>
-nctl cloud instances create name=<n> tenant=<id> [cloud=<p>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]
-nctl cloud instances update <id> [name=<new-name>] [memory=<size>]
-nctl cloud instances pause <id>
-nctl cloud instances resume <id>
-nctl cloud instances delete <id>
-nctl cloud instances rm <id>                                             # alias
+lom cloud instances list
+lom cloud instances ls                                                  # alias
+lom cloud instances get <id>
+lom cloud instances create name=<n> tenant=<id> [cloud=<p>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]
+lom cloud instances update <id> [name=<new-name>] [memory=<size>]
+lom cloud instances pause <id>
+lom cloud instances resume <id>
+lom cloud instances delete <id>
+lom cloud instances rm <id>                                             # alias
 
-nctl cloud projects list
-nctl cloud projects get <id>
+lom cloud projects list
+lom cloud projects get <id>
 ```
 
 `instances create` requires `name` and `tenant`. All other fields fall back to `aura.instance_defaults` in the config. Set defaults to avoid repeating them on every invocation:
 
 ```bash
-nctl config set aura.instance_defaults.tenant_id abc-123
-nctl config set aura.instance_defaults.cloud_provider aws
-nctl cloud instances create name=my-db
+lom config set aura.instance_defaults.tenant_id abc-123
+lom config set aura.instance_defaults.cloud_provider aws
+lom cloud instances create name=my-db
 ```
 
 > **Save your password.** When `instances create` succeeds, the initial password is shown exactly once and cannot be recovered.
@@ -125,8 +125,8 @@ Runs administrative commands against the connected database.
 > **Requires a Neo4j connection.** Same prerequisite as `cypher`.
 
 ```bash
-nctl admin show-users
-nctl admin show-databases
+lom admin show-users
+lom admin show-databases
 ```
 
 ### config
@@ -134,13 +134,13 @@ nctl admin show-databases
 Manages CLI configuration. Changes made with `set`, `delete`, and `reset` are persisted to the config file immediately and take effect in the current session.
 
 ```bash
-nctl config list                                # show all keys, values, and descriptions
-nctl config list --format json
-nctl config set neo4j.uri bolt://myhost:7687
-nctl config set cypher.output_format json
-nctl config set aura.instance_defaults.region us-east-1
-nctl config delete neo4j.password              # reset a key to its default (prompts)
-nctl config reset                              # wipe config file, restore all defaults (prompts)
+lom config list                                # show all keys, values, and descriptions
+lom config list --format json
+lom config set neo4j.uri bolt://myhost:7687
+lom config set cypher.output_format json
+lom config set aura.instance_defaults.region us-east-1
+lom config delete neo4j.password              # reset a key to its default (prompts)
+lom config reset                              # wipe config file, restore all defaults (prompts)
 ```
 
 ---
@@ -155,7 +155,7 @@ CLI flags  >  environment variables  >  config file  >  defaults
 
 ### Config file
 
-The default config file path is `~/.nctl/config.json`. The directory and file are created automatically when credentials are first saved via an interactive prompt. Pass `--config-file <path>` to use a different location.
+The default config file path is `~/.lom/config.json`. The directory and file are created automatically when credentials are first saved via an interactive prompt. Pass `--config-file <path>` to use a different location.
 
 A full example:
 
@@ -261,11 +261,11 @@ The CLI is designed to be driven by AI agents, CI pipelines, and orchestration t
 
 ```bash
 # Via flag
-nctl --agent cloud instances list
+lom --agent cloud instances list
 
 # Via environment variable (recommended for pipelines — all invocations inherit it)
 export LOM_AGENT=true
-nctl cloud instances list
+lom cloud instances list
 ```
 
 ### What --agent does
@@ -283,10 +283,10 @@ In agent mode, all operations that modify state are blocked by default. Pass `--
 
 ```bash
 # Blocked — returns READ_ONLY error
-nctl --agent cloud instances delete <id>
+lom --agent cloud instances delete <id>
 
 # Allowed — no prompt, executes immediately
-nctl --agent --rw cloud instances delete <id>
+lom --agent --rw cloud instances delete <id>
 ```
 
 `--rw` governs **all** mutation categories uniformly:
@@ -305,14 +305,14 @@ For `cypher` commands in agent mode without `--rw`, the CLI automatically runs `
 
 ```bash
 # EXPLAIN detects a write — blocked
-nctl --agent cypher "CREATE (n:Person {name:'Alice'}) RETURN n"
+lom --agent cypher "CREATE (n:Person {name:'Alice'}) RETURN n"
 # → {"status":"error","error":{"code":"WRITE_BLOCKED","message":"..."},...}
 
 # Read query — EXPLAIN confirms safe, executes
-nctl --agent cypher "MATCH (n:Person) RETURN n.name LIMIT 10"
+lom --agent cypher "MATCH (n:Person) RETURN n.name LIMIT 10"
 
 # EXPLAIN or PROFILE queries run as-is — no pre-check
-nctl --agent cypher "EXPLAIN MATCH (n) RETURN n"
+lom --agent cypher "EXPLAIN MATCH (n) RETURN n"
 ```
 
 With `--rw`, the EXPLAIN pre-check is skipped and queries execute directly.
@@ -357,10 +357,10 @@ export LOM_NEO4J_USERNAME="neo4j"
 export LOM_NEO4J_PASSWORD="${NEO4J_PASSWORD}"
 
 # Read operations work with no further flags
-nctl cypher "MATCH (n:Person) RETURN count(n)"
+lom cypher "MATCH (n:Person) RETURN count(n)"
 
 # Write operations require explicit --rw
-nctl --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
+lom --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
 ```
 
 ---
@@ -370,7 +370,7 @@ nctl --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
 ### Project structure
 
 ```
-cmd/nctl/
+cmd/lom/
     main.go             Entry point — calls run() and os.Exit
     app.go              App struct, Cobra root command, startup wiring, flag definitions,
                         subcommand builders (buildCloudCommand, buildCypherCommand, etc.)
@@ -481,7 +481,7 @@ func (t *MyTool) DefaultParams() map[string]interface{} {
 
 **Step 3 — Register it**
 
-In `cmd/nctl/app.go`, add your tool to the slice inside `buildRegistry`:
+In `cmd/lom/app.go`, add your tool to the slice inside `buildRegistry`:
 
 ```go
 for _, t := range []tool.Tool{
@@ -541,8 +541,8 @@ func BuildAdminCategory(svc service.AdminService) *dispatch.Category {
 Aliases are registered automatically in dispatch and appear in parentheses in `--help` output:
 
 ```bash
-nctl admin show-indexes
-nctl admin idx           # same command
+lom admin show-indexes
+lom admin idx           # same command
 ```
 
 **Example: adding a command to a sub-category**
@@ -639,7 +639,7 @@ func BuildGDSCategory(svc service.GDSService) *dispatch.Category {
 
 **Step 4 — Wire it into App**
 
-In `cmd/nctl/app.go`, add the service field, construct it in `newApp`, and register the category and its Cobra subcommand:
+In `cmd/lom/app.go`, add the service field, construct it in `newApp`, and register the category and its Cobra subcommand:
 
 ```go
 // In newApp(), after repo is created:
@@ -668,8 +668,8 @@ Use `InteractiveNeo4jPrerequisite` for database-connected categories and `Intera
 The category is then available as a direct subcommand:
 
 ```bash
-nctl gds list-algorithms
-nctl gds --help
+lom gds list-algorithms
+lom gds --help
 ```
 
 ---
@@ -680,7 +680,7 @@ nctl gds --help
 
 **Interfaces before implementations** — new behaviour starts with an interface in `internal/service/interfaces.go`. This keeps the command layer decoupled from concrete implementations and makes testing straightforward.
 
-**Prerequisite checks belong in `prerequisites.go`** — if a category requires an external dependency (database connection, API credentials), declare it with `SetPrerequisite` in `buildCategories`. Write the factory function in `internal/commands/prerequisites.go` so it is independently testable. The check runs before every real dispatch, but bare category invocations (e.g. `nctl cypher --help`) always show help regardless.
+**Prerequisite checks belong in `prerequisites.go`** — if a category requires an external dependency (database connection, API credentials), declare it with `SetPrerequisite` in `buildCategories`. Write the factory function in `internal/commands/prerequisites.go` so it is independently testable. The check runs before every real dispatch, but bare category invocations (e.g. `lom cypher --help`) always show help regardless.
 
 **Tool `Validate` runs before `Execute`** — `Validate` is called automatically before every `Execute`. Use it for tool-level readiness checks rather than repeating them inside `Execute`. `BaseTool.Validate` is a no-op; only override it when needed.
 

@@ -1,14 +1,14 @@
-# PRD: Rename Binary to nctl
+# PRD: Rename Binary to lom
 
 ## Overview
 
-Rename the CLI binary from `neo4j-cli` to `nctl` and make every reference consistent across the codebase: the cmd directory, the Cobra root command name, the GoReleaser build config, all env vars (unified under a single `LOM_` prefix), default config/log file paths, and user-facing documentation.
+Rename the CLI binary from `neo4j-cli` to `lom` and make every reference consistent across the codebase: the cmd directory, the Cobra root command name, the GoReleaser build config, all env vars (unified under a single `LOM_` prefix), default config/log file paths, and user-facing documentation.
 
 ## Goals
 
-- The installed binary is named `nctl`.
+- The installed binary is named `lom`.
 - All env vars use a single consistent `LOM_` prefix.
-- Default config and log directories move from `~/.neo4j-cli/` to `~/.nctl/`.
+- Default config and log directories move from `~/.neo4j-cli/` to `~/.lom/`.
 - README and CLAUDE.md reflect the new name.
 - No references to `neo4j-cli` remain in any user-facing surface (binary, env vars, paths, help text, error messages).
 
@@ -22,22 +22,22 @@ Rename the CLI binary from `neo4j-cli` to `nctl` and make every reference consis
 
 ### Functional Requirements
 
-- **REQ-F-001**: `cmd/neo4j-cli/` is renamed to `cmd/nctl/`. The Go `main` package inside remains `package main`.
-- **REQ-F-002**: The Cobra root command's `Use` field changes from `"neo4j-cli"` to `"nctl"`. All `Example:` strings in subcommand builders are updated accordingly.
+- **REQ-F-001**: `cmd/neo4j-cli/` is renamed to `cmd/lom/`. The Go `main` package inside remains `package main`.
+- **REQ-F-002**: The Cobra root command's `Use` field changes from `"neo4j-cli"` to `"lom"`. All `Example:` strings in subcommand builders are updated accordingly.
 - **REQ-F-003**: The agent-mode env vars read directly via `os.Getenv` become `LOM_AGENT`, `LOM_RW`, and `LOM_REQUEST_ID`.
-- **REQ-F-004**: The viper env prefix changes from `"CLI"` to `"NCTL"`, making config env vars `LOM_LOG_LEVEL`, `LOM_NEO4J_URI`, `LOM_AURA_CLIENT_SECRET`, `LOM_SHELL_ENABLED`, etc.
-- **REQ-F-005**: `DefaultConfigFilePath()` in `internal/config/config.go` returns `~/.nctl/config.json` (and falls back to `.nctl-config.json` on home-dir error).
-- **REQ-F-006**: `DefaultLogFilePath()` in `internal/logger/logger.go` returns `~/.nctl/nctl.log` (and falls back to `<tmpdir>/nctl.log`).
-- **REQ-F-007**: The `--log-file` flag description, all help text, error messages, and shell built-in output that reference `neo4j-cli` are updated to `nctl`.
-- **REQ-F-008**: `.goreleaser.yaml` is updated: `main: ./cmd/nctl`, `binary: nctl`, `id: nctl`.
-- **REQ-F-009**: `README.md` is updated: title, build command (`go build -o bin/nctl ./cmd/nctl`), all usage examples, and any path references (`~/.nctl/`).
-- **REQ-F-010**: `CLAUDE.md` build command is updated to `go build -o bin/nctl ./cmd/nctl`.
+- **REQ-F-004**: The viper env prefix changes from `"CLI"` to `"lom"`, making config env vars `LOM_LOG_LEVEL`, `LOM_NEO4J_URI`, `LOM_AURA_CLIENT_SECRET`, `LOM_SHELL_ENABLED`, etc.
+- **REQ-F-005**: `DefaultConfigFilePath()` in `internal/config/config.go` returns `~/.lom/config.json` (and falls back to `.lom-config.json` on home-dir error).
+- **REQ-F-006**: `DefaultLogFilePath()` in `internal/logger/logger.go` returns `~/.lom/lom.log` (and falls back to `<tmpdir>/lom.log`).
+- **REQ-F-007**: The `--log-file` flag description, all help text, error messages, and shell built-in output that reference `neo4j-cli` are updated to `lom`.
+- **REQ-F-008**: `.goreleaser.yaml` is updated: `main: ./cmd/lom`, `binary: lom`, `id: lom`.
+- **REQ-F-009**: `README.md` is updated: title, build command (`go build -o bin/lom ./cmd/lom`), all usage examples, and any path references (`~/.lom/`).
+- **REQ-F-010**: `CLAUDE.md` build command is updated to `go build -o bin/lom ./cmd/lom`.
 
 ### Non-Functional Requirements
 
-- **REQ-NF-001**: `go test ./...` passes with no failures after the rename; test assertions that check for `"neo4j-cli"` in output or path strings are updated to `"nctl"`.
+- **REQ-NF-001**: `go test ./...` passes with no failures after the rename; test assertions that check for `"neo4j-cli"` in output or path strings are updated to `"lom"`.
 - **REQ-NF-002**: `golangci-lint run` reports zero issues after the rename.
-- **REQ-NF-003**: `go build ./cmd/nctl` produces a working binary.
+- **REQ-NF-003**: `go build ./cmd/lom` produces a working binary.
 
 ## Technical Considerations
 
@@ -45,12 +45,12 @@ Rename the CLI binary from `neo4j-cli` to `nctl` and make every reference consis
 
 | File | Change |
 |---|---|
-| `cmd/neo4j-cli/` | Rename directory to `cmd/nctl/` |
-| `cmd/nctl/app.go` | `Use: "nctl"`, all example strings, `os.Getenv("LOM_*")`, flag descriptions, `"Run 'nctl --help'"` error string |
-| `internal/config/config.go` | `SetEnvPrefix("NCTL")`, `DefaultConfigFilePath()` paths, all `CLI_` comments |
+| `cmd/neo4j-cli/` | Rename directory to `cmd/lom/` |
+| `cmd/lom/app.go` | `Use: "lom"`, all example strings, `os.Getenv("LOM_*")`, flag descriptions, `"Run 'lom --help'"` error string |
+| `internal/config/config.go` | `SetEnvPrefix("lom")`, `DefaultConfigFilePath()` paths, all `CLI_` comments |
 | `internal/logger/logger.go` | `DefaultLogFilePath()` paths and comments |
-| `internal/shell/interactive.go` | Version string `"nctl %s"`, `~/.nctl/nctl.log` in config display, `LOM_` references in help |
-| `internal/dispatch/category.go` | Error message `"run 'nctl %s --help'"` |
+| `internal/shell/interactive.go` | Version string `"lom %s"`, `~/.lom/lom.log` in config display, `LOM_` references in help |
+| `internal/dispatch/category.go` | Error message `"run 'lom %s --help'"` |
 | `internal/dispatch/dispatch.go` | Comments referencing `NEO4J_CLI_AGENT`, `NEO4J_CLI_RW` |
 | `internal/commands/cypher.go` | `MAINTENANCE:` comments referencing `cmd/neo4j-cli/app.go` |
 | `internal/tool/tool.go` | Comment referencing `NEO4J_CLI_RW` |
@@ -62,9 +62,9 @@ Rename the CLI binary from `neo4j-cli` to `nctl` and make every reference consis
 
 | File | Change |
 |---|---|
-| `internal/shell/interactive_test.go:87-88` | Assert `"nctl"` instead of `"neo4j-cli"` in version output |
-| `internal/logger/logger_test.go:212-213` | Assert `"nctl"` instead of `"neo4j-cli"` in log path |
-| `internal/config/config_test.go:17` | Update comment about `~/.nctl/config.json` |
+| `internal/shell/interactive_test.go:87-88` | Assert `"lom"` instead of `"neo4j-cli"` in version output |
+| `internal/logger/logger_test.go:212-213` | Assert `"lom"` instead of `"neo4j-cli"` in log path |
+| `internal/config/config_test.go:17` | Update comment about `~/.lom/config.json` |
 
 ### Env var mapping (old → new)
 
@@ -96,13 +96,13 @@ Rename the CLI binary from `neo4j-cli` to `nctl` and make every reference consis
 
 ## Acceptance Criteria
 
-- [ ] `go build -o bin/nctl ./cmd/nctl` succeeds.
-- [ ] `bin/nctl --help` shows `nctl` as the command name.
-- [ ] `bin/nctl version` shows `nctl <version>`.
-- [ ] `LOM_AGENT=true bin/nctl` activates agent mode.
-- [ ] `LOM_NEO4J_URI=bolt://host:7687 bin/nctl cypher "RETURN 1"` is respected.
-- [ ] Default config file resolves to `~/.nctl/config.json`.
-- [ ] Default log file resolves to `~/.nctl/nctl.log`.
+- [ ] `go build -o bin/lom ./cmd/lom` succeeds.
+- [ ] `bin/lom --help` shows `lom` as the command name.
+- [ ] `bin/lom version` shows `lom <version>`.
+- [ ] `LOM_AGENT=true bin/lom` activates agent mode.
+- [ ] `LOM_NEO4J_URI=bolt://host:7687 bin/lom cypher "RETURN 1"` is respected.
+- [ ] Default config file resolves to `~/.lom/config.json`.
+- [ ] Default log file resolves to `~/.lom/lom.log`.
 - [ ] `go test ./...` passes with no failures.
 - [ ] `golangci-lint run` reports zero issues.
 - [ ] No occurrences of `neo4j-cli`, `NEO4J_CLI_`, or `CLI_` prefix remain in any user-facing string, path, or env var name.
@@ -111,7 +111,7 @@ Rename the CLI binary from `neo4j-cli` to `nctl` and make every reference consis
 
 - Backwards-compatible env var aliases (`NEO4J_CLI_*` / `CLI_*` continuing to work).
 - Renaming the GitHub repository or Go module path.
-- Migrating existing user config files from `~/.neo4j-cli/` to `~/.nctl/`.
+- Migrating existing user config files from `~/.neo4j-cli/` to `~/.lom/`.
 
 ## Open Questions
 

@@ -287,7 +287,7 @@ func parseCypherFlags(args []string) cypherFlags {
 // arg stream because DisableFlagParsing passes them through verbatim.
 //
 // MAINTENANCE: keep in sync with the BoolVar persistent flags registered in
-// buildRootCommand() in cmd/nctl/app.go.
+// buildRootCommand() in cmd/lom/app.go.
 func globalBoolFlag(s string) bool {
 	switch s {
 	case "--agent", "--rw", "--no-metrics":
@@ -300,7 +300,7 @@ func globalBoolFlag(s string) bool {
 // consumes a following value token.
 //
 // MAINTENANCE: keep in sync with the StringVar/IntVar persistent flags
-// registered in buildRootCommand() in cmd/nctl/app.go.
+// registered in buildRootCommand() in cmd/lom/app.go.
 func globalValueFlag(s string) bool {
 	switch s {
 	case "--config-file",

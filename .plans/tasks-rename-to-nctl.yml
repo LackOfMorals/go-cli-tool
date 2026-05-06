@@ -1,31 +1,31 @@
-feature: rename-to-nctl
-prd: ./prd-rename-to-nctl.md
+feature: rename-to-lom
+prd: ./prd-rename-to-lom.md
 created_at: 2026-05-05T00:00:00Z
 updated_at: 2026-05-05T00:00:00Z
 
 tasks:
   - id: task-001
-    title: "Rename cmd/neo4j-cli/ directory to cmd/nctl/"
+    title: "Rename cmd/neo4j-cli/ directory to cmd/lom/"
     description: |
-      Use git mv to rename the cmd/neo4j-cli directory to cmd/nctl so the
+      Use git mv to rename the cmd/neo4j-cli directory to cmd/lom so the
       rename is tracked in git history. The package declaration inside main.go
       and app.go remains package main — no Go source changes needed in this task.
-      Verify go build ./cmd/nctl compiles after the directory move.
+      Verify go build ./cmd/lom compiles after the directory move.
     status: completed
     dependencies: []
     acceptance_criteria:
-      - "Directory cmd/nctl/ exists; cmd/neo4j-cli/ is gone"
+      - "Directory cmd/lom/ exists; cmd/neo4j-cli/ is gone"
       - "git mv is used so the rename appears in git history"
-      - "go build ./cmd/nctl succeeds"
+      - "go build ./cmd/lom succeeds"
     completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-002
-    title: "Update env vars in cmd/nctl/app.go to LOM_ prefix"
+    title: "Update env vars in cmd/lom/app.go to LOM_ prefix"
     description: |
       Replace all three os.Getenv calls and their corresponding flag description
-      strings in cmd/nctl/app.go: NEO4J_CLI_AGENT -> LOM_AGENT,
+      strings in cmd/lom/app.go: NEO4J_CLI_AGENT -> LOM_AGENT,
       NEO4J_CLI_RW -> LOM_RW, NEO4J_CLI_REQUEST_ID -> LOM_REQUEST_ID.
-      Also update the 'Run nctl --help' error string and all variable comments
+      Also update the 'Run lom --help' error string and all variable comments
       that reference the old env var names.
     status: completed
     dependencies:
@@ -35,22 +35,22 @@ tasks:
       - "os.Getenv(\"LOM_RW\") replaces NEO4J_CLI_RW"
       - "os.Getenv(\"LOM_REQUEST_ID\") replaces NEO4J_CLI_REQUEST_ID"
       - "Flag descriptions reference LOM_ env var names"
-      - "go build ./cmd/nctl succeeds"
+      - "go build ./cmd/lom succeeds"
     completed_at: "2026-05-05T00:00:00Z"
 
   - id: task-003
-    title: "Update viper env prefix from CLI to NCTL in internal/config/config.go"
+    title: "Update viper env prefix from CLI to lom in internal/config/config.go"
     description: |
-      Change v.SetEnvPrefix(\"CLI\") to v.SetEnvPrefix(\"NCTL\") in the
+      Change v.SetEnvPrefix(\"CLI\") to v.SetEnvPrefix(\"lom\") in the
       viperConfigLoader function. Update DefaultConfigFilePath() to return
-      ~/.nctl/config.json (and fall back to .nctl-config.json). Update all
+      ~/.lom/config.json (and fall back to .lom-config.json). Update all
       CLI_ comments in the file to LOM_.
     status: completed
     dependencies: []
     acceptance_criteria:
-      - "SetEnvPrefix is called with \"NCTL\""
-      - "DefaultConfigFilePath returns a path containing .nctl"
-      - "Fallback path is .nctl-config.json"
+      - "SetEnvPrefix is called with \"lom\""
+      - "DefaultConfigFilePath returns a path containing .lom"
+      - "Fallback path is .lom-config.json"
       - "All CLI_ references in comments are updated to LOM_"
       - "go test ./internal/config/... passes"
     completed_at: "2026-05-05T01:00:00Z"
@@ -58,22 +58,22 @@ tasks:
   - id: task-004
     title: "Update default log file path in internal/logger/logger.go"
     description: |
-      Change DefaultLogFilePath() to return ~/.nctl/nctl.log and the tmpdir
-      fallback to nctl.log. Update all comments in the file that reference
+      Change DefaultLogFilePath() to return ~/.lom/lom.log and the tmpdir
+      fallback to lom.log. Update all comments in the file that reference
       neo4j-cli paths or the old log file name.
     status: completed
     dependencies: []
     acceptance_criteria:
-      - "DefaultLogFilePath returns a path containing .nctl/nctl.log"
-      - "Tmpdir fallback returns nctl.log"
-      - "Comments updated to reference nctl"
+      - "DefaultLogFilePath returns a path containing .lom/lom.log"
+      - "Tmpdir fallback returns lom.log"
+      - "Comments updated to reference lom"
       - "go test ./internal/logger/... passes"
     completed_at: "2026-05-05T02:00:00Z"
 
   - id: task-005
-    title: "Update Cobra Use field and all Example strings in cmd/nctl/app.go"
+    title: "Update Cobra Use field and all Example strings in cmd/lom/app.go"
     description: |
-      Change Use: \"neo4j-cli\" to Use: \"nctl\" in buildRootCommand. Replace
+      Change Use: \"neo4j-cli\" to Use: \"lom\" in buildRootCommand. Replace
       all neo4j-cli occurrences in the Long description, all Example strings
       across buildCloudCommand, buildCypherCommand, buildAdminCommand, and
       buildConfigCommand, and the --log-file flag description that references
@@ -82,11 +82,11 @@ tasks:
     dependencies:
       - task-002
     acceptance_criteria:
-      - "Use field is \"nctl\""
-      - "Long description references nctl"
-      - "All Example strings use nctl instead of neo4j-cli"
-      - "Flag description references ~/.nctl/nctl.log"
-      - "go build ./cmd/nctl succeeds"
+      - "Use field is \"lom\""
+      - "Long description references lom"
+      - "All Example strings use lom instead of neo4j-cli"
+      - "Flag description references ~/.lom/lom.log"
+      - "go build ./cmd/lom succeeds"
     completed_at: "2026-05-05T03:00:00Z"
 
   - id: task-006
@@ -102,43 +102,43 @@ tasks:
     dependencies:
       - task-001
     acceptance_criteria:
-      - "dispatch/category.go error message references 'nctl'"
+      - "dispatch/category.go error message references 'lom'"
       - "dispatch/dispatch.go comments reference LOM_ env vars"
-      - "commands/cypher.go MAINTENANCE comments reference cmd/nctl/app.go"
+      - "commands/cypher.go MAINTENANCE comments reference cmd/lom/app.go"
       - "tool/tool.go comment references LOM_RW"
-      - "shell/interactive.go version string returns 'nctl <version>'"
+      - "shell/interactive.go version string returns 'lom <version>'"
     completed_at: "2026-05-05T04:00:00Z"
 
   - id: task-007
-    title: "Update .goreleaser.yaml for nctl binary"
+    title: "Update .goreleaser.yaml for lom binary"
     description: |
-      In .goreleaser.yaml update the build entry: id from neo4j-cli to nctl,
-      main from ./cmd/neo4j-cli to ./cmd/nctl, and binary from neo4j-cli to
-      nctl. No other fields need changing.
+      In .goreleaser.yaml update the build entry: id from neo4j-cli to lom,
+      main from ./cmd/neo4j-cli to ./cmd/lom, and binary from neo4j-cli to
+      lom. No other fields need changing.
     status: completed
     dependencies:
       - task-001
     acceptance_criteria:
-      - "build id is nctl"
-      - "main is ./cmd/nctl"
-      - "binary is nctl"
-      - "goreleaser check (if available) passes, or go build ./cmd/nctl succeeds as proxy"
+      - "build id is lom"
+      - "main is ./cmd/lom"
+      - "binary is lom"
+      - "goreleaser check (if available) passes, or go build ./cmd/lom succeeds as proxy"
     completed_at: "2026-05-05T05:00:00Z"
 
   - id: task-008
-    title: "Update README.md to use nctl throughout"
+    title: "Update README.md to use lom throughout"
     description: |
       Replace all 56+ occurrences of neo4j-cli in README.md: the title, build
-      command (go build -o bin/nctl ./cmd/nctl), all usage examples, and path
-      references (~/.nctl/). The overall structure and content of the README
+      command (go build -o bin/lom ./cmd/lom), all usage examples, and path
+      references (~/.lom/). The overall structure and content of the README
       is unchanged — only the binary name and paths are updated.
     status: completed
     dependencies: []
     acceptance_criteria:
-      - "README.md title is nctl (or equivalent)"
-      - "Build command shows go build -o bin/nctl ./cmd/nctl"
-      - "All usage examples reference nctl"
-      - "Path references show ~/.nctl/"
+      - "README.md title is lom (or equivalent)"
+      - "Build command shows go build -o bin/lom ./cmd/lom"
+      - "All usage examples reference lom"
+      - "Path references show ~/.lom/"
       - "grep -c neo4j-cli README.md returns 0"
     completed_at: "2026-05-06T00:00:00Z"
 
@@ -147,21 +147,21 @@ tasks:
     description: |
       Update the build command in CLAUDE.md from
       'go build -o bin/neo4j-cli ./cmd/neo4j-cli' to
-      'go build -o bin/nctl ./cmd/nctl'. Check for any other neo4j-cli
+      'go build -o bin/lom ./cmd/lom'. Check for any other neo4j-cli
       references in the file and update them.
     status: completed
     dependencies:
       - task-001
     acceptance_criteria:
-      - "Build command in CLAUDE.md references bin/nctl and ./cmd/nctl"
+      - "Build command in CLAUDE.md references bin/lom and ./cmd/lom"
       - "No remaining neo4j-cli references in CLAUDE.md"
     completed_at: "2026-05-06T21:30:00Z"
 
   - id: task-010
     title: "Fix test assertions that check for neo4j-cli strings"
     description: |
-      Update three test locations: interactive_test.go:87-88 (assert 'nctl' in
-      version output), logger_test.go:212-213 (assert 'nctl' in log path),
+      Update three test locations: interactive_test.go:87-88 (assert 'lom' in
+      version output), logger_test.go:212-213 (assert 'lom' in log path),
       and config_test.go:17 (update comment about config path). Run go test
       ./... to confirm all tests pass.
     status: completed
@@ -171,8 +171,8 @@ tasks:
       - task-005
       - task-006
     acceptance_criteria:
-      - "interactive_test.go asserts 'nctl' in version output"
-      - "logger_test.go asserts 'nctl' in DefaultLogFilePath result"
+      - "interactive_test.go asserts 'lom' in version output"
+      - "logger_test.go asserts 'lom' in DefaultLogFilePath result"
       - "go test ./... passes with no failures"
     completed_at: "2026-05-06T22:00:00Z"
 
@@ -181,7 +181,7 @@ tasks:
     description: |
       Run golangci-lint run and grep the entire repo for any remaining
       neo4j-cli, NEO4J_CLI_, or CLI_ prefix occurrences in Go source, YAML,
-      and Markdown files. Fix any issues found. Confirm go build ./cmd/nctl
+      and Markdown files. Fix any issues found. Confirm go build ./cmd/lom
       produces a working binary.
     status: completed
     dependencies:
@@ -192,6 +192,6 @@ tasks:
     acceptance_criteria:
       - "golangci-lint run reports zero issues"
       - "grep -r 'neo4j-cli\\|NEO4J_CLI_\\|CLI_' --include='*.go' returns no matches in user-facing strings"
-      - "go build -o bin/nctl ./cmd/nctl succeeds"
-      - "bin/nctl --help shows nctl as the command name"
+      - "go build -o bin/lom ./cmd/lom succeeds"
+      - "bin/lom --help shows lom as the command name"
     completed_at: "2026-05-06T20:24:21Z"

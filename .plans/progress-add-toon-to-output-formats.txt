@@ -204,7 +204,7 @@ changes were needed in the dispatch logic itself — only help text and tests.
 Files Changed:
 - internal/commands/cypher.go (modified: package doc comment now lists toon
   alongside table|graph|json|pretty-json and adds a toon usage example)
-- cmd/nctl/app.go (modified: cypher cobra Long description now lists toon
+- cmd/lom/app.go (modified: cypher cobra Long description now lists toon
   in the --format value enumeration)
 - internal/commands/cypher_test.go (modified: added
   TestCypherCategory_FormatFlag_TOON and
@@ -214,9 +214,9 @@ Files Changed:
 Key Decisions:
 - Help text was updated in two spots: the package-level doc comment in
   internal/commands/cypher.go (developer-facing) and the cobra Long
-  description in cmd/nctl/app.go (the source of `nctl help cypher`).
-  Smoke-tested via `nctl help cypher` to confirm the user-facing string.
-- The global persistent --format flag description in cmd/nctl/app.go
+  description in cmd/lom/app.go (the source of `lom help cypher`).
+  Smoke-tested via `lom help cypher` to confirm the user-facing string.
+- The global persistent --format flag description in cmd/lom/app.go
   (line ~193) and the validation error message (line ~387) still list
   "table, json, pretty-json, graph". These are out of scope for task-006
   (which is specifically the cypher command); IsValid() already accepts
@@ -241,7 +241,7 @@ Date: 2026-05-06T00:00:00Z
 Summary:
 Added "toon" to the allow-list, error message, and description of the
 cypher.output_format entry in the configRegistry inside
-internal/commands/config.go. After this task, `nctl config set
+internal/commands/config.go. After this task, `lom config set
 cypher.output_format toon` succeeds, persists to disk, and round-trips
 through the loader so subsequent runs honour the value. No changes were
 needed to internal/config/config.go because validateConfig() does not
@@ -276,7 +276,7 @@ Key Decisions:
   the task scope is the configRegistry entry, and golangci-lint does
   not flag this drift. Carried over from earlier tasks per the same
   convention used in tasks 004 and 005.
-- The global persistent --format flag description in cmd/nctl/app.go
+- The global persistent --format flag description in cmd/lom/app.go
   (lines ~193, ~387) still lists "table, json, pretty-json, graph".
   These are out of scope for task-007 (which is the config key
   validation specifically) and out of scope for task-006. Task-010's
@@ -291,7 +291,7 @@ Date: 2026-05-06T00:00:00Z
 
 Summary:
 Made the presentation service's startup default format agent-mode-aware. The
-NewPresentationService call site in cmd/nctl/app.go now chooses TOON when
+NewPresentationService call site in cmd/lom/app.go now chooses TOON when
 the binary is running in agent mode AND the user has not explicitly set
 cypher.output_format; an explicit config value always wins, and outside
 agent mode the default stays as today (table). Detection of "user has not
@@ -303,11 +303,11 @@ Files Changed:
   cypher.output_format dropped from "table" to ""; doc comment on the
   CypherConfig.OutputFormat field updated to call out empty-means-unset
   semantics and list every valid value)
-- cmd/nctl/app.go (modified: added resolveDefaultPresentationFormat helper
+- cmd/lom/app.go (modified: added resolveDefaultPresentationFormat helper
   with config-wins → agent-toon → table precedence; newApp now calls it
   instead of passing presentation.OutputFormatTable directly to
   NewPresentationService)
-- cmd/nctl/app_test.go (created: 6 test functions covering agent-no-config,
+- cmd/lom/app_test.go (created: 6 test functions covering agent-no-config,
   agent-config-set across all valid formats, non-agent-no-config,
   non-agent-config-set, invalid-config-fallback, and nil-config defensive
   behaviour)
@@ -321,7 +321,7 @@ Key Decisions:
   empty, so this is behaviour-preserving for non-agent users.
 - configRegistry's Default: "table" for cypher.output_format (in
   internal/commands/config.go) is left untouched; it controls what
-  `nctl config delete cypher.output_format` resets to, which is a
+  `lom config delete cypher.output_format` resets to, which is a
   different concept from "what is the runtime default if unset".
 - resolveDefaultPresentationFormat takes (cfg *config.Config, agent bool)
   so it can be tested without mutating the package-level agentMode var.
@@ -335,8 +335,8 @@ Key Decisions:
 - Pre-existing gofmt drift in internal/config/config.go (Overrides
   struct field alignment around lines 22-29) is left untouched per the
   convention established in tasks 004/005/007.
-- Tests live in package main (cmd/nctl/app_test.go) — same package as
-  the helper — because the helper is unexported. Existing cmd/nctl had
+- Tests live in package main (cmd/lom/app_test.go) — same package as
+  the helper — because the helper is unexported. Existing cmd/lom had
   no tests; this is the first.
 
 Next Task: task-009 (Regenerate skill.md.gen and any other generated artefacts)
@@ -353,7 +353,7 @@ directive in this repo is for internal/analytics/mocks/mock_analytics.go,
 and the analytics.Service / HTTPClient interfaces were not touched by this
 feature. Project does NOT have an internal/skill/skill.md.gen file —
 CLAUDE.md mentions it but is out of sync with the actual layout of the
-nctl repo (likely inherited from a parent template). No code changes;
+lom repo (likely inherited from a parent template). No code changes;
 verification pass only.
 
 Files Changed:
@@ -387,24 +387,24 @@ from go generate. Verified the changie fragment
 .changes/unreleased/added-toon-output-format.yaml is present, parses as
 valid YAML (kind: Added, body string), and accurately describes the shipped
 behaviour. Smoke-tested the freshly built binary: --format help text and
-invalid-format error message both list `toon`; nctl help cypher Long
+invalid-format error message both list `toon`; lom help cypher Long
 description lists `toon`. While doing the smoke test, picked up the small
 UX fixup that the earlier tasks (006, 007) deferred: four user-facing
-strings in cmd/nctl/app.go still listed only "table, json, pretty-json,
+strings in cmd/lom/app.go still listed only "table, json, pretty-json,
 graph". Updated all four to "table, json, pretty-json, graph, toon" so
 the help text, the invalid-format error, and the cloud/admin Long
 descriptions match the cypher Long description and the config registry's
 allow-list. Verified no test references the old global error string.
 
 Files Changed:
-- cmd/nctl/app.go (modified: four user-visible strings now list toon —
+- cmd/lom/app.go (modified: four user-visible strings now list toon —
   global --format flag help (line 193), invalid-format error message
   (line 407), buildCloudCommand Long description (line 475),
   buildAdminCommand Long description (line 521))
 - .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
 - .plans/progress-add-toon-to-output-formats.txt (this entry)
 - AGENTS.md (note added under Gotchas about the now-consistent
-  --format help text across the four occurrences in cmd/nctl/app.go)
+  --format help text across the four occurrences in cmd/lom/app.go)
 
 Key Decisions:
 - Picked up the deferred UX consistency fix from tasks 006/007 here
@@ -427,7 +427,7 @@ Key Decisions:
   end-to-end via the registered TOONFormatter.
 - Final verification snapshot:
     go build ./...        — clean
-    go test ./... -count=1 — clean (cmd/nctl 0.985s, commands 0.902s,
+    go test ./... -count=1 — clean (cmd/lom 0.985s, commands 0.902s,
                             presentation 0.382s)
     golangci-lint run     — 0 issues
     go generate ./...     — no diff

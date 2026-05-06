@@ -119,7 +119,7 @@ func run() int {
 			}
 			sort.Strings(names)
 			fmt.Fprintf(os.Stderr, "Valid commands: %s\n", strings.Join(names, ", "))
-			fmt.Fprintf(os.Stderr, "Run 'nctl --help' for usage.\n")
+			fmt.Fprintf(os.Stderr, "Run 'lom --help' for usage.\n")
 		}
 		return 1
 	}
@@ -167,9 +167,9 @@ func printAgentError(err error, reqID string) {
 
 func buildRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "nctl",
+		Use:   "lom",
 		Short: "A CLI for Neo4j",
-		Long: `nctl is a command-line tool for Neo4j.
+		Long: `lom is a command-line tool for Neo4j.
 
 Use a subcommand to interact with Neo4j databases and Aura cloud resources, or
 run without arguments to start the interactive shell.`,
@@ -183,7 +183,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error")
 	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
 	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
-	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.nctl/nctl.log)")
+	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.lom/lom.log)")
 	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and LOM_TELEMETRY_METRICS env var)")
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
@@ -473,12 +473,12 @@ Available sub-commands:
   projects    List and inspect Aura projects (tenants)
 
 Use --format to control output (table, json, pretty-json, graph, toon).`,
-		Example: `  nctl cloud instances list
-  nctl cloud instances list --format json
-  nctl cloud instances get <id>
-  nctl cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
-  nctl cloud instances pause <id>
-  nctl cloud projects list`,
+		Example: `  lom cloud instances list
+  lom cloud instances list --format json
+  lom cloud instances get <id>
+  lom cloud instances create name=my-db tenant=<tenant-id> cloud=aws region=us-east-1
+  lom cloud instances pause <id>
+  lom cloud projects list`,
 		RunE:          runCategory("cloud"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -498,9 +498,9 @@ Query flags (parsed inline, not by cobra):
   --format table|json|pretty-json|graph|toon
                        Override output format for this query
   --limit N            Override the auto-injected row limit (default 25)`,
-		Example: `  nctl cypher "MATCH (n:Person) RETURN n.name, n.age;"
-  nctl cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n;"
-  nctl cypher --format json "MATCH (n) RETURN n;"`,
+		Example: `  lom cypher "MATCH (n:Person) RETURN n.name, n.age;"
+  lom cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n;"
+  lom cypher --format json "MATCH (n) RETURN n;"`,
 		RunE:               runCategory("cypher"),
 		DisableFlagParsing: true, // let parseCypherFlags handle --param/--format/--limit
 		SilenceUsage:       true,
@@ -519,9 +519,9 @@ Available commands:
   show-databases   List all databases and their status
 
 Use --format to control output (table, json, pretty-json, graph, toon).`,
-		Example: `  nctl admin show-users
-  nctl admin show-users --format json
-  nctl admin show-databases`,
+		Example: `  lom admin show-users
+  lom admin show-users --format json
+  lom admin show-databases`,
 		RunE:          runCategory("admin"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -542,12 +542,12 @@ Available commands:
   reset            Wipe the config file and restore all defaults
 
 Use --format to control output for 'config list'.`,
-		Example: `  nctl config list
-  nctl config list --format json
-  nctl config set neo4j.uri bolt://myhost:7687
-  nctl config set cypher.output_format json
-  nctl config delete neo4j.password
-  nctl config reset`,
+		Example: `  lom config list
+  lom config list --format json
+  lom config set neo4j.uri bolt://myhost:7687
+  lom config set cypher.output_format json
+  lom config delete neo4j.password
+  lom config reset`,
 		RunE:          runCategory("config"),
 		SilenceUsage:  true,
 		SilenceErrors: true,

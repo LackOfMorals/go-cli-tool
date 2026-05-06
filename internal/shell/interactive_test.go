@@ -84,8 +84,8 @@ func TestExecute_Version(t *testing.T) {
 	if !strings.Contains(out, "1.2.3") {
 		t.Errorf("expected version in output, got: %q", out)
 	}
-	if !strings.Contains(out, "nctl") {
-		t.Errorf("expected 'nctl' in output, got: %q", out)
+	if !strings.Contains(out, "lom") {
+		t.Errorf("expected 'lom' in output, got: %q", out)
 	}
 }
 
@@ -411,7 +411,7 @@ func TestExecute_ContextPropagatedToTool(t *testing.T) {
 // to fail validation so we can assert the flow stops before Execute.
 type validatingTool struct {
 	*tool.BaseTool
-	validateErr  error
+	validateErr    error
 	validateCalled bool
 	executeCalled  bool
 }

@@ -20,13 +20,13 @@ import (
 // they must come from the config file or environment variables, never from
 // CLI flags that would appear in shell history or `ps` output.
 type Overrides struct {
-	ConfigFile  string // non-empty → load and overlay this file
-	LogLevel    string // non-empty → override
-	LogFormat   string // non-empty → override
-	LogOutput   string // non-empty → override (stderr | stdout | file)
-	LogFile     string // non-empty → override log file path
-	ShellEnabled   *bool // non-nil → override
-	MetricsEnabled *bool // non-nil → override
+	ConfigFile     string // non-empty → load and overlay this file
+	LogLevel       string // non-empty → override
+	LogFormat      string // non-empty → override
+	LogOutput      string // non-empty → override (stderr | stdout | file)
+	LogFile        string // non-empty → override log file path
+	ShellEnabled   *bool  // non-nil → override
+	MetricsEnabled *bool  // non-nil → override
 
 	// Neo4j connection (non-secret fields only)
 	Neo4jURI      string
@@ -92,13 +92,13 @@ type AuraInstanceDefaults struct {
 }
 
 // DefaultConfigFilePath returns the default path for the CLI configuration
-// file: ~/.nctl/config.json. Falls back to a local file on error.
+// file: ~/.lom/config.json. Falls back to a local file on error.
 func DefaultConfigFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".nctl-config.json"
+		return ".lom-config.json"
 	}
-	return filepath.Join(home, ".nctl", "config.json")
+	return filepath.Join(home, ".lom", "config.json")
 }
 
 type TelemetryConfig struct {
@@ -160,7 +160,7 @@ func NewConfigService(overrides Overrides) Service {
 //
 // File loading precedence:
 //  1. Explicit --config-file path (hard error if file is missing)
-//  2. DefaultConfigFilePath() — ~/.nctl/config.json (silently skipped if absent)
+//  2. DefaultConfigFilePath() — ~/.lom/config.json (silently skipped if absent)
 func (c *configService) LoadConfiguration() (Config, error) {
 	if c.overrides.ConfigFile != "" {
 		// Explicit path: treat a missing file as an error.
@@ -316,7 +316,7 @@ func newViperConfigLoader() *viperConfigLoader {
 
 	// Env vars: LOM_NEO4J_URI, LOM_AURA_CLIENT_SECRET, etc.
 	// The replacer maps "." → "_" so "neo4j.uri" → LOM_NEO4J_URI.
-	v.SetEnvPrefix("NCTL")
+	v.SetEnvPrefix("lom")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 

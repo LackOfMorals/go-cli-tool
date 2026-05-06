@@ -90,13 +90,13 @@ tasks:
   - id: task-007
     title: "Allow toon for cypher.output_format config"
     description: |
-      Allow toon as a valid value for the cypher.output_format config key. Update any allow-list, validation, or help text in internal/config/config.go and internal/commands/config.go (the latter exposes the get/set surface for cypher.output_format around line 249). After this task, nctl config set cypher.output_format toon must persist and be honoured by subsequent runs.
+      Allow toon as a valid value for the cypher.output_format config key. Update any allow-list, validation, or help text in internal/config/config.go and internal/commands/config.go (the latter exposes the get/set surface for cypher.output_format around line 249). After this task, lom config set cypher.output_format toon must persist and be honoured by subsequent runs.
     status: completed
     completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-005
     acceptance_criteria:
-      - "nctl config set cypher.output_format toon succeeds and the value round-trips through the loader"
+      - "lom config set cypher.output_format toon succeeds and the value round-trips through the loader"
       - "Any validation that previously rejected toon now accepts it"
       - "Help text for cypher.output_format lists toon"
       - "Existing config validation tests (e.g. the fixed-config-validation flow) still pass"

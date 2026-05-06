@@ -1,63 +1,63 @@
-## rename-to-nctl progress log
+## rename-to-lom progress log
 
 ### task-001 — 2026-05-05
-- Used `git mv cmd/neo4j-cli cmd/nctl` to rename the directory; rename is tracked in git history.
-- `go build ./cmd/nctl` and `go build ./...` both succeed with no changes to Go source files.
+- Used `git mv cmd/neo4j-cli cmd/lom` to rename the directory; rename is tracked in git history.
+- `go build ./cmd/lom` and `go build ./...` both succeed with no changes to Go source files.
 - `go test ./...` passes — all existing tests still pass after the directory rename.
 - No Go source edits were needed: `package main` declarations and import paths are unaffected by a directory rename in this module layout.
 
 ### task-002 — 2026-05-05
-- Replaced all three `os.Getenv` calls in `cmd/nctl/app.go`: `NEO4J_CLI_AGENT` → `LOM_AGENT`, `NEO4J_CLI_RW` → `LOM_RW`, `NEO4J_CLI_REQUEST_ID` → `LOM_REQUEST_ID`.
-- Updated the error string from `'neo4j-cli --help'` to `'nctl --help'` in `run()`.
+- Replaced all three `os.Getenv` calls in `cmd/lom/app.go`: `NEO4J_CLI_AGENT` → `LOM_AGENT`, `NEO4J_CLI_RW` → `LOM_RW`, `NEO4J_CLI_REQUEST_ID` → `LOM_REQUEST_ID`.
+- Updated the error string from `'neo4j-cli --help'` to `'lom --help'` in `run()`.
 - Updated the comment on `currentRequestID()` to reference `LOM_REQUEST_ID`.
 - Updated variable comments for `agentMode`, `allowWrites`, and `requestID`.
 - Updated all three flag description strings (--agent, --rw, --request-id) to reference `LOM_` env var names.
-- `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
+- `go build ./cmd/lom` and `go test ./...` both pass with no failures.
 
 ### task-003 — 2026-05-05
-- Changed `v.SetEnvPrefix("CLI")` to `v.SetEnvPrefix("NCTL")` in `newViperConfigLoader()`.
-- Updated `DefaultConfigFilePath()` to return `~/.nctl/config.json`; fallback is `.nctl-config.json`.
+- Changed `v.SetEnvPrefix("CLI")` to `v.SetEnvPrefix("lom")` in `newViperConfigLoader()`.
+- Updated `DefaultConfigFilePath()` to return `~/.lom/config.json`; fallback is `.lom-config.json`.
 - Updated all `CLI_` references in comments throughout `internal/config/config.go` to `LOM_` (Neo4jConfig, AuraConfig, AuraInstanceDefaults, CypherConfig, NewConfigService, LoadConfiguration, newViperConfigLoader).
 - Updated `config_test.go`: comment about `~/.neo4j-cli/config.json`, and two `t.Setenv` calls (`CLI_NEO4J_URI` → `LOM_NEO4J_URI`, `CLI_NEO4J_DATABASE` → `LOM_NEO4J_DATABASE`).
 - Note: user-facing `CLI_` strings in other packages (prerequisites.go, cloud_service.go, neo4j_repo.go, app.go) are in scope for task-005 and task-006.
 - `go test ./internal/config/...` and `go test ./...` both pass; `golangci-lint run ./internal/config/...` reports 0 issues.
 
 ### task-005 — 2026-05-05
-- Changed `Use: "neo4j-cli"` to `Use: "nctl"` in `buildRootCommand()`.
-- Updated Long description to reference `nctl` instead of `neo4j-cli`.
-- Updated `--log-file` flag description from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
-- Updated all `Example` strings in `buildCloudCommand`, `buildCypherCommand`, `buildAdminCommand`, and `buildConfigCommand` to use `nctl` instead of `neo4j-cli`.
-- `go build ./cmd/nctl` and `go test ./...` both pass with no failures.
-- `bin/nctl --help` correctly shows `nctl` as the command name.
+- Changed `Use: "neo4j-cli"` to `Use: "lom"` in `buildRootCommand()`.
+- Updated Long description to reference `lom` instead of `neo4j-cli`.
+- Updated `--log-file` flag description from `~/.neo4j-cli/neo4j-cli.log` to `~/.lom/lom.log`.
+- Updated all `Example` strings in `buildCloudCommand`, `buildCypherCommand`, `buildAdminCommand`, and `buildConfigCommand` to use `lom` instead of `neo4j-cli`.
+- `go build ./cmd/lom` and `go test ./...` both pass with no failures.
+- `bin/lom --help` correctly shows `lom` as the command name.
 
 ### task-006 — 2026-05-05
-- Updated `dispatch/category.go`: error message changed from `'neo4j-cli %s --help'` to `'nctl %s --help'`; doc comment examples updated from `neo4j-cli cloud/cypher` to `nctl cloud/cypher`.
+- Updated `dispatch/category.go`: error message changed from `'neo4j-cli %s --help'` to `'lom %s --help'`; doc comment examples updated from `neo4j-cli cloud/cypher` to `lom cloud/cypher`.
 - Updated `dispatch/dispatch.go`: comments on `AgentMode` and `AllowWrites` fields now reference `LOM_AGENT` and `LOM_RW` respectively.
-- Updated `commands/cypher.go`: both MAINTENANCE comments in `globalBoolFlag` and `globalValueFlag` now reference `cmd/nctl/app.go` instead of `cmd/neo4j-cli/app.go`.
+- Updated `commands/cypher.go`: both MAINTENANCE comments in `globalBoolFlag` and `globalValueFlag` now reference `cmd/lom/app.go` instead of `cmd/neo4j-cli/app.go`.
 - Updated `tool/tool.go`: `ModeWrite` constant comment now references `LOM_RW` instead of `NEO4J_CLI_RW`.
-- Updated `shell/interactive.go`: `builtinVersion` returns `"nctl %s"` (was `"neo4j-cli %s"`); `builtinConfig` log file default path updated from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
-- Updated `shell/interactive_test.go`: `TestExecute_Version` assertion updated from `'neo4j-cli'` to `'nctl'` (test was broken by the version string change; fix pulled forward from task-010).
+- Updated `shell/interactive.go`: `builtinVersion` returns `"lom %s"` (was `"neo4j-cli %s"`); `builtinConfig` log file default path updated from `~/.neo4j-cli/neo4j-cli.log` to `~/.lom/lom.log`.
+- Updated `shell/interactive_test.go`: `TestExecute_Version` assertion updated from `'neo4j-cli'` to `'lom'` (test was broken by the version string change; fix pulled forward from task-010).
 - `go test ./...` and `golangci-lint run` both pass with zero issues.
 
 ### task-004 — 2026-05-05
-- Updated `DefaultLogFilePath()` in `internal/logger/logger.go`: return path changed from `~/.neo4j-cli/neo4j-cli.log` to `~/.nctl/nctl.log`.
-- Updated tmpdir fallback from `neo4j-cli.log` to `nctl.log`.
+- Updated `DefaultLogFilePath()` in `internal/logger/logger.go`: return path changed from `~/.neo4j-cli/neo4j-cli.log` to `~/.lom/lom.log`.
+- Updated tmpdir fallback from `neo4j-cli.log` to `lom.log`.
 - Updated doc comment block (Linux/macOS and Windows example paths).
-- Updated `OutputStderr` constant comment shell redirection example from `neo4j-cli 2>neo4j-cli.log` to `nctl 2>nctl.log`.
-- Updated `logger_test.go` test assertion in `TestOpenLogFile_DefaultPath` to check for `"nctl"` instead of `"neo4j-cli"`.
+- Updated `OutputStderr` constant comment shell redirection example from `neo4j-cli 2>neo4j-cli.log` to `lom 2>lom.log`.
+- Updated `logger_test.go` test assertion in `TestOpenLogFile_DefaultPath` to check for `"lom"` instead of `"neo4j-cli"`.
 - `go test ./internal/logger/...` and `go test ./...` both pass; `golangci-lint run ./internal/logger/...` reports 0 issues.
 
 ### task-007 — 2026-05-05
-- Updated `.goreleaser.yaml` build entry: `id: neo4j-cli` → `id: nctl`, `main: ./cmd/neo4j-cli` → `main: ./cmd/nctl`, `binary: neo4j-cli` → `binary: nctl`.
-- `goreleaser check` passes; `go build ./cmd/nctl` succeeds.
+- Updated `.goreleaser.yaml` build entry: `id: neo4j-cli` → `id: lom`, `main: ./cmd/neo4j-cli` → `main: ./cmd/lom`, `binary: neo4j-cli` → `binary: lom`.
+- `goreleaser check` passes; `go build ./cmd/lom` succeeds.
 
 ================================================================================
-TASK-008: Update README.md to use nctl throughout
+TASK-008: Update README.md to use lom throughout
 Date: 2026-05-06T00:00:00Z
 ================================================================================
 
 Summary:
-README.md was already partially staged on the branch with `neo4j-cli` → `nctl`
+README.md was already partially staged on the branch with `neo4j-cli` → `lom`
 replacements applied to title, build command, usage examples and path
 references. Verified the staged changes met the original acceptance criteria
 (grep -c neo4j-cli returns 0) and additionally updated stale env var
@@ -85,16 +85,16 @@ Date: 2026-05-06T21:30:00Z
 ================================================================================
 
 Summary:
-Verified CLAUDE.md is already updated to reference nctl throughout — the file
-was rewritten in commit 44eb860 ("nctl rename") which landed on main before
+Verified CLAUDE.md is already updated to reference lom throughout — the file
+was rewritten in commit 44eb860 ("lom rename") which landed on main before
 this finish-up loop began. Both target lines (build command and architecture
-description of binary location) already use nctl/cmd/nctl. No code changes
+description of binary location) already use lom/cmd/lom. No code changes
 required. Confirmed via `grep -n "neo4j-cli\|NEO4J_CLI\|CLI_" CLAUDE.md` — no
 matches. `go build ./...` and `go test ./...` both pass.
 
 Files Changed:
-- .plans/tasks-rename-to-nctl.yml (mark task-009 completed)
-- .plans/progress-rename-to-nctl.txt (this entry)
+- .plans/tasks-rename-to-lom.yml (mark task-009 completed)
+- .plans/progress-rename-to-lom.txt (this entry)
 
 Key Decisions:
 - Did not re-edit CLAUDE.md because it was already correct on disk; followed
@@ -111,20 +111,20 @@ Date: 2026-05-06T22:00:00Z
 
 Summary:
 The three explicit assertion locations called out in the task were already
-fixed in earlier commits (44eb860 "nctl rename" carried interactive_test.go
+fixed in earlier commits (44eb860 "lom rename" carried interactive_test.go
 and logger_test.go assertions; config_test.go's comment was updated as part
 of task-003). Verified via Read of all three locations — each already asserts
-'nctl' instead of 'neo4j-cli'. The only remaining `neo4j-cli` token in any
+'lom' instead of 'neo4j-cli'. The only remaining `neo4j-cli` token in any
 *_test.go file was a non-load-bearing temp-file basename in
 internal/logger/logger_test.go:185 (TestOpenLogFile_CreatesFileAndDirectory),
-which I changed from "neo4j-cli.log" to "nctl.log" for codebase-wide
+which I changed from "neo4j-cli.log" to "lom.log" for codebase-wide
 consistency. `go test ./...`, `go build ./...`, and `golangci-lint run` all
 pass with zero issues.
 
 Files Changed:
 - internal/logger/logger_test.go (rename test temp-file basename)
-- .plans/tasks-rename-to-nctl.yml (mark task-010 completed)
-- .plans/progress-rename-to-nctl.txt (this entry)
+- .plans/tasks-rename-to-lom.yml (mark task-010 completed)
+- .plans/progress-rename-to-lom.txt (this entry)
 
 Key Decisions:
 - Verified rather than blindly redid the assertion edits — the orchestrator
@@ -151,7 +151,7 @@ zero matches across the repo. Also fixed AGENTS.md line 51 (`CLI_SHELL_ENABLED`
 → `LOM_SHELL_ENABLED`) which was a stale doc note.
 
 Files Changed:
-- cmd/nctl/app.go: --no-metrics flag desc (CLI_TELEMETRY_METRICS →
+- cmd/lom/app.go: --no-metrics flag desc (CLI_TELEMETRY_METRICS →
   LOM_TELEMETRY_METRICS), --shell flag desc (CLI_SHELL_ENABLED →
   LOM_SHELL_ENABLED), Mixpanel token comment.
 - internal/repository/neo4j_repo.go: two error messages
@@ -161,15 +161,15 @@ Files Changed:
 - internal/service/cloud_service.go: aura credentials error message
   (CLI_AURA_* → LOM_).
 - AGENTS.md: line 51 CLI_SHELL_ENABLED → LOM_SHELL_ENABLED.
-- .plans/tasks-rename-to-nctl.yml: marked task-011 completed.
-- .plans/progress-rename-to-nctl.txt: this entry.
+- .plans/tasks-rename-to-lom.yml: marked task-011 completed.
+- .plans/progress-rename-to-lom.txt: this entry.
 
 Verification:
 - grep for 'neo4j-cli|NEO4J_CLI_|CLI_' --include='*.go' returns no matches.
-- `go build -o bin/nctl ./cmd/nctl` succeeds.
+- `go build -o bin/lom ./cmd/lom` succeeds.
 - `go test -count=1 ./...` passes (all 11 packages).
 - `golangci-lint run` reports 0 issues.
-- `./bin/nctl --help` shows `nctl` and contains no stale strings.
+- `./bin/lom --help` shows `lom` and contains no stale strings.
 - `go generate ./...` produces a clean diff.
 
 Key Decisions:

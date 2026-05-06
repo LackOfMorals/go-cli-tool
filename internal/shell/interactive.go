@@ -12,12 +12,12 @@ import (
 	"syscall"
 
 	"github.com/chzyer/readline"
-	"github.com/google/shlex"
 	"github.com/cli/go-cli-tool/internal/analytics"
 	"github.com/cli/go-cli-tool/internal/config"
 	"github.com/cli/go-cli-tool/internal/logger"
 	"github.com/cli/go-cli-tool/internal/presentation"
 	"github.com/cli/go-cli-tool/internal/tool"
+	"github.com/google/shlex"
 )
 
 // InteractiveShell is the concrete REPL implementation of the Shell interface.
@@ -59,12 +59,12 @@ func NewInteractiveShell() *InteractiveShell {
 
 // ---- Setters ------------------------------------------------------------
 
-func (s *InteractiveShell) SetLogger(log logger.Service)                     { s.log = log }
-func (s *InteractiveShell) SetTelemetry(tel analytics.Service)               { s.telemetry = tel }
-func (s *InteractiveShell) SetPresenter(p presentation.Service) { s.presenter = p }
-func (s *InteractiveShell) SetCategories(cats map[string]*Category)          { s.categories = cats }
-func (s *InteractiveShell) SetVersion(v string)                              { s.version = v }
-func (s *InteractiveShell) SetRegistry(r Registry)                           { s.registry = r }
+func (s *InteractiveShell) SetLogger(log logger.Service)            { s.log = log }
+func (s *InteractiveShell) SetTelemetry(tel analytics.Service)      { s.telemetry = tel }
+func (s *InteractiveShell) SetPresenter(p presentation.Service)     { s.presenter = p }
+func (s *InteractiveShell) SetCategories(cats map[string]*Category) { s.categories = cats }
+func (s *InteractiveShell) SetVersion(v string)                     { s.version = v }
+func (s *InteractiveShell) SetRegistry(r Registry)                  { s.registry = r }
 
 func (s *InteractiveShell) SetConfig(cfg config.Config) {
 	s.cfg = &cfg
@@ -485,7 +485,7 @@ func (s *InteractiveShell) builtinConfig(_ []string) (string, error) {
 	if c.LogOutput == "file" {
 		row("Log file", func() string {
 			if c.LogFile == "" {
-				return "(default: ~/.nctl/nctl.log)"
+				return "(default: ~/.lom/lom.log)"
 			}
 			return c.LogFile
 		}())
@@ -620,7 +620,7 @@ func (s *InteractiveShell) builtinClear(_ []string) (string, error) {
 }
 
 func (s *InteractiveShell) builtinVersion(_ []string) (string, error) {
-	return fmt.Sprintf("nctl %s", s.version), nil
+	return fmt.Sprintf("lom %s", s.version), nil
 }
 
 // ---- Tool execution -----------------------------------------------------
@@ -665,22 +665,22 @@ func (s *InteractiveShell) executeTool(ctx context.Context, t tool.Tool, args []
 //  1. Single-line with trailing semicolon — the semicolon is stripped and the
 //     line is executed immediately. This works for all commands:
 //
-//	   neo4j> cloud instances list;
+//     neo4j> cloud instances list;
 //
 //  2. Backslash continuation — a trailing \ starts multi-line mode for any
 //     command. Input is accumulated until a line without a trailing \ is
 //     received, or a trailing ; terminates early:
 //
-//	   neo4j> cloud instances \
-//	   ...>   list
+//     neo4j> cloud instances \
+//     ...>   list
 //
 //  3. Cypher mode — when the first token is "cypher", the shell automatically
 //     enters multi-line mode and waits for a ; terminator. This lets Cypher
 //     queries span as many lines as needed:
 //
-//	   neo4j> cypher MATCH (n:Person)
-//	   ...>   WHERE n.age > 30
-//	   ...>   RETURN n.name, n.age;
+//     neo4j> cypher MATCH (n:Person)
+//     ...>   WHERE n.age > 30
+//     ...>   RETURN n.name, n.age;
 func (s *InteractiveShell) collectInput(rl *readline.Instance, firstLine string) (string, error) {
 	const contPrompt = "...> "
 

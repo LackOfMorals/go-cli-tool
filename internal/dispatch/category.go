@@ -29,13 +29,13 @@ type Command struct {
 //
 // Categories can be nested one level deep:
 //
-//	nctl cloud instances list
-//	nctl cloud instances pause <id>
+//	lom cloud instances list
+//	lom cloud instances pause <id>
 //
 // A category may also carry a DirectHandler for cases where the entire
 // remaining input should be forwarded verbatim:
 //
-//	nctl cypher "MATCH (n) RETURN n LIMIT 5"
+//	lom cypher "MATCH (n) RETURN n LIMIT 5"
 //
 // # Prerequisites
 //
@@ -243,7 +243,7 @@ func (c *Category) Dispatch(args []string, ctx Context) (CommandResult, error) {
 		return c.directHandler(args, ctx)
 	}
 
-	return CommandResult{}, fmt.Errorf("%s: unknown command %q — run 'nctl %s --help' to see available commands",
+	return CommandResult{}, fmt.Errorf("%s: unknown command %q — run 'lom %s --help' to see available commands",
 		c.Name, name, c.Name)
 }
 

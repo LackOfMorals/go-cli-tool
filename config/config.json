@@ -2,8 +2,8 @@
   "log_level": "info",
   "log_format": "text",
   "shell": {
-    "prompt": "cli> ",
-    "history_file": ".cli_history"
+    "prompt": "lom> ",
+    "history_file": ".lom_history"
   },
   "tools": {
     "echo": {

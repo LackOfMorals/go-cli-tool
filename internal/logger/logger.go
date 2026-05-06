@@ -41,7 +41,7 @@ type LogOutput string
 const (
 	// OutputStderr writes all log records to stderr (default). This keeps
 	// stdout clean for command output and allows shell redirection of logs
-	// independently: nctl 2>nctl.log
+	// independently: lom 2>lom.log
 	OutputStderr LogOutput = "stderr"
 
 	// OutputStdout writes all log records to stdout. Useful when the caller
@@ -56,14 +56,14 @@ const (
 // DefaultLogFilePath returns the OS-appropriate default log file path when
 // log_output = file and no explicit log_file is configured.
 //
-//	Linux/macOS  ~/.nctl/nctl.log
-//	Windows      %USERPROFILE%\.nctl\nctl.log
+//	Linux/macOS  ~/.lom/lom.log
+//	Windows      %USERPROFILE%\.lom\lom.log
 func DefaultLogFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), "nctl.log")
+		return filepath.Join(os.TempDir(), "lom.log")
 	}
-	return filepath.Join(home, ".nctl", "nctl.log")
+	return filepath.Join(home, ".lom", "lom.log")
 }
 
 // Field represents a log field key-value pair
@@ -261,5 +261,3 @@ func WriterFor(output LogOutput) io.Writer {
 		return os.Stderr
 	}
 }
-
-

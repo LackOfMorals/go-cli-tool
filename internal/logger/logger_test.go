@@ -77,7 +77,7 @@ func TestParseLogOutput(t *testing.T) {
 		{"STDOUT", OutputStdout},
 		{"file", OutputFile},
 		{"FILE", OutputFile},
-		{"", OutputStderr},    // empty → default
+		{"", OutputStderr},        // empty → default
 		{"unknown", OutputStderr}, // unknown → default
 	}
 	for _, tt := range tests {
@@ -182,7 +182,7 @@ func TestWithFields_AttrsAppearInOutput(t *testing.T) {
 
 func TestOpenLogFile_CreatesFileAndDirectory(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "subdir", "nctl.log")
+	path := filepath.Join(dir, "subdir", "lom.log")
 
 	f, err := OpenLogFile(path)
 	if err != nil {
@@ -209,8 +209,8 @@ func TestOpenLogFile_DefaultPath(t *testing.T) {
 	if p == "" {
 		t.Error("DefaultLogFilePath returned empty string")
 	}
-	if !strings.Contains(p, "nctl") {
-		t.Errorf("DefaultLogFilePath should contain 'nctl', got: %s", p)
+	if !strings.Contains(p, "lom") {
+		t.Errorf("DefaultLogFilePath should contain 'lom', got: %s", p)
 	}
 }
 
