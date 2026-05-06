@@ -183,7 +183,7 @@ tasks:
       neo4j-cli, NEO4J_CLI_, or CLI_ prefix occurrences in Go source, YAML,
       and Markdown files. Fix any issues found. Confirm go build ./cmd/nctl
       produces a working binary.
-    status: pending
+    status: completed
     dependencies:
       - task-010
       - task-007
@@ -194,4 +194,4 @@ tasks:
       - "grep -r 'neo4j-cli\\|NEO4J_CLI_\\|CLI_' --include='*.go' returns no matches in user-facing strings"
       - "go build -o bin/nctl ./cmd/nctl succeeds"
       - "bin/nctl --help shows nctl as the command name"
-    completed_at: null
+    completed_at: "2026-05-06T20:24:21Z"

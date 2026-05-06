@@ -136,3 +136,51 @@ Key Decisions:
   (untracked files belonging to a different feature, per orchestrator note).
 
 Next Task: task-011 (Final lint and completeness check)
+
+================================================================================
+TASK-011: Final lint and completeness check
+Date: 2026-05-06T20:24:21Z
+================================================================================
+
+Summary:
+Closed all remaining `CLI_*` env var references in Go user-facing strings that
+the earlier tasks deliberately deferred (task-003 explicitly noted these were
+"in scope for task-005 and task-006" but they had not yet been done). After
+this task, `grep -rn 'neo4j-cli\|NEO4J_CLI_\|CLI_' --include='*.go' .` returns
+zero matches across the repo. Also fixed AGENTS.md line 51 (`CLI_SHELL_ENABLED`
+→ `NCTL_SHELL_ENABLED`) which was a stale doc note.
+
+Files Changed:
+- cmd/nctl/app.go: --no-metrics flag desc (CLI_TELEMETRY_METRICS →
+  NCTL_TELEMETRY_METRICS), --shell flag desc (CLI_SHELL_ENABLED →
+  NCTL_SHELL_ENABLED), Mixpanel token comment.
+- internal/repository/neo4j_repo.go: two error messages
+  (CLI_NEO4J_URI/USERNAME → NCTL_).
+- internal/commands/prerequisites.go: two interactive Tip prints
+  (CLI_AURA_*/CLI_NEO4J_* → NCTL_).
+- internal/service/cloud_service.go: aura credentials error message
+  (CLI_AURA_* → NCTL_).
+- AGENTS.md: line 51 CLI_SHELL_ENABLED → NCTL_SHELL_ENABLED.
+- .plans/tasks-rename-to-nctl.yml: marked task-011 completed.
+- .plans/progress-rename-to-nctl.txt: this entry.
+
+Verification:
+- grep for 'neo4j-cli|NEO4J_CLI_|CLI_' --include='*.go' returns no matches.
+- `go build -o bin/nctl ./cmd/nctl` succeeds.
+- `go test -count=1 ./...` passes (all 11 packages).
+- `golangci-lint run` reports 0 issues.
+- `./bin/nctl --help` shows `nctl` and contains no stale strings.
+- `go generate ./...` produces a clean diff.
+
+Key Decisions:
+- Extended the grep cleanup to include the AGENTS.md line 51 stale note as
+  the orchestrator explicitly called it out.
+- Did NOT touch `.claude/settings.json` or
+  `.plans/prd-change-command-prefix.md` (untracked files belonging to a
+  different feature, per orchestrator note).
+- Acknowledged overlap with the change-command-prefix PRD: the same files
+  (app.go, neo4j_repo.go, prerequisites.go, cloud_service.go) are listed
+  there, but task-011's literal acceptance criteria required closing them
+  now, so the change-command-prefix PRD's scope shrinks accordingly.
+
+Feature complete: all 11 tasks finished.
