@@ -1,0 +1,137 @@
+feature: add-toon-to-output-formats
+prd: ./prd-add-toon-to-output-formats.md
+created_at: 2026-05-06T00:00:00Z
+updated_at: 2026-05-06T00:00:00Z
+
+tasks:
+  - id: task-001
+    title: "Add github.com/toon-format/toon-go dependency"
+    description: |
+      Add the toon-go module to go.mod and go.sum. Verify the public API surface (package name, top-level Marshal/Encode function, supported value types) by writing a small throwaway main or doc comment, then settle on a pinned version (latest stable tag at time of work). No production code uses the library yet — this task only lands the dependency cleanly so subsequent tasks can import it.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "go.mod and go.sum include github.com/toon-format/toon-go pinned to a specific stable version"
+      - "go build ./... succeeds with the new dependency present"
+      - "go mod tidy produces no further changes"
+      - "Brief note in the commit body or a comment near first use records which top-level encoder function will be called and any non-default options chosen"
+
+  - id: task-002
+    title: "Add OutputFormatTOON constant and update IsValid"
+    description: |
+      In internal/presentation/presentation.go, add OutputFormatTOON = "toon" alongside the existing OutputFormat constants and extend OutputFormat.IsValid() to recognise it. This is a foundational change with no behaviour beyond making the value valid; later tasks register the actual formatter and wire help text.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "OutputFormatTOON OutputFormat = \"toon\" exists in internal/presentation/presentation.go"
+      - "OutputFormat.IsValid() returns true for OutputFormatTOON and false for unknown values"
+      - "Existing presentation tests still pass; if a test enumerates valid formats, it is updated to include toon"
+      - "go build ./... succeeds"
+
+  - id: task-003
+    title: "Implement normalizeForTOON helper with tests"
+    description: |
+      Add a pure helper (e.g. internal/presentation/toon.go) that recursively rewrites Neo4j entity maps before encoding. Maps with a _labels key become {labels: [...], properties: {...}} where properties exclude any underscore-prefixed sentinel keys; maps with a _type key become {type: "...", properties: {...}}; plain maps and slices are recursed into; everything else passes through unchanged. The helper has no dependency on toon-go and is unit-tested in isolation so the entity-shape behaviour is locked down before the formatter is wired up.
+    status: pending
+    dependencies:
+      - task-002
+    acceptance_criteria:
+      - "normalizeForTOON(any) any handles node maps, relationship maps, nested maps, slices of maps, and scalars"
+      - "Sentinel keys (_labels, _type, _id, and any other _-prefixed keys present in the input) never appear in the normalised output"
+      - "Unit tests cover: node map, relationship map, plain map pass-through, nested node-in-map, slice of nodes, scalar/string pass-through"
+      - "Helper is pure (no I/O, no state) and safe for concurrent use"
+
+  - id: task-004
+    title: "Implement TOONFormatter using toon-go"
+    description: |
+      Add a TOONFormatter type in the presentation package that satisfies OutputFormatter. Format must handle Tabular (rows/cols → slice of row maps, matching JSONFormatter's tabularToJSONSlice behaviour), *DetailData (label/value object), strings, and arbitrary scalars. Before delegating to toon-go's encoder, route the value through normalizeForTOON so entity maps emit cleanly. Wrap any encoder error as fmt.Errorf("encode TOON: %w", err) for parity with the JSON formatter.
+    status: pending
+    dependencies:
+      - task-001
+      - task-003
+    acceptance_criteria:
+      - "TOONFormatter satisfies presentation.OutputFormatter and is exported from the presentation package"
+      - "Format correctly handles Tabular (multi-row), Tabular (empty), *DetailData, scalar string, scalar int, and a Tabular with node/relationship cells — verified by unit tests"
+      - "Output for entity-bearing rows contains no _labels/_type/_id keys"
+      - "Encoder errors are wrapped with the encode TOON: %w prefix"
+      - "TOONFormatter is documented as safe for concurrent use, matching the contract of the existing formatters"
+
+  - id: task-005
+    title: "Register TOONFormatter in NewPresentationService"
+    description: |
+      Wire TOONFormatter into the built-in formatters table inside NewPresentationService in internal/presentation/presentation.go, alongside the existing five RegisterFormatter calls. After this task, callers can use --format toon (where it is parsed) and presenter.FormatAs(data, OutputFormatTOON) end-to-end through the presentation service.
+    status: pending
+    dependencies:
+      - task-004
+    acceptance_criteria:
+      - "NewPresentationService registers OutputFormatTOON → &TOONFormatter{} alongside the existing formatters"
+      - "FormatAs(data, OutputFormatTOON) returns TOON output for Tabular, *DetailData, and scalar inputs in an integration-style test"
+      - "Registering TOON does not change the output of any of the existing five formats — existing presentation_test.go cases pass unchanged"
+
+  - id: task-006
+    title: "Accept --format toon in cypher command and update help text"
+    description: |
+      Update internal/commands/cypher.go to accept toon as a valid value for the --format flag. The current help string lists table|graph|json|pretty-json — extend it to include toon. Verify that the parsing path (the args loop around lines 240–246) lower-cases input consistently so --format TOON also works. Add a unit/integration test exercising cypher --format toon end-to-end if one is straightforward to add given the existing command test style.
+    status: pending
+    dependencies:
+      - task-005
+    acceptance_criteria:
+      - "cypher --format toon (case-insensitive) routes to the TOON formatter without error"
+      - "cypher --help and the doc comment list toon as a valid format"
+      - "Invalid format values still produce the same error as before"
+      - "If a cypher command test exists, it covers --format toon"
+
+  - id: task-007
+    title: "Allow toon for cypher.output_format config"
+    description: |
+      Allow toon as a valid value for the cypher.output_format config key. Update any allow-list, validation, or help text in internal/config/config.go and internal/commands/config.go (the latter exposes the get/set surface for cypher.output_format around line 249). After this task, nctl config set cypher.output_format toon must persist and be honoured by subsequent runs.
+    status: pending
+    dependencies:
+      - task-005
+    acceptance_criteria:
+      - "nctl config set cypher.output_format toon succeeds and the value round-trips through the loader"
+      - "Any validation that previously rejected toon now accepts it"
+      - "Help text for cypher.output_format lists toon"
+      - "Existing config validation tests (e.g. the fixed-config-validation flow) still pass"
+
+  - id: task-008
+    title: "Default to TOON in agent mode when no override is set"
+    description: |
+      In the app startup wiring (app.go's buildCategories / NewPresentationService call site), choose OutputFormatTOON as the default format passed to NewPresentationService when (a) the binary is running in agent mode and (b) the user has not set cypher.output_format in their config. Otherwise keep today's default. The --format flag is already a per-call override via FormatAs and needs no change. Add a focused unit test that drives the selection logic with the three relevant input combinations (agent + no config → toon; agent + config set → config wins; non-agent → today's default).
+    status: pending
+    dependencies:
+      - task-005
+    acceptance_criteria:
+      - "In agent mode with no cypher.output_format set, the active default format is TOON"
+      - "In agent mode with cypher.output_format = json (or any other valid format), that value wins over the TOON default"
+      - "Outside agent mode, the default format is unchanged"
+      - "Unit test covers all three combinations and is placed alongside the relevant code (likely app_test.go or a presentation-startup test)"
+
+  - id: task-009
+    title: "Regenerate skill.md.gen and any other generated artefacts"
+    description: |
+      Per CLAUDE.md, run go install go.uber.org/mock/mockgen@v0.6.0 if needed, then go generate ./... and commit the regenerated files. Expect changes to internal/skill/skill.md.gen to reflect the updated cypher --format help text. CI fails if any generated file is stale, so this task ensures the diff is captured. No source-code changes belong in this task — only generated output.
+    status: pending
+    dependencies:
+      - task-006
+      - task-007
+    acceptance_criteria:
+      - "go generate ./... runs cleanly"
+      - "internal/skill/skill.md.gen reflects toon being a valid --format value"
+      - "git status after go generate ./... shows no further uncommitted changes"
+      - "Mock files are unchanged unless an interface they cover was modified by an earlier task"
+
+  - id: task-010
+    title: "Final verification: build, test, lint, generate-clean"
+    description: |
+      Run the full local CI loop end-to-end on the branch: go build ./..., go test ./..., golangci-lint run, and go generate ./... (must produce no diff). Confirm the changie fragment .changes/unreleased/added-toon-output-format.yaml is present and accurate. Smoke-test cypher --format toon and (if practical) the agent-mode default against a live or mocked Neo4j to confirm output looks sane. This task is a gate before opening a PR — no new code, just verification and any small fixups uncovered.
+    status: pending
+    dependencies:
+      - task-008
+      - task-009
+    acceptance_criteria:
+      - "go build ./..., go test ./..., and golangci-lint run all pass"
+      - "go generate ./... produces no diff"
+      - ".changes/unreleased/added-toon-output-format.yaml exists, parses as valid changie YAML, and accurately describes the shipped behaviour"
+      - "A manual smoke test of cypher --format toon (or an equivalent recorded test invocation) shows clean TOON output with no sentinel keys"
+      - "Branch is in a state ready for /hone:finalize or PR creation"
