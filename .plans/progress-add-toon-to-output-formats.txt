@@ -56,3 +56,51 @@ Key Decisions:
   in IsValid's contract changed.
 
 Next Task: task-003 (Implement normalizeForTOON helper with tests)
+================================================================================
+TASK-003: Implement normalizeForTOON helper with tests
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Replaced the placeholder doc-only internal/presentation/toon.go with a pure
+helper, normalizeForTOON, that recursively rewrites Neo4j entity maps into
+encoder-friendly shapes ahead of the TOONFormatter (task-004). Added focused
+unit tests in internal/presentation/toon_internal_test.go covering node maps,
+relationship maps, plain maps, nested entities, slices of nodes, slices of
+typed maps ([]map[string]any), scalars, and immutability of the input.
+
+Files Changed:
+- internal/presentation/toon.go (rewritten: now exposes the unexported
+  normalizeForTOON helper plus normalizeMap/normalizeNode/normalizeRel /
+  normalizeLabels/entityPropsNormalized internals; blank import for
+  toon-go retained until task-004 lands the real import)
+- internal/presentation/toon_internal_test.go (created: 8 test functions
+  exercising all helper code paths, lives in package presentation so it
+  can call the unexported helper)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Helper is unexported (normalizeForTOON, lower-case n) because it is an
+  internal implementation detail of the upcoming TOONFormatter; tests
+  live in the *_internal_test.go file per AGENTS.md convention.
+- Used `any` rather than `interface{}` throughout the new file for
+  consistency with newer-style Go and brevity. Existing code in this
+  package mixes both — both are valid.
+- Labels are coerced to []any (not []string) so the TOON encoder always
+  sees a homogeneous-shape array regardless of whether the upstream
+  driver provided []string or []any.
+- []map[string]any inputs are explicitly handled (they don't match the
+  []any case in the type switch) — some callers in the codebase produce
+  this shape directly. Test TestNormalizeForTOON_SliceOfMapsTyped locks
+  this behaviour down.
+- The helper does not mutate its input — it always allocates a new map
+  / slice. TestNormalizeForTOON_DoesNotMutateInput asserts this and
+  documents the contract for downstream callers.
+- All keys starting with "_" are stripped (not just _labels/_type/_id) —
+  this future-proofs against new Neo4j sentinel keys (e.g. _start, _end
+  on relationships) appearing in repository.convertValue output.
+- Blank import of toon-go retained with an updated comment that calls
+  out task-004 as the deletion point. Without it, `go mod tidy` would
+  remove the dependency before task-004 needs it.
+
+Next Task: task-004 (Implement TOONFormatter using toon-go)

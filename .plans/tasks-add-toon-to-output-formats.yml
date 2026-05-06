@@ -34,7 +34,8 @@ tasks:
     title: "Implement normalizeForTOON helper with tests"
     description: |
       Add a pure helper (e.g. internal/presentation/toon.go) that recursively rewrites Neo4j entity maps before encoding. Maps with a _labels key become {labels: [...], properties: {...}} where properties exclude any underscore-prefixed sentinel keys; maps with a _type key become {type: "...", properties: {...}}; plain maps and slices are recursed into; everything else passes through unchanged. The helper has no dependency on toon-go and is unit-tested in isolation so the entity-shape behaviour is locked down before the formatter is wired up.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-002
     acceptance_criteria:
