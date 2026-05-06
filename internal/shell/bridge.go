@@ -58,6 +58,23 @@ func BridgeCategory(cat *dispatch.Category, ctxFor func(Context) dispatch.Contex
 		})
 	}
 
+	// Forward the direct handler so categories that consume free-form input
+	// (e.g. cypher receiving a query as its arguments) work in the shell.
+	// Without this, dispatching `cypher MATCH (n) RETURN n` falls through
+	// shell.Category.Dispatch as an unknown command.
+	if direct := cat.DirectHandler(); direct != nil {
+		bridged.SetDirectHandler(func(args []string, shellCtx Context) (string, error) {
+			result, err := direct(args, ctxFor(shellCtx))
+			if err != nil {
+				return "", err
+			}
+			return renderResult(result, shellCtx)
+		})
+		if cat.DirectHandlerAllowsEmpty() {
+			bridged.AllowEmptyDirectHandler()
+		}
+	}
+
 	return bridged
 }
 

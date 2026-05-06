@@ -315,6 +315,59 @@ func TestBridgeCategory_NoPrerequisite_HandlerCalled(t *testing.T) {
 	}
 }
 
+// ---- BridgeCategory: direct handler ----------------------------------------
+
+func TestBridgeCategory_DirectHandler_ReceivesFreeFormArgs(t *testing.T) {
+	var receivedArgs []string
+
+	src := dispatch.NewCategory("cypher", "Run a Cypher query").
+		SetDirectHandler(func(args []string, _ dispatch.Context) (dispatch.CommandResult, error) {
+			receivedArgs = args
+			return dispatch.MessageResult("ran"), nil
+		})
+
+	bridged := shell.BridgeCategory(src, identityCtxFor)
+	out, err := bridged.Dispatch([]string{"MATCH", "(n)", "RETURN", "n"}, shellCtxWith(nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "ran" {
+		t.Errorf("got %q, want %q", out, "ran")
+	}
+	want := []string{"MATCH", "(n)", "RETURN", "n"}
+	if len(receivedArgs) != len(want) {
+		t.Fatalf("args: got %v, want %v", receivedArgs, want)
+	}
+	for i := range want {
+		if receivedArgs[i] != want[i] {
+			t.Errorf("args[%d]: got %q, want %q", i, receivedArgs[i], want[i])
+		}
+	}
+}
+
+func TestBridgeCategory_DirectHandler_AllowEmptyForwarded(t *testing.T) {
+	called := false
+
+	src := dispatch.NewCategory("cypher", "Run a Cypher query").
+		AllowEmptyDirectHandler().
+		SetDirectHandler(func(_ []string, _ dispatch.Context) (dispatch.CommandResult, error) {
+			called = true
+			return dispatch.MessageResult("prompted"), nil
+		})
+
+	bridged := shell.BridgeCategory(src, identityCtxFor)
+	out, err := bridged.Dispatch(nil, shellCtxWith(nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("direct handler was not invoked on empty args")
+	}
+	if out != "prompted" {
+		t.Errorf("got %q, want %q", out, "prompted")
+	}
+}
+
 // ---- BridgeCategory: ctxFor propagation ------------------------------------
 
 func TestBridgeCategory_CtxForReceivesShellContext(t *testing.T) {

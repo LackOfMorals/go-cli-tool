@@ -183,6 +183,19 @@ func (c *Category) Prerequisite() func() error {
 	return c.prerequisite
 }
 
+// DirectHandler returns the direct handler installed on this category, or nil
+// if none has been set. Used by bridge adapters that need to forward catch-all
+// dispatch behaviour to a different category implementation (e.g. the shell).
+func (c *Category) DirectHandler() CommandHandler {
+	return c.directHandler
+}
+
+// DirectHandlerAllowsEmpty reports whether the direct handler is permitted to
+// run with no arguments (set via AllowEmptyDirectHandler).
+func (c *Category) DirectHandlerAllowsEmpty() bool {
+	return c.directHandlerEmptyOK
+}
+
 // ---- Dispatch / navigation ----------------------------------------------
 
 // Dispatch routes args through the category tree and calls the matching
