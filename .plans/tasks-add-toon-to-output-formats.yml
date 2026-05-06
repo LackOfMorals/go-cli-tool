@@ -77,7 +77,8 @@ tasks:
     title: "Accept --format toon in cypher command and update help text"
     description: |
       Update internal/commands/cypher.go to accept toon as a valid value for the --format flag. The current help string lists table|graph|json|pretty-json — extend it to include toon. Verify that the parsing path (the args loop around lines 240–246) lower-cases input consistently so --format TOON also works. Add a unit/integration test exercising cypher --format toon end-to-end if one is straightforward to add given the existing command test style.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-005
     acceptance_criteria:

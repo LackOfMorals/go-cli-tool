@@ -188,3 +188,48 @@ Key Decisions:
   untouched (carried over from task-004).
 
 Next Task: task-006 (Accept --format toon in cypher command and update help text)
+================================================================================
+TASK-006: Accept --format toon in cypher command and update help text
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Updated the cypher command's help text to advertise toon as a valid value for
+--format and added focused tests verifying that --format toon (and its
+case-insensitive form --format TOON) routes to the registered TOONFormatter.
+The parsing path already lower-cased input and presentation.OutputFormatTOON
+was already accepted by IsValid (task-002) and registered (task-005), so no
+changes were needed in the dispatch logic itself — only help text and tests.
+
+Files Changed:
+- internal/commands/cypher.go (modified: package doc comment now lists toon
+  alongside table|graph|json|pretty-json and adds a toon usage example)
+- cmd/nctl/app.go (modified: cypher cobra Long description now lists toon
+  in the --format value enumeration)
+- internal/commands/cypher_test.go (modified: added
+  TestCypherCategory_FormatFlag_TOON and
+  TestCypherCategory_FormatFlag_TOON_CaseInsensitive)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Help text was updated in two spots: the package-level doc comment in
+  internal/commands/cypher.go (developer-facing) and the cobra Long
+  description in cmd/nctl/app.go (the source of `nctl help cypher`).
+  Smoke-tested via `nctl help cypher` to confirm the user-facing string.
+- The global persistent --format flag description in cmd/nctl/app.go
+  (line ~193) and the validation error message (line ~387) still list
+  "table, json, pretty-json, graph". These are out of scope for task-006
+  (which is specifically the cypher command); IsValid() already accepts
+  toon so cypher --format toon works end-to-end. Task-010's verification
+  step is the right place to clean those up if desired.
+- No new flag parsing or routing code: the existing `strings.ToLower`
+  on line 244/246 already handles --format TOON. The
+  TestCypherCategory_FormatFlag_TOON_CaseInsensitive test locks this
+  behaviour down so future refactors can't silently regress it.
+- Test pattern mirrors TestCypherCategory_FormatFlag_OverridesConfig:
+  drive Dispatch with --format toon, assert FormatOverride matches
+  OutputFormatTOON, then run the result through the presenter to
+  confirm end-to-end output is structurally distinct from the table
+  format (no box-drawing │ character).
+
+Next Task: task-007 (Allow toon for cypher.output_format config)

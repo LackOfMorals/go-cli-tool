@@ -475,7 +475,7 @@ Supply the query directly on the command line.
 
 Query flags (parsed inline, not by cobra):
   --param key=value    Add a query parameter (repeatable; auto-typed)
-  --format table|json|pretty-json|graph
+  --format table|json|pretty-json|graph|toon
                        Override output format for this query
   --limit N            Override the auto-injected row limit (default 25)`,
 		Example: `  nctl cypher "MATCH (n:Person) RETURN n.name, n.age;"
