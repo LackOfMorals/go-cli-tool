@@ -151,3 +151,40 @@ Key Decisions:
   not touched in this task to keep the diff scoped.
 
 Next Task: task-005 (Register TOONFormatter in NewPresentationService)
+================================================================================
+TASK-005: Register TOONFormatter in NewPresentationService
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Wired TOONFormatter into the built-in formatters table inside
+NewPresentationService alongside the existing five formatters. Callers can
+now use presenter.FormatAs(data, OutputFormatTOON) and (once parsed via the
+cypher command in task-006) --format toon end-to-end. Added four
+integration-style tests covering Tabular, *DetailData, scalar, and FormatAs
+override paths through the service.
+
+Files Changed:
+- internal/presentation/presentation.go (modified: added single
+  RegisterFormatter call for OutputFormatTOON → &TOONFormatter{} alongside
+  the existing five)
+- internal/presentation/presentation_test.go (modified: added four tests
+  covering TOON output via the service for Tabular, *DetailData, scalar
+  string, and FormatAs override)
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+
+Key Decisions:
+- Tests live in the existing presentation_test.go (external package) since
+  they exercise the service end-to-end. The TOONFormatter unit tests in
+  toon_test.go (task-004) remain focused on the formatter in isolation;
+  the new tests verify the registration path.
+- Used substring assertions (strings.Contains) rather than exact-output
+  matches so the tests survive any incidental formatting changes in the
+  toon-go encoder. The acceptance criterion is "returns TOON output", not
+  byte-for-byte equality.
+- No changes to existing formatter registrations; existing five-format
+  test coverage continues to pass unchanged.
+- Pre-existing gofmt drift in internal/presentation/data.go is left
+  untouched (carried over from task-004).
+
+Next Task: task-006 (Accept --format toon in cypher command and update help text)

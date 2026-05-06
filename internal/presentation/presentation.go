@@ -75,6 +75,7 @@ func NewPresentationService(format OutputFormat, log logger.Service) (Service, e
 	_ = s.RegisterFormatter(OutputFormatGraph, &GraphFormatter{})
 	_ = s.RegisterFormatter(OutputFormatJSON, &JSONFormatter{Indent: false})
 	_ = s.RegisterFormatter(OutputFormatPrettyJSON, &JSONFormatter{Indent: true})
+	_ = s.RegisterFormatter(OutputFormatTOON, &TOONFormatter{})
 
 	return s, nil
 }

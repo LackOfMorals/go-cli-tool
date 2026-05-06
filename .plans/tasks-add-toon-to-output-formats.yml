@@ -64,7 +64,8 @@ tasks:
     title: "Register TOONFormatter in NewPresentationService"
     description: |
       Wire TOONFormatter into the built-in formatters table inside NewPresentationService in internal/presentation/presentation.go, alongside the existing five RegisterFormatter calls. After this task, callers can use --format toon (where it is parsed) and presenter.FormatAs(data, OutputFormatTOON) end-to-end through the presentation service.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-004
     acceptance_criteria:
