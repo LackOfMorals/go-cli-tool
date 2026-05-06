@@ -132,7 +132,7 @@ tasks:
       command (go build -o bin/nctl ./cmd/nctl), all usage examples, and path
       references (~/.nctl/). The overall structure and content of the README
       is unchanged — only the binary name and paths are updated.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "README.md title is nctl (or equivalent)"
@@ -140,7 +140,7 @@ tasks:
       - "All usage examples reference nctl"
       - "Path references show ~/.nctl/"
       - "grep -c neo4j-cli README.md returns 0"
-    completed_at: null
+    completed_at: "2026-05-06T00:00:00Z"
 
   - id: task-009
     title: "Update CLAUDE.md build command"
@@ -149,13 +149,13 @@ tasks:
       'go build -o bin/neo4j-cli ./cmd/neo4j-cli' to
       'go build -o bin/nctl ./cmd/nctl'. Check for any other neo4j-cli
       references in the file and update them.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
       - "Build command in CLAUDE.md references bin/nctl and ./cmd/nctl"
       - "No remaining neo4j-cli references in CLAUDE.md"
-    completed_at: null
+    completed_at: "2026-05-06T21:30:00Z"
 
   - id: task-010
     title: "Fix test assertions that check for neo4j-cli strings"
@@ -164,7 +164,7 @@ tasks:
       version output), logger_test.go:212-213 (assert 'nctl' in log path),
       and config_test.go:17 (update comment about config path). Run go test
       ./... to confirm all tests pass.
-    status: pending
+    status: completed
     dependencies:
       - task-003
       - task-004
@@ -174,7 +174,7 @@ tasks:
       - "interactive_test.go asserts 'nctl' in version output"
       - "logger_test.go asserts 'nctl' in DefaultLogFilePath result"
       - "go test ./... passes with no failures"
-    completed_at: null
+    completed_at: "2026-05-06T22:00:00Z"
 
   - id: task-011
     title: "Final lint and completeness check"
@@ -183,7 +183,7 @@ tasks:
       neo4j-cli, NEO4J_CLI_, or CLI_ prefix occurrences in Go source, YAML,
       and Markdown files. Fix any issues found. Confirm go build ./cmd/nctl
       produces a working binary.
-    status: pending
+    status: completed
     dependencies:
       - task-010
       - task-007
@@ -194,4 +194,4 @@ tasks:
       - "grep -r 'neo4j-cli\\|NEO4J_CLI_\\|CLI_' --include='*.go' returns no matches in user-facing strings"
       - "go build -o bin/nctl ./cmd/nctl succeeds"
       - "bin/nctl --help shows nctl as the command name"
-    completed_at: null
+    completed_at: "2026-05-06T20:24:21Z"

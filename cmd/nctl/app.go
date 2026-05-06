@@ -184,7 +184,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&logFormat, "log-format", "", "Log format: text, json")
 	pf.StringVar(&logOutput, "log-output", "", "Log destination: stderr (default), stdout, file")
 	pf.StringVar(&logFile, "log-file", "", "Log file path when --log-output=file (default: ~/.nctl/nctl.log)")
-	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and CLI_TELEMETRY_METRICS env var)")
+	pf.BoolVar(&noMetrics, "no-metrics", false, "Disable sending usage metrics to Neo4j (overrides config file and NCTL_TELEMETRY_METRICS env var)")
 	pf.StringVar(&neo4jURI, "neo4j-uri", "", "Neo4j bolt URI (e.g. bolt://localhost:7687)")
 	pf.StringVar(&neo4jUsername, "neo4j-username", "", "Neo4j username")
 	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
@@ -193,7 +193,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph, toon")
 
 	// Shell-mode flag
-	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: CLI_SHELL_ENABLED=false to disable)")
+	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: NCTL_SHELL_ENABLED=false to disable)")
 
 	// Agent-mode flags
 	pf.BoolVar(&agentMode, "agent", false, "Enable agent-optimised mode: JSON output, read-only by default, no interactive prompts, errors on stdout (env: NCTL_AGENT=true)")
@@ -632,7 +632,7 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 		logWriter,
 	)
 
-	// 3. Analytics — prefer a token from config/env (CLI_TELEMETRY_MIXPANEL_TOKEN)
+	// 3. Analytics — prefer a token from config/env (NCTL_TELEMETRY_MIXPANEL_TOKEN)
 	// so the hardcoded default can be overridden without a rebuild.
 	token := mixPanelToken
 	if cfg.Telemetry.MixpanelToken != "" {

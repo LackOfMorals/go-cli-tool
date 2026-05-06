@@ -40,10 +40,10 @@ func (r *Neo4jRepository) ensureDriver() (neo4j.Driver, error) {
 	}
 
 	if r.cfg.URI == "" {
-		return nil, fmt.Errorf("no Neo4j URI configured — set CLI_NEO4J_URI or neo4j.uri in your config file")
+		return nil, fmt.Errorf("no Neo4j URI configured — set NCTL_NEO4J_URI or neo4j.uri in your config file")
 	}
 	if r.cfg.Username == "" {
-		return nil, fmt.Errorf("no Neo4j username configured — set CLI_NEO4J_USERNAME or neo4j.username in your config file")
+		return nil, fmt.Errorf("no Neo4j username configured — set NCTL_NEO4J_USERNAME or neo4j.username in your config file")
 	}
 
 	driver, err := neo4j.NewDriver(

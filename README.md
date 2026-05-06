@@ -1,4 +1,4 @@
-# neo4j-cli
+# nctl
 
 A command-line tool for Neo4j, optimised for use by AI agents and scripts. Connect to a Neo4j database and the Neo4j Aura management API from a single binary — run Cypher queries, manage cloud instances, and perform administrative operations.
 
@@ -31,31 +31,32 @@ A command-line tool for Neo4j, optimised for use by AI agents and scripts. Conne
 ```bash
 git clone <repo-url>
 cd go-cli-tool
-go build -o bin/neo4j-cli ./cmd/neo4j-cli
+go build -o bin/nctl ./cmd/nctl
 ```
 
 ### Run
 
 ```bash
 # Run a subcommand directly
-./bin/neo4j-cli cypher "MATCH (n:Person) RETURN n.name LIMIT 5"
-./bin/neo4j-cli cloud instances list
-./bin/neo4j-cli admin show-databases
-./bin/neo4j-cli config list
+./bin/nctl cypher "MATCH (n:Person) RETURN n.name LIMIT 5"
+./bin/nctl cloud instances list
+./bin/nctl admin show-databases
+./bin/nctl config list
 
 # Point at a specific config file
-./bin/neo4j-cli --config-file ~/.neo4j-cli/config.json cloud instances list
+./bin/nctl --config-file ~/.nctl/config.json cloud instances list
 
 # Control output format
-./bin/neo4j-cli cypher --format json "MATCH (n) RETURN n LIMIT 10"
-./bin/neo4j-cli cloud instances list --format json
+./bin/nctl cypher --format json "MATCH (n) RETURN n LIMIT 10"
+./bin/nctl cloud instances list --format json
+./bin/nctl cloud instances list --format toon
 ```
 
 ---
 
 ## Commands
 
-All functionality is exposed as top-level subcommands. Running `neo4j-cli` with no arguments prints help.
+All functionality is exposed as top-level subcommands. Running `nctl` with no arguments prints help.
 
 | Subcommand | Description |
 |---|---|
@@ -69,11 +70,11 @@ All functionality is exposed as top-level subcommands. Running `neo4j-cli` with 
 Executes a Cypher query against the connected database.
 
 ```bash
-neo4j-cli cypher "MATCH (n) RETURN n LIMIT 5"
-neo4j-cli cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n"
-neo4j-cli cypher --format json "MATCH (n) RETURN n"
-neo4j-cli cypher --format graph "MATCH (n)-[r]->(m) RETURN n,r,m"
-neo4j-cli cypher --limit 100 "MATCH (n) RETURN n"
+nctl cypher "MATCH (n) RETURN n LIMIT 5"
+nctl cypher --param name=Alice "MATCH (n:Person {name:\$name}) RETURN n"
+nctl cypher --format json "MATCH (n) RETURN n"
+nctl cypher --format toon "MATCH (n)-[r]->(m) RETURN n,r,m"
+nctl cypher --limit 100 "MATCH (n) RETURN n"
 ```
 
 Flags (placed before the query):
@@ -81,7 +82,7 @@ Flags (placed before the query):
 | Flag | Description |
 |---|---|
 | `--param key=value` | Add a query parameter (repeatable). Values are auto-typed: int, float, bool, string. |
-| `--format table\|json\|pretty-json\|graph` | Override the output format for this query. |
+| `--format table\|toon\|json\|pretty-json\|graph` | Override the output format for this query. |
 | `--limit N` | Override the auto-injected row limit. |
 
 > **Requires a Neo4j connection.** If credentials are not configured, you are prompted to enter them on first use and they are saved to the config file.
@@ -93,26 +94,26 @@ Manages Neo4j Aura cloud resources.
 > **Requires Aura credentials.** If `aura.client_id` or `aura.client_secret` are not configured, you are prompted to enter them on first use.
 
 ```bash
-neo4j-cli cloud instances list
-neo4j-cli cloud instances ls                                                  # alias
-neo4j-cli cloud instances get <id>
-neo4j-cli cloud instances create name=<n> tenant=<id> [cloud=<p>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]
-neo4j-cli cloud instances update <id> [name=<new-name>] [memory=<size>]
-neo4j-cli cloud instances pause <id>
-neo4j-cli cloud instances resume <id>
-neo4j-cli cloud instances delete <id>
-neo4j-cli cloud instances rm <id>                                             # alias
+nctl cloud instances list
+nctl cloud instances ls                                                  # alias
+nctl cloud instances get <id>
+nctl cloud instances create name=<n> tenant=<id> [cloud=<p>] [region=<r>] [type=<t>] [version=<v>] [memory=<size>]
+nctl cloud instances update <id> [name=<new-name>] [memory=<size>]
+nctl cloud instances pause <id>
+nctl cloud instances resume <id>
+nctl cloud instances delete <id>
+nctl cloud instances rm <id>                                             # alias
 
-neo4j-cli cloud projects list
-neo4j-cli cloud projects get <id>
+nctl cloud projects list
+nctl cloud projects get <id>
 ```
 
 `instances create` requires `name` and `tenant`. All other fields fall back to `aura.instance_defaults` in the config. Set defaults to avoid repeating them on every invocation:
 
 ```bash
-neo4j-cli config set aura.instance_defaults.tenant_id abc-123
-neo4j-cli config set aura.instance_defaults.cloud_provider aws
-neo4j-cli cloud instances create name=my-db
+nctl config set aura.instance_defaults.tenant_id abc-123
+nctl config set aura.instance_defaults.cloud_provider aws
+nctl cloud instances create name=my-db
 ```
 
 > **Save your password.** When `instances create` succeeds, the initial password is shown exactly once and cannot be recovered.
@@ -124,8 +125,8 @@ Runs administrative commands against the connected database.
 > **Requires a Neo4j connection.** Same prerequisite as `cypher`.
 
 ```bash
-neo4j-cli admin show-users
-neo4j-cli admin show-databases
+nctl admin show-users
+nctl admin show-databases
 ```
 
 ### config
@@ -133,13 +134,13 @@ neo4j-cli admin show-databases
 Manages CLI configuration. Changes made with `set`, `delete`, and `reset` are persisted to the config file immediately and take effect in the current session.
 
 ```bash
-neo4j-cli config list                                # show all keys, values, and descriptions
-neo4j-cli config list --format json
-neo4j-cli config set neo4j.uri bolt://myhost:7687
-neo4j-cli config set cypher.output_format json
-neo4j-cli config set aura.instance_defaults.region us-east-1
-neo4j-cli config delete neo4j.password              # reset a key to its default (prompts)
-neo4j-cli config reset                              # wipe config file, restore all defaults (prompts)
+nctl config list                                # show all keys, values, and descriptions
+nctl config list --format json
+nctl config set neo4j.uri bolt://myhost:7687
+nctl config set cypher.output_format json
+nctl config set aura.instance_defaults.region us-east-1
+nctl config delete neo4j.password              # reset a key to its default (prompts)
+nctl config reset                              # wipe config file, restore all defaults (prompts)
 ```
 
 ---
@@ -154,7 +155,7 @@ CLI flags  >  environment variables  >  config file  >  defaults
 
 ### Config file
 
-The default config file path is `~/.neo4j-cli/config.json`. The directory and file are created automatically when credentials are first saved via an interactive prompt. Pass `--config-file <path>` to use a different location.
+The default config file path is `~/.nctl/config.json`. The directory and file are created automatically when credentials are first saved via an interactive prompt. Pass `--config-file <path>` to use a different location.
 
 A full example:
 
@@ -196,33 +197,33 @@ A full example:
 
 ### Environment variables
 
-All variables use the `CLI_` prefix. Nested keys use underscores.
+All variables use the `NCTL_` prefix. Nested keys use underscores.
 
 | Variable | Default | Description |
 |---|---|---|
-| `CLI_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `CLI_LOG_FORMAT` | `text` | Log format: `text`, `json` |
-| `CLI_LOG_OUTPUT` | `stderr` | Log destination: `stderr`, `stdout`, `file` |
-| `CLI_LOG_FILE` | _(empty)_ | Log file path (used when `CLI_LOG_OUTPUT=file`) |
-| `CLI_NEO4J_URI` | `bolt://localhost:7687` | Neo4j bolt URI |
-| `CLI_NEO4J_USERNAME` | `neo4j` | Neo4j username |
-| `CLI_NEO4J_PASSWORD` | _(empty)_ | Neo4j password — prefer env over config file |
-| `CLI_NEO4J_DATABASE` | `neo4j` | Neo4j database name |
-| `CLI_AURA_CLIENT_ID` | _(empty)_ | Aura API client ID |
-| `CLI_AURA_CLIENT_SECRET` | _(empty)_ | Aura API client secret — prefer env over config file |
-| `CLI_AURA_TIMEOUT_SECONDS` | `30` | Aura API request timeout |
-| `CLI_AURA_INSTANCE_DEFAULTS_TENANT_ID` | _(empty)_ | Default tenant ID for new instances |
-| `CLI_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER` | `gcp` | Default cloud provider: `aws`, `gcp`, `azure` |
-| `CLI_AURA_INSTANCE_DEFAULTS_REGION` | `europe-west1` | Default region for new instances |
-| `CLI_AURA_INSTANCE_DEFAULTS_TYPE` | `enterprise-db` | Default instance type |
-| `CLI_AURA_INSTANCE_DEFAULTS_VERSION` | `5` | Default Neo4j version |
-| `CLI_AURA_INSTANCE_DEFAULTS_MEMORY` | `8GB` | Default instance memory |
-| `CLI_CYPHER_SHELL_LIMIT` | `25` | Default LIMIT injected into cypher queries |
-| `CLI_CYPHER_EXEC_LIMIT` | `100` | Default LIMIT in non-interactive mode |
-| `CLI_CYPHER_OUTPUT_FORMAT` | `table` | Default output format: `table`, `json`, `pretty-json`, `graph` |
-| `CLI_TELEMETRY_METRICS` | `true` | Send anonymous usage metrics to Neo4j |
+| `NCTL_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `NCTL_LOG_FORMAT` | `text` | Log format: `text`, `json` |
+| `NCTL_LOG_OUTPUT` | `stderr` | Log destination: `stderr`, `stdout`, `file` |
+| `NCTL_LOG_FILE` | _(empty)_ | Log file path (used when `NCTL_LOG_OUTPUT=file`) |
+| `NCTL_NEO4J_URI` | `bolt://localhost:7687` | Neo4j bolt URI |
+| `NCTL_NEO4J_USERNAME` | `neo4j` | Neo4j username |
+| `NCTL_NEO4J_PASSWORD` | _(empty)_ | Neo4j password — prefer env over config file |
+| `NCTL_NEO4J_DATABASE` | `neo4j` | Neo4j database name |
+| `NCTL_AURA_CLIENT_ID` | _(empty)_ | Aura API client ID |
+| `NCTL_AURA_CLIENT_SECRET` | _(empty)_ | Aura API client secret — prefer env over config file |
+| `NCTL_AURA_TIMEOUT_SECONDS` | `30` | Aura API request timeout |
+| `NCTL_AURA_INSTANCE_DEFAULTS_TENANT_ID` | _(empty)_ | Default tenant ID for new instances |
+| `NCTL_AURA_INSTANCE_DEFAULTS_CLOUD_PROVIDER` | `gcp` | Default cloud provider: `aws`, `gcp`, `azure` |
+| `NCTL_AURA_INSTANCE_DEFAULTS_REGION` | `europe-west1` | Default region for new instances |
+| `NCTL_AURA_INSTANCE_DEFAULTS_TYPE` | `enterprise-db` | Default instance type |
+| `NCTL_AURA_INSTANCE_DEFAULTS_VERSION` | `5` | Default Neo4j version |
+| `NCTL_AURA_INSTANCE_DEFAULTS_MEMORY` | `8GB` | Default instance memory |
+| `NCTL_CYPHER_SHELL_LIMIT` | `25` | Default LIMIT injected into cypher queries |
+| `NCTL_CYPHER_EXEC_LIMIT` | `100` | Default LIMIT in non-interactive mode |
+| `NCTL_CYPHER_OUTPUT_FORMAT` | `table` | Default output format: `table`, `json`, `pretty-json`, `graph`, `toon` |
+| `NCTL_TELEMETRY_METRICS` | `true` | Send anonymous usage metrics to Neo4j |
 
-> **Security note:** `CLI_NEO4J_PASSWORD` and `CLI_AURA_CLIENT_SECRET` are intentionally not available as CLI flags. Passing secrets as flags exposes them in shell history and `ps` output.
+> **Security note:** `NCTL_NEO4J_PASSWORD` and `NCTL_AURA_CLIENT_SECRET` are intentionally not available as CLI flags. Passing secrets as flags exposes them in shell history and `ps` output.
 
 ### CLI flags
 
@@ -254,17 +255,17 @@ When Neo4j or Aura credentials are missing, the CLI prompts for them interactive
 
 ## Agent mode
 
-The CLI is designed to be driven by AI agents, CI pipelines, and orchestration tools. Use `--agent` (or `NEO4J_CLI_AGENT=true`) to activate a safe, machine-readable operating mode.
+The CLI is designed to be driven by AI agents, CI pipelines, and orchestration tools. Use `--agent` (or `NCTL_AGENT=true`) to activate a safe, machine-readable operating mode.
 
 ### Activating agent mode
 
 ```bash
 # Via flag
-neo4j-cli --agent cloud instances list
+nctl --agent cloud instances list
 
 # Via environment variable (recommended for pipelines — all invocations inherit it)
-export NEO4J_CLI_AGENT=true
-neo4j-cli cloud instances list
+export NCTL_AGENT=true
+nctl cloud instances list
 ```
 
 ### What --agent does
@@ -278,14 +279,14 @@ neo4j-cli cloud instances list
 
 ### The --rw flag
 
-In agent mode, all operations that modify state are blocked by default. Pass `--rw` (or `NEO4J_CLI_RW=true`) to explicitly permit mutations:
+In agent mode, all operations that modify state are blocked by default. Pass `--rw` (or `NCTL_RW=true`) to explicitly permit mutations:
 
 ```bash
 # Blocked — returns READ_ONLY error
-neo4j-cli --agent cloud instances delete <id>
+nctl --agent cloud instances delete <id>
 
 # Allowed — no prompt, executes immediately
-neo4j-cli --agent --rw cloud instances delete <id>
+nctl --agent --rw cloud instances delete <id>
 ```
 
 `--rw` governs **all** mutation categories uniformly:
@@ -304,14 +305,14 @@ For `cypher` commands in agent mode without `--rw`, the CLI automatically runs `
 
 ```bash
 # EXPLAIN detects a write — blocked
-neo4j-cli --agent cypher "CREATE (n:Person {name:'Alice'}) RETURN n"
+nctl --agent cypher "CREATE (n:Person {name:'Alice'}) RETURN n"
 # → {"status":"error","error":{"code":"WRITE_BLOCKED","message":"..."},...}
 
 # Read query — EXPLAIN confirms safe, executes
-neo4j-cli --agent cypher "MATCH (n:Person) RETURN n.name LIMIT 10"
+nctl --agent cypher "MATCH (n:Person) RETURN n.name LIMIT 10"
 
 # EXPLAIN or PROFILE queries run as-is — no pre-check
-neo4j-cli --agent cypher "EXPLAIN MATCH (n) RETURN n"
+nctl --agent cypher "EXPLAIN MATCH (n) RETURN n"
 ```
 
 With `--rw`, the EXPLAIN pre-check is skipped and queries execute directly.
@@ -340,7 +341,7 @@ Error codes:
 ```
 --request-id string   Correlation ID included in JSON responses.
                       Auto-generated (UUID) if not supplied.
-                      Env: NEO4J_CLI_REQUEST_ID
+                      Env: NCTL_REQUEST_ID
 
 --timeout duration    Maximum time for a command to run (e.g. 30s, 2m).
                       Exit code 1 + TIMEOUT error on expiry.
@@ -349,17 +350,17 @@ Error codes:
 ### Recommended orchestrator setup
 
 ```bash
-export NEO4J_CLI_AGENT=true
-export NEO4J_CLI_REQUEST_ID="pipeline-run-${RUN_ID}"  # inject your trace ID
-export CLI_NEO4J_URI="bolt+s://your-instance.databases.neo4j.io"
-export CLI_NEO4J_USERNAME="neo4j"
-export CLI_NEO4J_PASSWORD="${NEO4J_PASSWORD}"
+export NCTL_AGENT=true
+export NCTL_REQUEST_ID="pipeline-run-${RUN_ID}"  # inject your trace ID
+export NCTL_NEO4J_URI="bolt+s://your-instance.databases.neo4j.io"
+export NCTL_NEO4J_USERNAME="neo4j"
+export NCTL_NEO4J_PASSWORD="${NEO4J_PASSWORD}"
 
 # Read operations work with no further flags
-neo4j-cli cypher "MATCH (n:Person) RETURN count(n)"
+nctl cypher "MATCH (n:Person) RETURN count(n)"
 
 # Write operations require explicit --rw
-neo4j-cli --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
+nctl --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
 ```
 
 ---
@@ -369,7 +370,7 @@ neo4j-cli --rw cypher "CREATE (n:Event {ts: datetime()}) RETURN n"
 ### Project structure
 
 ```
-cmd/neo4j-cli/
+cmd/nctl/
     main.go             Entry point — calls run() and os.Exit
     app.go              App struct, Cobra root command, startup wiring, flag definitions,
                         subcommand builders (buildCloudCommand, buildCypherCommand, etc.)
@@ -480,7 +481,7 @@ func (t *MyTool) DefaultParams() map[string]interface{} {
 
 **Step 3 — Register it**
 
-In `cmd/neo4j-cli/app.go`, add your tool to the slice inside `buildRegistry`:
+In `cmd/nctl/app.go`, add your tool to the slice inside `buildRegistry`:
 
 ```go
 for _, t := range []tool.Tool{
@@ -540,8 +541,8 @@ func BuildAdminCategory(svc service.AdminService) *dispatch.Category {
 Aliases are registered automatically in dispatch and appear in parentheses in `--help` output:
 
 ```bash
-neo4j-cli admin show-indexes
-neo4j-cli admin idx           # same command
+nctl admin show-indexes
+nctl admin idx           # same command
 ```
 
 **Example: adding a command to a sub-category**
@@ -638,7 +639,7 @@ func BuildGDSCategory(svc service.GDSService) *dispatch.Category {
 
 **Step 4 — Wire it into App**
 
-In `cmd/neo4j-cli/app.go`, add the service field, construct it in `newApp`, and register the category and its Cobra subcommand:
+In `cmd/nctl/app.go`, add the service field, construct it in `newApp`, and register the category and its Cobra subcommand:
 
 ```go
 // In newApp(), after repo is created:
@@ -667,8 +668,8 @@ Use `InteractiveNeo4jPrerequisite` for database-connected categories and `Intera
 The category is then available as a direct subcommand:
 
 ```bash
-neo4j-cli gds list-algorithms
-neo4j-cli gds --help
+nctl gds list-algorithms
+nctl gds --help
 ```
 
 ---
@@ -679,7 +680,7 @@ neo4j-cli gds --help
 
 **Interfaces before implementations** — new behaviour starts with an interface in `internal/service/interfaces.go`. This keeps the command layer decoupled from concrete implementations and makes testing straightforward.
 
-**Prerequisite checks belong in `prerequisites.go`** — if a category requires an external dependency (database connection, API credentials), declare it with `SetPrerequisite` in `buildCategories`. Write the factory function in `internal/commands/prerequisites.go` so it is independently testable. The check runs before every real dispatch, but bare category invocations (e.g. `neo4j-cli cypher --help`) always show help regardless.
+**Prerequisite checks belong in `prerequisites.go`** — if a category requires an external dependency (database connection, API credentials), declare it with `SetPrerequisite` in `buildCategories`. Write the factory function in `internal/commands/prerequisites.go` so it is independently testable. The check runs before every real dispatch, but bare category invocations (e.g. `nctl cypher --help`) always show help regardless.
 
 **Tool `Validate` runs before `Execute`** — `Validate` is called automatically before every `Execute`. Use it for tool-level readiness checks rather than repeating them inside `Execute`. `BaseTool.Validate` is a no-op; only override it when needed.
 

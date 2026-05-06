@@ -50,3 +50,137 @@
 ### task-007 — 2026-05-05
 - Updated `.goreleaser.yaml` build entry: `id: neo4j-cli` → `id: nctl`, `main: ./cmd/neo4j-cli` → `main: ./cmd/nctl`, `binary: neo4j-cli` → `binary: nctl`.
 - `goreleaser check` passes; `go build ./cmd/nctl` succeeds.
+
+================================================================================
+TASK-008: Update README.md to use nctl throughout
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+README.md was already partially staged on the branch with `neo4j-cli` → `nctl`
+replacements applied to title, build command, usage examples and path
+references. Verified the staged changes met the original acceptance criteria
+(grep -c neo4j-cli returns 0) and additionally updated stale env var
+references that the original task scope did not cover but were left
+inconsistent with task-002/task-003: `NEO4J_CLI_AGENT/RW/REQUEST_ID` →
+`NCTL_*`, and the entire `CLI_*` env var table (LOG_*, NEO4J_*, AURA_*,
+CYPHER_*, TELEMETRY_*) → `NCTL_*`. Also added `toon` to the documented
+`NCTL_CYPHER_OUTPUT_FORMAT` value list to match current code.
+
+Files Changed:
+- README.md (binary name, paths, env var prefix, output format list)
+
+Key Decisions:
+- Extended the task scope to also rename `NEO4J_CLI_*` and `CLI_*` env var
+  references in README. Without this the README would document env vars that
+  no longer work, contradicting tasks 002/003.
+- Did NOT touch `.claude/settings.json` or `.plans/prd-change-command-prefix.md`
+  (untracked files belonging to a different feature, per orchestrator note).
+
+Next Task: task-009 (Update CLAUDE.md build command)
+
+================================================================================
+TASK-009: Update CLAUDE.md build command
+Date: 2026-05-06T21:30:00Z
+================================================================================
+
+Summary:
+Verified CLAUDE.md is already updated to reference nctl throughout — the file
+was rewritten in commit 44eb860 ("nctl rename") which landed on main before
+this finish-up loop began. Both target lines (build command and architecture
+description of binary location) already use nctl/cmd/nctl. No code changes
+required. Confirmed via `grep -n "neo4j-cli\|NEO4J_CLI\|CLI_" CLAUDE.md` — no
+matches. `go build ./...` and `go test ./...` both pass.
+
+Files Changed:
+- .plans/tasks-rename-to-nctl.yml (mark task-009 completed)
+- .plans/progress-rename-to-nctl.txt (this entry)
+
+Key Decisions:
+- Did not re-edit CLAUDE.md because it was already correct on disk; followed
+  the orchestrator instruction to "verify rather than blindly redo".
+- Did NOT touch `.claude/settings.json` or `.plans/prd-change-command-prefix.md`
+  (untracked files belonging to a different feature, per orchestrator note).
+
+Next Task: task-010 (Fix test assertions that check for neo4j-cli strings)
+
+================================================================================
+TASK-010: Fix test assertions that check for neo4j-cli strings
+Date: 2026-05-06T22:00:00Z
+================================================================================
+
+Summary:
+The three explicit assertion locations called out in the task were already
+fixed in earlier commits (44eb860 "nctl rename" carried interactive_test.go
+and logger_test.go assertions; config_test.go's comment was updated as part
+of task-003). Verified via Read of all three locations — each already asserts
+'nctl' instead of 'neo4j-cli'. The only remaining `neo4j-cli` token in any
+*_test.go file was a non-load-bearing temp-file basename in
+internal/logger/logger_test.go:185 (TestOpenLogFile_CreatesFileAndDirectory),
+which I changed from "neo4j-cli.log" to "nctl.log" for codebase-wide
+consistency. `go test ./...`, `go build ./...`, and `golangci-lint run` all
+pass with zero issues.
+
+Files Changed:
+- internal/logger/logger_test.go (rename test temp-file basename)
+- .plans/tasks-rename-to-nctl.yml (mark task-010 completed)
+- .plans/progress-rename-to-nctl.txt (this entry)
+
+Key Decisions:
+- Verified rather than blindly redid the assertion edits — the orchestrator
+  note "verify rather than blindly redo" applied since the original PR was
+  already merged.
+- Extended the cleanup slightly to cover the temp-file basename so the entire
+  internal/logger test file is free of `neo4j-cli` tokens.
+- Did NOT touch `.claude/settings.json` or `.plans/prd-change-command-prefix.md`
+  (untracked files belonging to a different feature, per orchestrator note).
+
+Next Task: task-011 (Final lint and completeness check)
+
+================================================================================
+TASK-011: Final lint and completeness check
+Date: 2026-05-06T20:24:21Z
+================================================================================
+
+Summary:
+Closed all remaining `CLI_*` env var references in Go user-facing strings that
+the earlier tasks deliberately deferred (task-003 explicitly noted these were
+"in scope for task-005 and task-006" but they had not yet been done). After
+this task, `grep -rn 'neo4j-cli\|NEO4J_CLI_\|CLI_' --include='*.go' .` returns
+zero matches across the repo. Also fixed AGENTS.md line 51 (`CLI_SHELL_ENABLED`
+→ `NCTL_SHELL_ENABLED`) which was a stale doc note.
+
+Files Changed:
+- cmd/nctl/app.go: --no-metrics flag desc (CLI_TELEMETRY_METRICS →
+  NCTL_TELEMETRY_METRICS), --shell flag desc (CLI_SHELL_ENABLED →
+  NCTL_SHELL_ENABLED), Mixpanel token comment.
+- internal/repository/neo4j_repo.go: two error messages
+  (CLI_NEO4J_URI/USERNAME → NCTL_).
+- internal/commands/prerequisites.go: two interactive Tip prints
+  (CLI_AURA_*/CLI_NEO4J_* → NCTL_).
+- internal/service/cloud_service.go: aura credentials error message
+  (CLI_AURA_* → NCTL_).
+- AGENTS.md: line 51 CLI_SHELL_ENABLED → NCTL_SHELL_ENABLED.
+- .plans/tasks-rename-to-nctl.yml: marked task-011 completed.
+- .plans/progress-rename-to-nctl.txt: this entry.
+
+Verification:
+- grep for 'neo4j-cli|NEO4J_CLI_|CLI_' --include='*.go' returns no matches.
+- `go build -o bin/nctl ./cmd/nctl` succeeds.
+- `go test -count=1 ./...` passes (all 11 packages).
+- `golangci-lint run` reports 0 issues.
+- `./bin/nctl --help` shows `nctl` and contains no stale strings.
+- `go generate ./...` produces a clean diff.
+
+Key Decisions:
+- Extended the grep cleanup to include the AGENTS.md line 51 stale note as
+  the orchestrator explicitly called it out.
+- Did NOT touch `.claude/settings.json` or
+  `.plans/prd-change-command-prefix.md` (untracked files belonging to a
+  different feature, per orchestrator note).
+- Acknowledged overlap with the change-command-prefix PRD: the same files
+  (app.go, neo4j_repo.go, prerequisites.go, cloud_service.go) are listed
+  there, but task-011's literal acceptance criteria required closing them
+  now, so the change-command-prefix PRD's scope shrinks accordingly.
+
+Feature complete: all 11 tasks finished.
