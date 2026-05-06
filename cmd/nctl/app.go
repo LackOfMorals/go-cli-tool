@@ -190,7 +190,7 @@ run without arguments to start the interactive shell.`,
 	pf.StringVar(&neo4jDatabase, "neo4j-database", "", "Neo4j database name")
 	pf.StringVar(&auraClientID, "aura-client-id", "", "Neo4j Aura API client ID")
 	pf.IntVar(&auraTimeoutSeconds, "aura-timeout", 0, "Aura API request timeout in seconds")
-	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph")
+	pf.StringVar(&outputFormat, "format", "", "Output format: table, json, pretty-json, graph, toon")
 
 	// Shell-mode flag
 	pf.BoolVar(&shellFlag, "shell", true, "Enable the interactive shell (env: CLI_SHELL_ENABLED=false to disable)")
@@ -404,7 +404,7 @@ func (a *App) dispatchCategory(name string, args []string) error {
 	if outputFormat != "" {
 		f := presentation.OutputFormat(outputFormat)
 		if !f.IsValid() {
-			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph", outputFormat)
+			return fmt.Errorf("invalid format %q: must be one of table, json, pretty-json, graph, toon", outputFormat)
 		}
 	}
 
@@ -472,7 +472,7 @@ Available sub-commands:
   instances   Create, list, get, update, pause, resume, and delete Aura DB instances
   projects    List and inspect Aura projects (tenants)
 
-Use --format to control output (table, json, pretty-json, graph).`,
+Use --format to control output (table, json, pretty-json, graph, toon).`,
 		Example: `  nctl cloud instances list
   nctl cloud instances list --format json
   nctl cloud instances get <id>
@@ -518,7 +518,7 @@ Available commands:
   show-users       List all database users and their roles
   show-databases   List all databases and their status
 
-Use --format to control output (table, json, pretty-json, graph).`,
+Use --format to control output (table, json, pretty-json, graph, toon).`,
 		Example: `  nctl admin show-users
   nctl admin show-users --format json
   nctl admin show-databases`,

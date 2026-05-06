@@ -134,7 +134,8 @@ tasks:
     title: "Final verification: build, test, lint, generate-clean"
     description: |
       Run the full local CI loop end-to-end on the branch: go build ./..., go test ./..., golangci-lint run, and go generate ./... (must produce no diff). Confirm the changie fragment .changes/unreleased/added-toon-output-format.yaml is present and accurate. Smoke-test cypher --format toon and (if practical) the agent-mode default against a live or mocked Neo4j to confirm output looks sane. This task is a gate before opening a PR — no new code, just verification and any small fixups uncovered.
-    status: pending
+    status: completed
+    completed_at: 2026-05-06T00:00:00Z
     dependencies:
       - task-008
       - task-009

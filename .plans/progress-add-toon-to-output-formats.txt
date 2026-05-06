@@ -375,3 +375,62 @@ Key Decisions:
   golangci-lint run all clean; go generate ./... produces no diff.
 
 Next Task: task-010 (Final verification: build, test, lint, generate-clean)
+================================================================================
+TASK-010: Final verification: build, test, lint, generate-clean
+Date: 2026-05-06T00:00:00Z
+================================================================================
+
+Summary:
+Ran the full local CI loop on the branch (go build ./..., go test ./...,
+golangci-lint run, go generate ./...). All four pass cleanly with zero diff
+from go generate. Verified the changie fragment
+.changes/unreleased/added-toon-output-format.yaml is present, parses as
+valid YAML (kind: Added, body string), and accurately describes the shipped
+behaviour. Smoke-tested the freshly built binary: --format help text and
+invalid-format error message both list `toon`; nctl help cypher Long
+description lists `toon`. While doing the smoke test, picked up the small
+UX fixup that the earlier tasks (006, 007) deferred: four user-facing
+strings in cmd/nctl/app.go still listed only "table, json, pretty-json,
+graph". Updated all four to "table, json, pretty-json, graph, toon" so
+the help text, the invalid-format error, and the cloud/admin Long
+descriptions match the cypher Long description and the config registry's
+allow-list. Verified no test references the old global error string.
+
+Files Changed:
+- cmd/nctl/app.go (modified: four user-visible strings now list toon —
+  global --format flag help (line 193), invalid-format error message
+  (line 407), buildCloudCommand Long description (line 475),
+  buildAdminCommand Long description (line 521))
+- .plans/tasks-add-toon-to-output-formats.yml (status flip → completed)
+- .plans/progress-add-toon-to-output-formats.txt (this entry)
+- AGENTS.md (note added under Gotchas about the now-consistent
+  --format help text across the four occurrences in cmd/nctl/app.go)
+
+Key Decisions:
+- Picked up the deferred UX consistency fix from tasks 006/007 here
+  rather than punting it to a follow-up PR. It is a pure string change,
+  has no behaviour impact (IsValid already accepted toon since
+  task-002), and fits the spirit of "any small fixups uncovered" in
+  task-010's acceptance criteria.
+- Used the canonical ordering "table, json, pretty-json, graph, toon"
+  to match what task-007 established in
+  internal/commands/config.go (the config registry's accepted-values
+  list and error message).
+- Did not touch the existing TestConfigCategory_SetCypherOutputFormat
+  test in internal/commands/config_test.go that asserts the
+  toon-inclusive form — its assertion already matches the updated
+  app.go strings, so no test changes were needed.
+- Smoke test of cypher --format toon against a live Neo4j was not
+  performed (no DB available in this environment); coverage is
+  provided by TestCypherCategory_FormatFlag_TOON and
+  TestFormatAs_TOON which exercise the dispatch + presentation paths
+  end-to-end via the registered TOONFormatter.
+- Final verification snapshot:
+    go build ./...        — clean
+    go test ./... -count=1 — clean (cmd/nctl 0.985s, commands 0.902s,
+                            presentation 0.382s)
+    golangci-lint run     — 0 issues
+    go generate ./...     — no diff
+- Branch is now in a state ready for /hone:finalize / PR creation.
+
+Next Task: All tasks complete
