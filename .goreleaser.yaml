@@ -20,11 +20,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Exclude combos you don't want (e.g. Windows ARM)
-    ignore:
-      - goos: windows
-        formats: 
-        -zip
     ldflags:
       - -X "main.Version={{.Tag}}"
 
