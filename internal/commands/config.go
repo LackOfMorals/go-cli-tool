@@ -76,7 +76,7 @@ var configRegistry = []configItemDef{
 	// ---- Shell -----------------------------------------------------------
 
 	{
-		Key: "shell.prompt", Section: "Shell", Default: "neo4j> ",
+		Key: "shell.prompt", Section: "Shell", Default: "lom> ",
 		Description: "Interactive shell prompt string",
 		Get:         func(c config.Config) string { return c.Shell.Prompt },
 		Set: func(c *config.Config, v string) error {

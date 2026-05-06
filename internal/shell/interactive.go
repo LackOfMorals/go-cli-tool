@@ -51,7 +51,7 @@ func NewInteractiveShell() *InteractiveShell {
 		categories:  make(map[string]*Category),
 		handlers:    make(map[string]CommandHandler),
 		io:          tool.NewDefaultIOHandler(),
-		prompt:      "neo4j> ",
+		prompt:      "lom> ",
 		historyFile: ".neo4j_history",
 		version:     "development",
 	}
@@ -374,7 +374,7 @@ func isUnconfigured(cfg *config.Config) bool {
 }
 
 func (s *InteractiveShell) printWelcome() {
-	fmt.Println("Neo4j CLI — type 'help' for commands, 'exit' to quit.")
+	fmt.Println("lom , a CLI for Neo4j — type 'help' for commands, 'exit' to quit.")
 	fmt.Println()
 
 	if isUnconfigured(s.cfg) {

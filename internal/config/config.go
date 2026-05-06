@@ -285,7 +285,7 @@ func newViperConfigLoader() *viperConfigLoader {
 	v.SetDefault("log_output", "stderr")
 	v.SetDefault("log_file", "")
 	v.SetDefault("shell.enabled", true)
-	v.SetDefault("shell.prompt", "neo4j> ")
+	v.SetDefault("shell.prompt", "lom> ")
 	v.SetDefault("shell.history_file", ".neo4j_history")
 	v.SetDefault("telemetry.metrics", true)
 	v.SetDefault("telemetry.mixpanel_token", "")
