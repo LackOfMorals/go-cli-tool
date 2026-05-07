@@ -723,6 +723,16 @@ func (s *InteractiveShell) collectInput(rl *readline.Instance, firstLine string)
 	// Cypher mode: wait for a ; terminator before executing.
 	// The prompt switches to ...> so the user knows more input is expected.
 	if isCypherCommand(line) {
+		// If the line already contains a `;` — typically inside a quoted
+		// query argument like `cypher "MATCH (n);" --format json` — the
+		// cypher input is complete. Execute as-is rather than blocking on a
+		// terminator that is already present. The trailing-`;` case is
+		// handled above; this catches any `;` followed by flags or other
+		// trailing tokens.
+		if strings.Contains(line, ";") {
+			return line, nil
+		}
+
 		rl.SetPrompt(contPrompt)
 		defer rl.SetPrompt(s.prompt)
 

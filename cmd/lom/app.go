@@ -662,8 +662,8 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 	cloudSvc := service.NewCloudService(&cfg.Aura) // pointer so interactive prerequisite can populate credentials
 	adminSvc := service.NewAdminService(repo)
 
-	// 7. Tool registry — QueryTool reuses cypherSvc so there is one query path.
-	registry := buildRegistry(&cfg, log, cypherSvc)
+	// 7. Tool registry
+	registry := buildRegistry(&cfg, log)
 
 	return &App{
 		cfg:          &cfg,
@@ -679,15 +679,12 @@ func newApp(cmd *cobra.Command, _ []string) (*App, error) {
 	}, nil
 }
 
-// buildRegistry constructs the tool registry. QueryTool receives the same
-// CypherService used by the 'cypher' command — one query path, no duplication.
-func buildRegistry(cfg *config.Config, log logger.Service, cypherSvc service.CypherService) *tools.ToolRegistry {
+// buildRegistry constructs the tool registry.
+func buildRegistry(cfg *config.Config, log logger.Service) *tools.ToolRegistry {
 	registry := tools.NewToolRegistry()
 
 	for _, t := range []tool.Tool{
-		tools.NewEchoTool(),
 		tools.NewHelpTool(registry),
-		tools.NewQueryTool(cypherSvc),
 	} {
 		registerTool(registry, t, cfg, log)
 	}

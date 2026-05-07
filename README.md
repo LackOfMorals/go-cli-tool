@@ -485,9 +485,7 @@ In `cmd/lom/app.go`, add your tool to the slice inside `buildRegistry`:
 
 ```go
 for _, t := range []tool.Tool{
-    tools.NewEchoTool(),
     tools.NewHelpTool(registry),
-    tools.NewQueryTool(cypherSvc),
     tools.NewMyTool(),           // ← add here
 } {
     registerTool(registry, t, cfg, log)

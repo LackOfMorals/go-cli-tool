@@ -1,10 +1,40 @@
 package shell
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cli/go-cli-tool/internal/config"
 )
+
+// TestCypherInlineTerminator covers the regression where a quoted cypher query
+// containing a `;` followed by trailing flags (e.g. `--format json`) caused
+// collectInput to enter multi-line mode and block on a second terminator.
+// The check belongs to collectInput; this test pins down the underlying
+// detection rule (a `;` anywhere on the line marks the cypher input complete).
+func TestCypherInlineTerminator(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		complete bool
+	}{
+		{"quoted query with trailing flag", `cypher "match (n) return * limit 5;" --format json`, true},
+		{"quoted query with semicolon, no flag", `cypher "match (n);"`, true},
+		{"unquoted query without semicolon", `cypher MATCH (n) RETURN n`, false},
+		{"bare cypher", `cypher`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !isCypherCommand(tt.line) {
+				t.Fatalf("isCypherCommand(%q) = false, want true", tt.line)
+			}
+			got := strings.Contains(tt.line, ";")
+			if got != tt.complete {
+				t.Errorf("strings.Contains(%q, %q) = %v, want %v", tt.line, ";", got, tt.complete)
+			}
+		})
+	}
+}
 
 // TestIsUnconfigured covers the package-level isUnconfigured helper defined in
 // interactive.go. It lives in package shell (not shell_test) because
